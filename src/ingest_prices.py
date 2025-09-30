@@ -29,10 +29,30 @@ def main():
         df = yf.download(t, start=start, end=end, auto_adjust=True, progress=False)
         if df.empty:
             continue
-        df = df.reset_index().rename(columns=str.lower)
+        # Reset index then flatten possible MultiIndex columns returned by yfinance
+        df = df.reset_index()
+        flattened = []
+        for col in df.columns:
+            if isinstance(col, tuple):
+                # pick the first non-empty part, else join and fallback to str(col)
+                pick = next((p for p in col if p), None)
+                flattened.append(pick or col[0] or str(col))
+            else:
+                flattened.append(col)
+        # normalize to simple lowercase names
+        df.columns = [str(c).lower() for c in flattened]
         df["ticker"] = t
-        df.rename(columns={"adj close":"adj_close"}, inplace=True)
-        data.append(df[["date","ticker","open","high","low","close","adj_close","volume"]])
+
+        # Normalize adjusted close: yfinance with auto_adjust=True may not provide 'adj close'
+        # after auto_adjust the adjusted price is stored in 'close'. Handle variants.
+        if "adj close" in df.columns:
+            df.rename(columns={"adj close": "adj_close"}, inplace=True)
+        if "adj_close" not in df.columns:
+            # fall back to 'close' if adj_close unavailable
+            if "close" in df.columns:
+                df["adj_close"] = df["close"]
+
+        data.append(df[["date", "ticker", "open", "high", "low", "close", "adj_close", "volume"]])
 
     prices = pd.concat(data, ignore_index=True) if data else pd.DataFrame(
         columns=["date","ticker","open","high","low","close","adj_close","volume"]
@@ -57,7 +77,10 @@ def main():
         )
     view_name = register_temp_view(con, "prices_tmp", prices)
     if view_name:
-        con.execute(f"INSERT INTO prices_daily SELECT * FROM {view_name}")
+        # Explicitly select columns to avoid Binder errors if the temporary view has extra columns
+        con.execute(
+            f"INSERT INTO prices_daily (date, ticker, open, high, low, close, adj_close, volume) SELECT date, ticker, open, high, low, close, adj_close, volume FROM {view_name}"
+        )
     unregister_temp_view(con, view_name)
 
     from src.utils_io import write_parquet
