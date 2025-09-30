@@ -4,8 +4,14 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Optional
 
-import duckdb
 import pandas as pd
+try:
+    # duckdb is an optional runtime dependency for some commands (reports may not need it
+    # if they only read parquet). Import lazily inside db_conn to avoid top-level ImportError
+    # when running parts of the codebase that don't require DuckDB.
+    import duckdb  # type: ignore
+except Exception:  # pragma: no cover - environment dependent
+    duckdb = None
 import requests
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -18,6 +24,11 @@ SEC_CACHE.mkdir(parents=True, exist_ok=True)
 
 def db_conn():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if duckdb is None:
+        raise ImportError(
+            "duckdb is required for database operations but is not installed or failed to import. "
+            "Install it with `pip install duckdb` (or check binary compatibility with your NumPy build)."
+        )
     con = duckdb.connect(str(DB_PATH))
     return con
 
@@ -77,7 +88,7 @@ def get_ticker_cik_map(force_refresh: bool = False) -> Dict[str, str]:
     return mapping
 
 
-def register_temp_view(con: duckdb.DuckDBPyConnection, name: str, df: pd.DataFrame) -> Optional[str]:
+def register_temp_view(con: Any, name: str, df: pd.DataFrame) -> Optional[str]:
     """Register a pandas DataFrame as a DuckDB view if it has rows."""
     if df is None or df.empty:
         return None
@@ -85,6 +96,6 @@ def register_temp_view(con: duckdb.DuckDBPyConnection, name: str, df: pd.DataFra
     return name
 
 
-def unregister_temp_view(con: duckdb.DuckDBPyConnection, name: Optional[str]) -> None:
+def unregister_temp_view(con: Any, name: Optional[str]) -> None:
     if name:
         con.unregister(name)
