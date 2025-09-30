@@ -26,3 +26,4 @@ tqdm                   # progress bars for backfills
 
 # Testing
 pytest
+PyYAML
