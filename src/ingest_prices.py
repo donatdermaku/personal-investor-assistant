@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import pathlib
 import sys
 
@@ -22,7 +22,7 @@ def main():
     cfg = load_yaml(ROOT / "watchlist.yml")
     tickers = cfg["tickers"]
     start = "2015-01-01"  # initial backfill
-    end = datetime.utcnow().strftime("%Y-%m-%d")
+    end = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
     data = []
     for t in tickers:
