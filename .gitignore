@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+# ignore generated data and reports
+/data/db.duckdb
+/data/parquet/
+/data/sec/
+/reports/
+
