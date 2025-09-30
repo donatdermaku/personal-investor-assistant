@@ -25,7 +25,7 @@ jobs:
       - name: Install deps
         run: pip install -r requirements.txt
 
-      - name: Debug: Print working directory and Python path
+      - name: "Debug: Print working directory and Python path"
         run: |
           echo "PWD: $(pwd)"
           echo "PYTHONPATH: $PYTHONPATH"
