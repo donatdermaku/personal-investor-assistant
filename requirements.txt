@@ -1,6 +1,7 @@
 # Core data handling
 pandas
-numpy
+# Pin numpy to <2 to avoid compatibility issues with compiled extensions built for NumPy 1.x
+numpy<2
 
 # Market data
 yfinance
@@ -12,7 +13,11 @@ lxml                   # XML/HTML parsing for SEC data
 
 # Storage
 duckdb
-pyarrow                # for Parquet support
+# Use a known stable pyarrow release compatible with NumPy<2
+pyarrow==12.0.0        # for Parquet support
+
+# optional numeric expression engine used by pandas; pin to avoid import issues
+numexpr
 
 # Reporting
 jinja2                 # HTML templating

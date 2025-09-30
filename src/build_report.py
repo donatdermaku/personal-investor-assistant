@@ -21,6 +21,18 @@ def _all(prefix: str) -> list[pathlib.Path]:
     return sorted(PARQ.glob(f"{prefix}_*.parquet"))
 
 
+def _safe_read_parquet(path: pathlib.Path) -> pd.DataFrame:
+    """Read a parquet file and return an empty DataFrame on failure, logging a warning."""
+    try:
+        return pd.read_parquet(path)
+    except Exception as e:  # pragma: no cover - environment dependent
+        # Import here to avoid top-level dependency for lightweight runs
+        import sys
+
+        print(f"Warning: failed to read parquet {path}: {e}", file=sys.stderr)
+        return pd.DataFrame()
+
+
 def _normalize_weights(tickers: list[str], weights_cfg: dict[str, float]) -> pd.Series:
     if not tickers:
         return pd.Series(dtype=float)
@@ -43,9 +55,9 @@ def main():
     fundamentals_path = _latest("fundamentals_quarterly")
     prices_path = _latest("prices_daily")
 
-    scores = pd.read_parquet(scores_path) if scores_path else pd.DataFrame()
-    fundamentals = pd.read_parquet(fundamentals_path) if fundamentals_path else pd.DataFrame()
-    prices = pd.read_parquet(prices_path) if prices_path else pd.DataFrame()
+    scores = _safe_read_parquet(scores_path) if scores_path else pd.DataFrame()
+    fundamentals = _safe_read_parquet(fundamentals_path) if fundamentals_path else pd.DataFrame()
+    prices = _safe_read_parquet(prices_path) if prices_path else pd.DataFrame()
 
     scores = scores[scores["ticker"].isin(tickers)] if not scores.empty else scores
     fundamentals = fundamentals[fundamentals["ticker"].isin(tickers)] if not fundamentals.empty else fundamentals
@@ -73,7 +85,7 @@ def main():
             snap_date = datetime.strptime(date_part, "%Y-%m-%d")
         except ValueError:
             continue
-        df = pd.read_parquet(path)
+        df = _safe_read_parquet(path)
         df = df[df["ticker"].isin(tickers)]
         if df.empty:
             continue
