@@ -27,11 +27,11 @@ jobs:
       - name: Install deps
         run: pip install -r requirements.txt
 
-      - name: Debug: pip freeze
+      - name: "Debug: pip freeze"
         run: |
           pip freeze
 
-      - name: Reinstall binary deps (pyarrow, numexpr)
+      - name: "Reinstall binary deps (pyarrow, numexpr)"
         run: |
           # Force reinstall binary deps so they match the pinned numpy version
           pip install --upgrade --force-reinstall pyarrow numexpr || true
