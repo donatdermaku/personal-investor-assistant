@@ -108,6 +108,10 @@ def main():
         columns=["fiscal_end","ticker", *FACTS.keys(), "filed", "cik", "sic", "entity_name"]
     )
 
+    # Ensure the DataFrame has all expected columns (fill any missing with NaN)
+    expected_cols = ["fiscal_end", "ticker", *FACTS.keys(), "filed", "cik", "sic", "entity_name"]
+    fundamentals = fundamentals.reindex(columns=expected_cols)
+
     con = db_conn()
     con.execute("""
         CREATE TABLE IF NOT EXISTS fundamentals_quarterly (
