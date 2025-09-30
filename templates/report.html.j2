@@ -14,31 +14,122 @@
   </style>
 </head>
 <body>
-  <h1>Daily Screen — Top Ideas</h1>
+  <h1>Personal Investor Assistant — Watchlist Pulse</h1>
   <div class="sub">Generated: {{ generated_at }}</div>
-  <table>
-    <thead>
-      <tr>
-        <th>Ticker</th><th>Price</th><th>P/E (TTM)</th><th>FCF Yield</th>
-        <th>ROA</th><th>Leverage</th><th>Mom6m</th><th>Mom12m</th><th>Composite</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in top10 %}
-      <tr>
-        <td><span class="chip">{{ r["ticker"] }}</span></td>
-        <td>{{ "%.2f"|format(r["Price"] or 0) }}</td>
-        <td>{{ "%.1f"|format(r["PE_TTM"] or 0) }}</td>
-        <td>{{ "%.2f"|format(r["FCFYield_TTM"] or 0) }}</td>
-        <td>{{ "%.3f"|format(r["Qual_ROA"] or 0) }}</td>
-        <td>{{ "%.3f"|format(r["Leverage"] or 0) }}</td>
-        <td>{{ "%.2f"|format(r["Mom6m"] or 0) }}</td>
-        <td>{{ "%.2f"|format(r["Mom12m"] or 0) }}</td>
-        <td><b>{{ "%.3f"|format(r["Composite"] or 0) }}</b></td>
-      </tr>
+
+  {% if warnings %}
+  <div style="background:#fff4e5; border:1px solid #f5c97a; padding:12px 16px; margin-bottom:16px; border-radius:6px; color:#7a4b00;">
+    <strong>Warnings:</strong>
+    <ul style="margin:8px 0 0 18px; padding:0;">
+      {% for w in warnings %}
+      <li>{{ w }}</li>
       {% endfor %}
-    </tbody>
-  </table>
-  <p style="color:#888; margin-top:24px;">For personal research only. Not investment advice.</p>
+    </ul>
+  </div>
+  {% endif %}
+
+  <section style="margin-bottom:28px;">
+    <h2 style="margin-bottom:6px;">Portfolio Overview</h2>
+    <div style="display:flex; flex-wrap:wrap; gap:16px;">
+      <div style="flex:1 1 180px; background:#f6f8fa; padding:12px 16px; border-radius:8px;">
+        <div style="font-size:12px; text-transform:uppercase; color:#57606a;">Latest Composite</div>
+        <div style="font-size:24px; font-weight:600;">{% if latest_portfolio_composite is not none and latest_portfolio_composite == latest_portfolio_composite %}{{ "%.3f"|format(latest_portfolio_composite) }}{% else %}--{% endif %}</div>
+      </div>
+      <div style="flex:1 1 180px; background:#f6f8fa; padding:12px 16px; border-radius:8px;">
+        <div style="font-size:12px; text-transform:uppercase; color:#57606a;">YTD Return (Eq-weight)</div>
+        <div style="font-size:24px; font-weight:600;">{% if portfolio_return is not none and portfolio_return == portfolio_return %}{{ "%.1f%%"|format(portfolio_return * 100) }}{% else %}--{% endif %}</div>
+      </div>
+      <div style="flex:1 1 180px; background:#f6f8fa; padding:12px 16px; border-radius:8px;">
+        <div style="font-size:12px; text-transform:uppercase; color:#57606a;">Latest Drawdown</div>
+        <div style="font-size:24px; font-weight:600;">{% if portfolio_drawdown is not none and portfolio_drawdown == portfolio_drawdown %}{{ "%.1f%%"|format(portfolio_drawdown * 100) }}{% else %}--{% endif %}</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;">
+      <h3 style="margin-bottom:6px;">Composite History</h3>
+      {% if composite_history %}
+      <table>
+        <thead><tr><th>Date</th><th>Weighted Composite</th></tr></thead>
+        <tbody>
+          {% for entry in composite_history[-10:] %}
+          <tr>
+            <td style="text-align:left;">{{ entry.date }}</td>
+            <td>{{ "%.3f"|format(entry.value) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:#6e7781;">No composite history captured yet.</p>
+      {% endif %}
+    </div>
+    <div style="margin-top:16px;">
+      <h3 style="margin-bottom:6px;">Portfolio Index (Eq-weight)</h3>
+      {% if price_history %}
+      <table>
+        <thead><tr><th>Date</th><th>Index</th></tr></thead>
+        <tbody>
+          {% for entry in price_history[-10:] %}
+          <tr>
+            <td style="text-align:left;">{{ entry.date }}</td>
+            <td>{{ "%.3f"|format(entry.value) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:#6e7781;">Insufficient price history to compute portfolio index.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section>
+    <h2 style="margin-bottom:6px;">Watchlist Detail</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Ticker</th>
+          <th>Note</th>
+          <th>Price</th>
+          <th>Composite</th>
+          <th>Δ Composite (d)</th>
+          <th>Value Z</th>
+          <th>Quality Z</th>
+          <th>Momentum</th>
+          <th>Piotroski F</th>
+          <th>Vol(30d)</th>
+          <th>Sharpe(1y)</th>
+          <th>Industry</th>
+          <th>Last Filing</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in watch_rows %}
+        <tr>
+          <td><span class="chip">{{ r.ticker }}</span></td>
+          <td style="text-align:left; max-width:220px;">{{ r.note }}</td>
+          <td>{% if r.price is not none %}{{ "%.2f"|format(r.price) }}{% else %}--{% endif %}</td>
+          <td>{% if r.composite is not none %}{{ "%.3f"|format(r.composite) }}{% else %}--{% endif %}</td>
+          <td>{% if r.composite_delta is not none %}{{ "%.3f"|format(r.composite_delta) }}{% else %}--{% endif %}</td>
+          <td>{% if r.value_z is not none %}{{ "%.2f"|format(r.value_z) }}{% else %}--{% endif %}</td>
+          <td>{% if r.quality_z is not none %}{{ "%.2f"|format(r.quality_z) }}{% else %}--{% endif %}</td>
+          <td>{% if r.momentum is not none %}{{ "%.2f"|format(r.momentum) }}{% else %}--{% endif %}</td>
+          <td>{% if r.piotroski is not none %}{{ "%.0f"|format(r.piotroski) }}{% else %}--{% endif %}</td>
+          <td>{% if r.volatility is not none %}{{ "%.2f"|format(r.volatility) }}{% else %}--{% endif %}</td>
+          <td>{% if r.sharpe is not none %}{{ "%.2f"|format(r.sharpe) }}{% else %}--{% endif %}</td>
+          <td>{% if r.industry %}{{ r.industry }}{% else %}--{% endif %}</td>
+          <td>
+            {% if r.filing_url %}
+              <a href="{{ r.filing_url }}" target="_blank" rel="noopener">{{ r.filed or "View" }}</a>
+            {% else %}
+              {{ r.filed or "--" }}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <p style="color:#888; margin-top:24px;">Educational use only. Not investment advice.</p>
 </body>
 </html>

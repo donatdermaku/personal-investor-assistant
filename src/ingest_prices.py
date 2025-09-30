@@ -1,6 +1,22 @@
-import pathlib, pandas as pd, yfinance as yf
-from datetime import datetime, timedelta
-from src.utils_io import ROOT, PARQ, db_conn, load_yaml, today_str
+from datetime import datetime
+import pathlib
+import sys
+
+import pandas as pd
+import yfinance as yf
+
+if __package__ is None or __package__ == "":
+    sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
+
+from src.utils_io import (
+    PARQ,
+    ROOT,
+    db_conn,
+    load_yaml,
+    register_temp_view,
+    today_str,
+    unregister_temp_view,
+)
 
 def main():
     cfg = load_yaml(ROOT / "watchlist.yml")
@@ -24,15 +40,25 @@ def main():
 
     # Write to DuckDB + Parquet snapshot
     con = db_conn()
-    con.execute("""
+    con.execute(
+        """
         CREATE TABLE IF NOT EXISTS prices_daily (
             date DATE, ticker VARCHAR, open DOUBLE, high DOUBLE, low DOUBLE,
             close DOUBLE, adj_close DOUBLE, volume BIGINT
         )
-    """)
-    con.execute("DELETE FROM prices_daily WHERE ticker IN ({})".format(
-        ",".join(["?"]*len(tickers))), tickers)
-    con.execute("INSERT INTO prices_daily SELECT * FROM prices", {"prices": prices})
+        """
+    )
+    if tickers:
+        con.execute(
+            "DELETE FROM prices_daily WHERE ticker IN ({})".format(
+                ",".join(["?"] * len(tickers))
+            ),
+            tickers,
+        )
+    view_name = register_temp_view(con, "prices_tmp", prices)
+    if view_name:
+        con.execute(f"INSERT INTO prices_daily SELECT * FROM {view_name}")
+    unregister_temp_view(con, view_name)
 
     from src.utils_io import write_parquet
     write_parquet(prices, PARQ / f"prices_daily_{today_str()}.parquet")
