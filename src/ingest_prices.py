@@ -1,6 +1,6 @@
 import pathlib, pandas as pd, yfinance as yf
 from datetime import datetime, timedelta
-from utils_io import ROOT, PARQ, db_conn, load_yaml, today_str
+from src.utils_io import ROOT, PARQ, db_conn, load_yaml, today_str
 
 def main():
     cfg = load_yaml(ROOT / "watchlist.yml")

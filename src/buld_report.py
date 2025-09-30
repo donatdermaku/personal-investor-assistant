@@ -1,7 +1,7 @@
 import pathlib, pandas as pd
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from utils_io import ROOT, PARQ, today_str
+from src.utils_io import ROOT, PARQ, today_str
 
 def main():
     # load latest parquet snapshots by prefix

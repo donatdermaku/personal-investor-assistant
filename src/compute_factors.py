@@ -1,6 +1,6 @@
 import duckdb, pandas as pd, numpy as np
-from utils_io import db_conn, PARQ, today_str
-from utils_stats import zscore, winsorize
+from src.utils_io import db_conn, PARQ, today_str
+from src.utils_stats import zscore, winsorize
 
 def compute(prices: pd.DataFrame, fnds: pd.DataFrame) -> pd.DataFrame:
     # TTM basics from fundamentals
