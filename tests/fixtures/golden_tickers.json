@@ -1,0 +1,74 @@
+[
+  {
+    "ticker": "MSFT",
+    "price": 330.0,
+    "shares": 7400000000.0,
+    "fcf_ttm": 64000000000.0,
+    "debt": 58000000000.0,
+    "cash": 76000000000.0,
+    "ebitda_ttm": 97000000000.0,
+    "net_income_ttm": 72000000000.0,
+    "interest_expense_ttm": 2200000000.0,
+    "total_assets": 411000000000.0,
+    "current_liabilities": 90000000000.0,
+    "expected": {
+      "fcf_yield": 0.0262080262,
+      "ev_to_ebitda": 24.989690722,
+      "roic": 0.2448844884
+    }
+  },
+  {
+    "ticker": "AAPL",
+    "price": 190.0,
+    "shares": 15700000000.0,
+    "fcf_ttm": 100000000000.0,
+    "debt": 120000000000.0,
+    "cash": 60000000000.0,
+    "ebitda_ttm": 130000000000.0,
+    "net_income_ttm": 100000000000.0,
+    "interest_expense_ttm": 3000000000.0,
+    "total_assets": 352000000000.0,
+    "current_liabilities": 130000000000.0,
+    "expected": {
+      "fcf_yield": 0.0335232987,
+      "ev_to_ebitda": 23.407692308,
+      "roic": 0.365248227
+    }
+  },
+  {
+    "ticker": "JPM",
+    "price": 145.0,
+    "shares": 2900000000.0,
+    "fcf_ttm": 45000000000.0,
+    "debt": 380000000000.0,
+    "cash": 120000000000.0,
+    "ebitda_ttm": 75000000000.0,
+    "net_income_ttm": 45000000000.0,
+    "interest_expense_ttm": 7000000000.0,
+    "total_assets": 3920000000000.0,
+    "current_liabilities": 750000000000.0,
+    "expected": {
+      "fcf_yield": 0.1070154578,
+      "ev_to_ebitda": 9.0733333333,
+      "roic": 0.0151603499
+    }
+  },
+  {
+    "ticker": "XOM",
+    "price": 115.0,
+    "shares": 4100000000.0,
+    "fcf_ttm": 65000000000.0,
+    "debt": 45000000000.0,
+    "cash": 30000000000.0,
+    "ebitda_ttm": 90000000000.0,
+    "net_income_ttm": 55000000000.0,
+    "interest_expense_ttm": 1500000000.0,
+    "total_assets": 369000000000.0,
+    "current_liabilities": 95000000000.0,
+    "expected": {
+      "fcf_yield": 0.1378579003,
+      "ev_to_ebitda": 5.4055555556,
+      "roic": 0.1955017301
+    }
+  }
+]
