@@ -1,6 +1,6 @@
 import pathlib
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -108,7 +108,7 @@ def main():
                 for idx, val in portfolio_index.items()
             ]
             if not portfolio_index.empty:
-                start_of_year = portfolio_index[portfolio_index.index >= pd.Timestamp(datetime.utcnow().year, 1, 1)]
+                start_of_year = portfolio_index[portfolio_index.index >= pd.Timestamp(datetime.now(tz=timezone.utc).year, 1, 1)]
                 if not start_of_year.empty:
                     base = start_of_year.iloc[0]
                     if base != 0:
@@ -163,13 +163,33 @@ def main():
     if not prices.empty:
         latest_price_date = pd.to_datetime(prices["date"]).max()
         if latest_price_date is not None:
-            lag_days = (pd.Timestamp.utcnow().normalize() - latest_price_date.normalize()).days
+            # compute lag in a timezone-safe way: convert both to UTC-aware and normalize
+            now_utc = pd.Timestamp.now(tz="UTC").normalize()
+            try:
+                if latest_price_date.tzinfo is None and getattr(latest_price_date, "tz", None) is None:
+                    latest_norm = latest_price_date.tz_localize("UTC").normalize()
+                else:
+                    latest_norm = latest_price_date.tz_convert("UTC").normalize()
+            except Exception:
+                # fallback to naive normalize if conversion fails
+                latest_norm = pd.to_datetime(latest_price_date).normalize()
+
+            lag_days = (now_utc - latest_norm).days
             if lag_days > 3:
                 warnings.append(f"Prices are {lag_days} days old.")
     if not fundamentals.empty:
         latest_fund_date = pd.to_datetime(fundamentals["fiscal_end"]).max()
         if latest_fund_date is not None:
-            lag_quarters = (pd.Timestamp.utcnow().normalize() - latest_fund_date.normalize()).days / 90
+            now_utc = pd.Timestamp.now(tz="UTC").normalize()
+            try:
+                if latest_fund_date.tzinfo is None and getattr(latest_fund_date, "tz", None) is None:
+                    fund_norm = latest_fund_date.tz_localize("UTC").normalize()
+                else:
+                    fund_norm = latest_fund_date.tz_convert("UTC").normalize()
+            except Exception:
+                fund_norm = pd.to_datetime(latest_fund_date).normalize()
+
+            lag_quarters = (now_utc - fund_norm).days / 90
             if lag_quarters > 2:
                 warnings.append("Fundamentals stale (>2 quarters).")
     if not watch_rows:
@@ -181,7 +201,7 @@ def main():
     )
     tpl = env.get_template("report.html.j2")
     html = tpl.render(
-        generated_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+    generated_at=datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         watch_rows=watch_rows,
         composite_history=composite_history,
         price_history=price_history,
@@ -195,7 +215,7 @@ def main():
     reports.mkdir(parents=True, exist_ok=True)
     (reports / "latest.html").write_text(html, encoding="utf-8")
 
-    ym = datetime.utcnow().strftime("%Y-%m")
+    ym = datetime.now(tz=timezone.utc).strftime("%Y-%m")
     (reports / f"{ym}").mkdir(parents=True, exist_ok=True)
     (reports / f"{ym}/index.html").write_text(html, encoding="utf-8")
     print("Built report.")

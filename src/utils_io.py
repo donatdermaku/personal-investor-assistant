@@ -1,7 +1,7 @@
 import json
 import pathlib
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Optional
 
 import duckdb
@@ -26,7 +26,7 @@ def write_parquet(df: pd.DataFrame, path: pathlib.Path):
     df.to_parquet(path, index=False)
 
 def today_str() -> str:
-    return datetime.utcnow().strftime("%Y-%m-%d")
+    return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
 def load_yaml(path: pathlib.Path) -> Dict[str, Any]:
     import yaml
