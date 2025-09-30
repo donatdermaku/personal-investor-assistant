@@ -34,7 +34,7 @@ def main():
         ",".join(["?"]*len(tickers))), tickers)
     con.execute("INSERT INTO prices_daily SELECT * FROM prices", {"prices": prices})
 
-    from utils_io import write_parquet
+    from src.utils_io import write_parquet
     write_parquet(prices, PARQ / f"prices_daily_{today_str()}.parquet")
     print(f"Saved prices for {len(tickers)} tickers.")
 

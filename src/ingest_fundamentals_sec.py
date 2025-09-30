@@ -94,7 +94,7 @@ def main():
         ",".join(["?"]*len(tickers))), tickers)
     con.execute("INSERT INTO fundamentals_quarterly SELECT * FROM df", {"df": fundamentals})
 
-    from utils_io import write_parquet
+    from src.utils_io import write_parquet
     write_parquet(fundamentals, PARQ / f"fundamentals_quarterly_{today_str()}.parquet")
     print(f"Saved fundamentals for {len(tickers)} tickers.")
 
