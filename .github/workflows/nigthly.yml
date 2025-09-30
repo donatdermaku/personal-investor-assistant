@@ -61,6 +61,14 @@ jobs:
       - name: Build static report
         run: python -m src.build_report
 
+      - name: Debug reports structure
+        run: |
+          echo "Reports directory contents:"
+          ls -la reports/
+          echo "---"
+          echo "Checking for index.html:"
+          ls -la reports/index.html || echo "index.html NOT FOUND"
+
       - name: Commit data & reports
         run: |
           git config user.name "github-actions"

@@ -226,6 +226,7 @@ def main():
     reports = ROOT / "reports"
     reports.mkdir(parents=True, exist_ok=True)
     (reports / "latest.html").write_text(html, encoding="utf-8")
+    (reports / "index.html").write_text(html, encoding="utf-8")
 
     ym = datetime.now(tz=timezone.utc).strftime("%Y-%m")
     (reports / f"{ym}").mkdir(parents=True, exist_ok=True)
