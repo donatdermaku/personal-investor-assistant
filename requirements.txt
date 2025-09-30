@@ -1,0 +1,28 @@
+# Core data handling
+pandas
+numpy
+
+# Market data
+yfinance
+requests
+
+# Fundamentals
+sec-edgar-downloader   # to fetch 10-K/10-Q filings easily
+lxml                   # XML/HTML parsing for SEC data
+
+# Storage
+duckdb
+pyarrow                # for Parquet support
+
+# Reporting
+jinja2                 # HTML templating
+
+# Optional: PDF report rendering (local use only, not GitHub Actions)
+weasyprint
+
+# Utilities
+python-dateutil
+tqdm                   # progress bars for backfills
+
+# Testing
+pytest

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Personal Investor Assistant — Daily</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; margin:24px; line-height:1.4}
+    h1{margin-bottom:4px} .sub{color:#666; margin-bottom:16px}
+    table{border-collapse:collapse; width:100%}
+    th,td{padding:8px 10px; border-bottom:1px solid #eee; text-align:right}
+    th:first-child, td:first-child{text-align:left}
+    .chip{display:inline-block; padding:2px 8px; border-radius:14px; background:#f4f6f8}
+  </style>
+</head>
+<body>
+  <h1>Daily Screen — Top Ideas</h1>
+  <div class="sub">Generated: {{ generated_at }}</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Ticker</th><th>Price</th><th>P/E (TTM)</th><th>FCF Yield</th>
+        <th>ROA</th><th>Leverage</th><th>Mom6m</th><th>Mom12m</th><th>Composite</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in top10 %}
+      <tr>
+        <td><span class="chip">{{ r["ticker"] }}</span></td>
+        <td>{{ "%.2f"|format(r["Price"] or 0) }}</td>
+        <td>{{ "%.1f"|format(r["PE_TTM"] or 0) }}</td>
+        <td>{{ "%.2f"|format(r["FCFYield_TTM"] or 0) }}</td>
+        <td>{{ "%.3f"|format(r["Qual_ROA"] or 0) }}</td>
+        <td>{{ "%.3f"|format(r["Leverage"] or 0) }}</td>
+        <td>{{ "%.2f"|format(r["Mom6m"] or 0) }}</td>
+        <td>{{ "%.2f"|format(r["Mom12m"] or 0) }}</td>
+        <td><b>{{ "%.3f"|format(r["Composite"] or 0) }}</b></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p style="color:#888; margin-top:24px;">For personal research only. Not investment advice.</p>
+</body>
+</html>

@@ -1,0 +1,64 @@
+name: Nightly Data & Report
+
+on:
+  schedule:
+    - cron: "45 0 * * *"   # 00:45 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Ingest prices
+        run: python -m src.ingest_prices
+
+      - name: Ingest fundamentals (SEC)
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: |
+          if [ -z "$SEC_USER_AGENT" ]; then
+            echo "SEC_USER_AGENT not set; using default UA."
+          fi
+          python -m src.ingest_fundamentals_sec
+
+      - name: Compute factors & scores
+        run: python -m src.compute_factors
+
+      - name: Build static report
+        run: python -m src.build_report
+
+      - name: Commit data & reports
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/parquet/*.parquet reports/*
+          git commit -m "Nightly update $(date -u +'%Y-%m-%d')" || echo "No changes"
+          git push
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: reports
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4

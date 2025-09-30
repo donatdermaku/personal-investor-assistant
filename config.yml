@@ -1,0 +1,24 @@
+weights:
+  value: 0.4
+  quality: 0.4
+  momentum: 0.2
+
+alerts:
+  composite_pctile_min: 0.8
+  value_z_max: -0.5
+  momentum_positive: true
+  f_drop_points: 2
+  composite_drop_points: 15
+  big_down_day_pct: -5
+
+report:
+  keep_monthly_snapshots: true
+  include_portfolio_view: true
+  show_watchlist_only: true
+
+fetch:
+  retries: 3
+  backoff_seconds: 2
+
+schedule:
+  cron_utc: "45 0 * * *"   # 00:45 UTC nightly (02:45 Europe/Vienna)
