@@ -21,6 +21,9 @@ numexpr
 
 # Reporting
 jinja2                 # HTML templating
+streamlit>=1.32        # Streamlit app
+plotly                 # Streamlit charts
+streamlit-aggrid       # Interactive tables
 
 # Optional: PDF report rendering (local use only, not GitHub Actions)
 weasyprint
@@ -28,6 +31,7 @@ weasyprint
 # Utilities
 python-dateutil
 tqdm                   # progress bars for backfills
+scipy                  # risk metrics (future Streamlit pages)
 
 # Testing
 pytest

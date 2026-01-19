@@ -213,3 +213,7 @@ __marimo__/
 !/data/parquet/
 !/reports/
 
+# Local generated artifacts
+.DS_Store
+/data/
+/reports/
