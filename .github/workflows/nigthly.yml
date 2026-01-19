@@ -5,8 +5,12 @@ on:
     - cron: "45 0 * * *"   # 00:45 UTC daily
   workflow_dispatch:
 
+concurrency:
+  group: nightly-report
+  cancel-in-progress: true
+
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -26,22 +30,11 @@ jobs:
 
       - name: Install deps
         run: pip install -r requirements.txt
-
-
       - name: "Debug: pip freeze"
-        run: |
-          pip freeze
+        run: pip freeze
 
-      - name: "Reinstall binary deps (pyarrow, numexpr)"
-        run: |
-          # Force reinstall binary deps so they match the pinned numpy version
-          pip install --upgrade --force-reinstall pyarrow numexpr || true
-
-      - name: "Debug: Print working directory and Python path"
-        run: |
-          echo "PWD: $(pwd)"
-          echo "PYTHONPATH: $PYTHONPATH"
-          python -c 'import sys; print("sys.path:", sys.path)'
+      - name: Ingest universe
+        run: python -m src.ingest_universe
 
       - name: Ingest prices
         run: python -m src.ingest_prices
@@ -61,22 +54,9 @@ jobs:
       - name: Build static report
         run: python -m src.build_report
 
-      - name: Debug reports structure
+      - name: Validate report output
         run: |
-          echo "Reports directory contents:"
-          ls -la reports/
-          echo "---"
-          echo "Checking for index.html:"
-          ls -la reports/index.html || echo "index.html NOT FOUND"
-
-      - name: Commit data & reports
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@users.noreply.github.com"
-          git add data/parquet/*.parquet reports/*
-          git commit -m "Nightly update $(date -u +'%Y-%m-%d')" || echo "No changes"
-          # Attempt push but don't fail the workflow if branch protection prevents it
-          git push || echo "Push failed (branch protected?)"
+          test -f reports/index.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -89,4 +69,3 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v4
-

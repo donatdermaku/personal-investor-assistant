@@ -3,6 +3,11 @@ weights:
   quality: 0.4
   momentum: 0.2
 
+universe:
+  mode: "sp500"   # manual | sp500 | nasdaq100
+  tickers: []
+  min_size: 200
+
 alerts:
   composite_pctile_min: 0.8
   value_z_max: -0.5
@@ -10,15 +15,21 @@ alerts:
   f_drop_points: 2
   composite_drop_points: 15
   big_down_day_pct: -5
+  drawdown_alert_pct: -20
+  vol_spike_ratio: 1.5
+  filings_lookback_days: 7
 
 report:
   keep_monthly_snapshots: true
   include_portfolio_view: true
   show_watchlist_only: true
+  ticker_history_days: 365
+  max_history_snapshots: 260
 
 fetch:
   retries: 3
   backoff_seconds: 2
+  sec_cache_hours: 168
 
 schedule:
   cron_utc: "45 0 * * *"   # 00:45 UTC nightly (02:45 Europe/Vienna)

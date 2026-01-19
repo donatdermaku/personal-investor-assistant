@@ -1,4 +1,5 @@
 import json
+import os
 import pathlib
 import time
 from datetime import datetime, timezone
@@ -19,8 +20,12 @@ DATA = ROOT / "data"
 PARQ = DATA / "parquet"
 DB_PATH = DATA / "db.duckdb"
 SEC_CACHE = DATA / "sec"
+CACHE = DATA / "cache"
+UNIVERSE = DATA / "universe"
 PARQ.mkdir(parents=True, exist_ok=True)
 SEC_CACHE.mkdir(parents=True, exist_ok=True)
+CACHE.mkdir(parents=True, exist_ok=True)
+UNIVERSE.mkdir(parents=True, exist_ok=True)
 
 def db_conn():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -59,13 +64,36 @@ def fetch_sec_file(url: str, cache_name: str, max_age_hours: int = 24) -> pathli
         if age_hours < max_age_hours:
             return cache_path
 
-    headers = {
-        "User-Agent": "personal-investor-assistant (contact: example@example.com)",
-    }
+    headers = {"User-Agent": sec_user_agent()}
     resp = requests.get(url, headers=headers, timeout=30)
     resp.raise_for_status()
     cache_path.write_bytes(resp.content)
     return cache_path
+
+
+def fetch_url_cached(
+    url: str,
+    cache_name: str,
+    max_age_hours: int = 24,
+    timeout: int = 30,
+) -> pathlib.Path:
+    cache_path = CACHE / cache_name
+    if cache_path.exists():
+        age_hours = (time.time() - cache_path.stat().st_mtime) / 3600
+        if age_hours < max_age_hours:
+            return cache_path
+    headers = {"User-Agent": sec_user_agent()}
+    resp = requests.get(url, headers=headers, timeout=timeout)
+    resp.raise_for_status()
+    cache_path.write_bytes(resp.content)
+    return cache_path
+
+
+def sec_user_agent() -> str:
+    ua = os.environ.get("SEC_USER_AGENT")
+    if ua:
+        return ua
+    return "personal-investor-assistant (contact: example@example.com)"
 
 
 def get_ticker_cik_map(force_refresh: bool = False) -> Dict[str, str]:
@@ -99,3 +127,18 @@ def register_temp_view(con: Any, name: str, df: pd.DataFrame) -> Optional[str]:
 def unregister_temp_view(con: Any, name: Optional[str]) -> None:
     if name:
         con.unregister(name)
+
+
+def normalize_ticker(t: str) -> str:
+    raw = str(t or "")
+    collapsed = " ".join(raw.strip().split())
+    return collapsed.upper()
+
+
+def yahoo_ticker(t: str) -> str:
+    normalized = normalize_ticker(t)
+    return normalized.replace(".", "-")
+
+
+def sec_ticker(t: str) -> str:
+    return yahoo_ticker(t)

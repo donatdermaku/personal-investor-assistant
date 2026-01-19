@@ -9,6 +9,14 @@ def zscore(series: pd.Series) -> pd.Series:
     return (series - series.mean(skipna=True)) / std
 
 
+def robust_zscore(series: pd.Series) -> pd.Series:
+    median = series.median(skipna=True)
+    mad = (series - median).abs().median(skipna=True)
+    if mad == 0 or np.isnan(mad):
+        return pd.Series(np.zeros(len(series)), index=series.index)
+    return (series - median) / (1.4826 * mad)
+
+
 def winsorize(series: pd.Series, lower: float = 0.01, upper: float = 0.99) -> pd.Series:
     if series.empty:
         return series
@@ -22,9 +30,10 @@ def pct_change_n(prices: pd.Series, n: int) -> float:
     return prices.iloc[-1] / prices.iloc[-n - 1] - 1.0
 
 
-def industry_zscores(values: pd.Series, industries: pd.Series) -> pd.Series:
+def industry_zscores(values: pd.Series, industries: pd.Series, robust: bool = False) -> pd.Series:
     def _zs(x: pd.Series) -> pd.Series:
-        return zscore(x.fillna(x.mean(skipna=True)))
+        cleaned = x.fillna(x.mean(skipna=True))
+        return robust_zscore(cleaned) if robust else zscore(cleaned)
 
     grouped = values.groupby(industries)
     return grouped.transform(_zs)
@@ -93,6 +102,20 @@ def piotroski_f_score(df: pd.DataFrame) -> pd.Series:
     asset_turnover = df["RevenueTTM"] / df["TotalAssets"].replace({0: np.nan})
     shares = df["SharesDilutedTTM"]
 
+    components = piotroski_components(df)
+    return components.fillna(0).sum(axis=1)
+
+
+def piotroski_components(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.sort_values("fiscal_end")
+    roa = df["NetIncomeTTM"] / df["TotalAssets"].replace({0: np.nan})
+    accrual = df["OpCFTTM"] - df["NetIncomeTTM"]
+    leverage = df["Debt"] / df["TotalAssets"].replace({0: np.nan})
+    current_ratio = df["CurrentAssets"] / df["CurrentLiabilities"].replace({0: np.nan})
+    gross_margin = df["GrossProfitTTM"] / df["RevenueTTM"].replace({0: np.nan})
+    asset_turnover = df["RevenueTTM"] / df["TotalAssets"].replace({0: np.nan})
+    shares = df["SharesDilutedTTM"]
+
     components = pd.DataFrame(index=df.index)
     components["roa_pos"] = (roa > 0).astype(int)
     components["cfo_pos"] = (df["OpCFTTM"] > 0).astype(int)
@@ -103,5 +126,4 @@ def piotroski_f_score(df: pd.DataFrame) -> pd.Series:
     components["margin"] = (gross_margin > gross_margin.shift(1)).astype(int)
     components["turnover"] = (asset_turnover > asset_turnover.shift(1)).astype(int)
     components["shares"] = (shares <= shares.shift(1)).astype(int)
-
-    return components.fillna(0).sum(axis=1)
+    return components
