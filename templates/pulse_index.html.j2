@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pulse Archive</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ asset_path }}/report.css" />
+</head>
+<body>
+  <header>
+    <h1>Pulse Archive</h1>
+    <div class="sub">Daily summaries by date</div>
+  </header>
+
+  <div class="container">
+    <ul>
+      {% for d in dates %}
+      <li><a href="{{ d }}/index.html">{{ d }}</a></li>
+      {% endfor %}
+    </ul>
+    <div class="footer"><a class="chip" href="{{ base_path }}/index.html">Back to dashboard</a></div>
+  </div>
+</body>
+</html>

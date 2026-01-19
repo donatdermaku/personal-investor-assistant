@@ -2,53 +2,71 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Personal Investor Assistant — Daily</title>
+  <title>Personal Investor Assistant — Watchlist Pulse</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; margin:24px; line-height:1.4}
-    h1{margin-bottom:4px} .sub{color:#666; margin-bottom:16px}
-    table{border-collapse:collapse; width:100%}
-    th,td{padding:8px 10px; border-bottom:1px solid #eee; text-align:right}
-    th:first-child, td:first-child{text-align:left}
-    .chip{display:inline-block; padding:2px 8px; border-radius:14px; background:#f4f6f8}
-  </style>
+  <link rel="stylesheet" href="{{ asset_path }}/report.css" />
 </head>
 <body>
-  <h1>Personal Investor Assistant — Watchlist Pulse</h1>
-  <div class="sub">Generated: {{ generated_at }}</div>
+  <header>
+    <h1>Personal Investor Assistant — Watchlist Pulse</h1>
+    <div class="sub">Generated: {{ generated_at }}</div>
+  </header>
 
-  {% if warnings %}
-  <div style="background:#fff4e5; border:1px solid #f5c97a; padding:12px 16px; margin-bottom:16px; border-radius:6px; color:#7a4b00;">
-    <strong>Warnings:</strong>
-    <ul style="margin:8px 0 0 18px; padding:0;">
-      {% for w in warnings %}
-      <li>{{ w }}</li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% endif %}
-
-  <section style="margin-bottom:28px;">
-    <h2 style="margin-bottom:6px;">Portfolio Overview</h2>
-    <div style="display:flex; flex-wrap:wrap; gap:16px;">
-      <div style="flex:1 1 180px; background:#f6f8fa; padding:12px 16px; border-radius:8px;">
-        <div style="font-size:12px; text-transform:uppercase; color:#57606a;">Latest Composite</div>
-        <div style="font-size:24px; font-weight:600;">{% if latest_portfolio_composite is not none and latest_portfolio_composite == latest_portfolio_composite %}{{ "%.3f"|format(latest_portfolio_composite) }}{% else %}--{% endif %}</div>
-      </div>
-      <div style="flex:1 1 180px; background:#f6f8fa; padding:12px 16px; border-radius:8px;">
-        <div style="font-size:12px; text-transform:uppercase; color:#57606a;">YTD Return (Eq-weight)</div>
-        <div style="font-size:24px; font-weight:600;">{% if portfolio_return is not none and portfolio_return == portfolio_return %}{{ "%.1f%%"|format(portfolio_return * 100) }}{% else %}--{% endif %}</div>
-      </div>
-      <div style="flex:1 1 180px; background:#f6f8fa; padding:12px 16px; border-radius:8px;">
-        <div style="font-size:12px; text-transform:uppercase; color:#57606a;">Latest Drawdown</div>
-        <div style="font-size:24px; font-weight:600;">{% if portfolio_drawdown is not none and portfolio_drawdown == portfolio_drawdown %}{{ "%.1f%%"|format(portfolio_drawdown * 100) }}{% else %}--{% endif %}</div>
-      </div>
+  <div class="container">
+    {% if warnings %}
+    <div class="warn-box">
+      <strong>Warnings</strong>
+      <ul>
+        {% for w in warnings %}
+        <li>{{ w }}</li>
+        {% endfor %}
+      </ul>
     </div>
-    <div style="margin-top:16px;">
-      <h3 style="margin-bottom:6px;">Composite History</h3>
+    {% endif %}
+
+    <section style="margin-bottom:24px;">
+      <h2>Portfolio Overview</h2>
+      <div class="cards">
+        <div class="card">
+          <div class="card-label">Latest Composite</div>
+          <div class="card-value">
+            {% if latest_portfolio_composite is not none and latest_portfolio_composite == latest_portfolio_composite %}
+              {{ "%.3f"|format(latest_portfolio_composite) }}
+            {% else %}
+              --
+            {% endif %}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-label">YTD Return (Eq-weight)</div>
+          <div class="card-value">
+            {% if portfolio_return is not none and portfolio_return == portfolio_return %}
+              {{ "%.1f%%"|format(portfolio_return * 100) }}
+            {% else %}
+              --
+            {% endif %}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-label">Latest Drawdown</div>
+          <div class="card-value">
+            {% if portfolio_drawdown is not none and portfolio_drawdown == portfolio_drawdown %}
+              {{ "%.1f%%"|format(portfolio_drawdown * 100) }}
+            {% else %}
+              --
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="margin-bottom:24px;">
+      <h2>Composite History</h2>
       {% if composite_history %}
-      <table>
-        <thead><tr><th>Date</th><th>Weighted Composite</th></tr></thead>
+      <table class="table">
+        <thead>
+          <tr><th>Date</th><th>Weighted Composite</th></tr>
+        </thead>
         <tbody>
           {% for entry in composite_history[-10:] %}
           <tr>
@@ -59,77 +77,86 @@
         </tbody>
       </table>
       {% else %}
-      <p style="color:#6e7781;">No composite history captured yet.</p>
+      <p class="sub">No composite history captured yet.</p>
       {% endif %}
-    </div>
-    <div style="margin-top:16px;">
-      <h3 style="margin-bottom:6px;">Portfolio Index (Eq-weight)</h3>
-      {% if price_history %}
-      <table>
-        <thead><tr><th>Date</th><th>Index</th></tr></thead>
-        <tbody>
-          {% for entry in price_history[-10:] %}
+    </section>
+
+    <section>
+      <h2>Watchlist Detail</h2>
+      <div class="table-actions">
+        <input type="text" data-filter placeholder="Filter by ticker or note" />
+        <a class="chip" href="{{ base_path }}/pulse/index.html">Pulse archive</a>
+      </div>
+
+      <table class="table" data-sortable>
+        <thead>
           <tr>
-            <td style="text-align:left;">{{ entry.date }}</td>
-            <td>{{ "%.3f"|format(entry.value) }}</td>
+            <th data-key="ticker">Ticker</th>
+            <th data-key="note">Note</th>
+            <th data-key="price">Price</th>
+            <th data-key="composite">Composite</th>
+            <th data-key="composite_pct">Composite %</th>
+            <th data-key="composite_delta">Δ 1d</th>
+            <th data-key="composite_delta_7d">Δ 7d</th>
+            <th data-key="value_pct">Value %</th>
+            <th data-key="quality_pct">Quality %</th>
+            <th data-key="momentum_pct">Momentum %</th>
+            <th data-key="piotroski">Pio F</th>
+            <th data-key="volatility">Vol 30d</th>
+            <th data-key="sharpe">Sharpe 1y</th>
+            <th data-key="industry">Industry</th>
+            <th data-key="filed">Last Filing</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for r in watch_rows %}
+          <tr data-ticker="{{ r.ticker }}" data-note="{{ r.note }}">
+            <td><a class="chip" href="{{ base_path }}/ticker/{{ r.ticker }}.html">{{ r.ticker }}</a></td>
+            <td style="text-align:left; max-width:220px;">{{ r.note }}</td>
+
+            <td>{% if r.price == r.price %}{{ "%.2f"|format(r.price) }}{% else %}--{% endif %}</td>
+            <td>{% if r.composite == r.composite %}{{ "%.3f"|format(r.composite) }}{% else %}--{% endif %}</td>
+            <td>{% if r.composite_pct == r.composite_pct %}{{ "%.1f"|format(r.composite_pct) }}{% else %}--{% endif %}</td>
+
+            <td>{% if r.composite_delta == r.composite_delta %}{{ "%.2f"|format(r.composite_delta) }}{% else %}--{% endif %}</td>
+            <td>{% if r.composite_delta_7d == r.composite_delta_7d %}{{ "%.2f"|format(r.composite_delta_7d) }}{% else %}--{% endif %}</td>
+
+            <td>{% if r.value_pct == r.value_pct %}{{ "%.1f"|format(r.value_pct) }}{% else %}--{% endif %}</td>
+            <td>{% if r.quality_pct == r.quality_pct %}{{ "%.1f"|format(r.quality_pct) }}{% else %}--{% endif %}</td>
+            <td>{% if r.momentum_pct == r.momentum_pct %}{{ "%.1f"|format(r.momentum_pct) }}{% else %}--{% endif %}</td>
+
+            <td>{% if r.piotroski == r.piotroski %}{{ "%.0f"|format(r.piotroski) }}{% else %}--{% endif %}</td>
+            <td>{% if r.volatility == r.volatility %}{{ "%.2f"|format(r.volatility) }}{% else %}--{% endif %}</td>
+            <td>{% if r.sharpe == r.sharpe %}{{ "%.2f"|format(r.sharpe) }}{% else %}--{% endif %}</td>
+
+            <td>{{ r.industry or "--" }}</td>
+
+            <td>
+              {% if r.filing_url %}
+                <a href="{{ r.filing_url }}" target="_blank" rel="noopener">
+                  {{ r.filed or "View" }}
+                </a>
+              {% else %}
+                {{ r.filed or "--" }}
+              {% endif %}
+              {% if r.data_quality %}
+                <div>
+                  {% for tag in r.data_quality %}
+                    <span class="badge">{{ tag }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
-      {% else %}
-      <p style="color:#6e7781;">Insufficient price history to compute portfolio index.</p>
-      {% endif %}
-    </div>
-  </section>
+    </section>
 
-  <section>
-    <h2 style="margin-bottom:6px;">Watchlist Detail</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Ticker</th>
-          <th>Note</th>
-          <th>Price</th>
-          <th>Composite</th>
-          <th>Δ Composite (d)</th>
-          <th>Value Z</th>
-          <th>Quality Z</th>
-          <th>Momentum</th>
-          <th>Piotroski F</th>
-          <th>Vol(30d)</th>
-          <th>Sharpe(1y)</th>
-          <th>Industry</th>
-          <th>Last Filing</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in watch_rows %}
-        <tr>
-          <td><span class="chip">{{ r.ticker }}</span></td>
-          <td style="text-align:left; max-width:220px;">{{ r.note }}</td>
-          <td>{% if r.price is not none %}{{ "%.2f"|format(r.price) }}{% else %}--{% endif %}</td>
-          <td>{% if r.composite is not none %}{{ "%.3f"|format(r.composite) }}{% else %}--{% endif %}</td>
-          <td>{% if r.composite_delta is not none %}{{ "%.3f"|format(r.composite_delta) }}{% else %}--{% endif %}</td>
-          <td>{% if r.value_z is not none %}{{ "%.2f"|format(r.value_z) }}{% else %}--{% endif %}</td>
-          <td>{% if r.quality_z is not none %}{{ "%.2f"|format(r.quality_z) }}{% else %}--{% endif %}</td>
-          <td>{% if r.momentum is not none %}{{ "%.2f"|format(r.momentum) }}{% else %}--{% endif %}</td>
-          <td>{% if r.piotroski is not none %}{{ "%.0f"|format(r.piotroski) }}{% else %}--{% endif %}</td>
-          <td>{% if r.volatility is not none %}{{ "%.2f"|format(r.volatility) }}{% else %}--{% endif %}</td>
-          <td>{% if r.sharpe is not none %}{{ "%.2f"|format(r.sharpe) }}{% else %}--{% endif %}</td>
-          <td>{% if r.industry %}{{ r.industry }}{% else %}--{% endif %}</td>
-          <td>
-            {% if r.filing_url %}
-              <a href="{{ r.filing_url }}" target="_blank" rel="noopener">{{ r.filed or "View" }}</a>
-            {% else %}
-              {{ r.filed or "--" }}
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </section>
+    <div class="footer">Educational use only. Not investment advice.</div>
+  </div>
 
-  <p style="color:#888; margin-top:24px;">Educational use only. Not investment advice.</p>
+  <script src="{{ asset_path }}/report.js"></script>
 </body>
 </html>

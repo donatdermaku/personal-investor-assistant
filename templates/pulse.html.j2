@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Daily Pulse</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ asset_path }}/report.css" />
+</head>
+<body>
+  <header>
+    <h1>Daily Pulse</h1>
+    <div class="sub">Generated: {{ pulse.generated_at }}</div>
+  </header>
+
+  <div class="container">
+    <section>
+      <h2>Top Movers</h2>
+      <ul>
+        {% for r in pulse.top_movers %}
+        <li>{{ r.ticker }} ({{ "%.1f"|format(r.composite_pct_change_1d) }} pct-pts)</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section>
+      <h2>Volatility Changes</h2>
+      <ul>
+        {% for r in pulse.volatility_changes %}
+        <li>{{ r.ticker }} (x{{ "%.2f"|format(r.vol_ratio) }})</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section>
+      <h2>Drawdown Alerts</h2>
+      <ul>
+        {% for r in pulse.drawdown_alerts %}
+        <li>{{ r.ticker }} ({{ "%.1f%%"|format(r.Drawdown1y * 100) }})</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section>
+      <h2>New Filings</h2>
+      <ul>
+        {% for r in pulse.new_filings %}
+        <li>{{ r.ticker }} ({{ r.filed }})</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section>
+      <h2>Data Quality</h2>
+      <ul>
+        {% for r in pulse.data_quality %}
+        <li>{{ r }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section>
+      <h2>Top Opportunities</h2>
+      <ul>
+        {% for r in pulse.top_opportunities %}
+        <li>{{ r.ticker }} — {{ r.rationale }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section>
+      <h2>Top Risks</h2>
+      <ul>
+        {% for r in pulse.top_risks %}
+        <li>{{ r.ticker }} — {{ r.rationale }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <div class="footer"><a class="chip" href="{{ base_path }}/index.html">Back to dashboard</a></div>
+  </div>
+</body>
+</html>

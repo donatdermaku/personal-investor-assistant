@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>{{ ticker }} — Investor Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ asset_path }}/report.css" />
+</head>
+<body>
+  <header>
+    <h1>{{ ticker }} — Drilldown</h1>
+    <div class="sub">Generated: {{ generated_at }}</div>
+  </header>
+
+  <div class="container" data-ticker-chart="{{ data_path }}">
+    <section style="margin-bottom:24px;">
+      <h2>Snapshot</h2>
+      {% if row is not none %}
+      <div class="cards">
+        <div class="card"><div class="card-label">Composite %</div><div class="card-value">{{ "%.1f"|format(row.composite_pct) }}</div></div>
+        <div class="card"><div class="card-label">Price</div><div class="card-value">{{ "%.2f"|format(row.Price) }}</div></div>
+        <div class="card"><div class="card-label">Drawdown 1y</div><div class="card-value">{{ "%.1f%%"|format(row.Drawdown1y * 100) }}</div></div>
+      </div>
+      {% else %}
+      <p class="sub">No data available for this ticker.</p>
+      {% endif %}
+    </section>
+
+    <section style="margin-bottom:24px;">
+      <h2>Price (1y)</h2>
+      <canvas id="priceChart" width="1000" height="260" style="width:100%; background:#fff; border:1px solid #ded7cc; border-radius:10px;"></canvas>
+    </section>
+
+    <section style="margin-bottom:24px;">
+      <h2>Factor History</h2>
+      <canvas id="factorChart" width="1000" height="260" style="width:100%; background:#fff; border:1px solid #ded7cc; border-radius:10px;"></canvas>
+    </section>
+
+    {% if row is not none %}
+    <section>
+      <h2>Key Metrics</h2>
+      <table class="table">
+        <tbody>
+          <tr><th>Value %</th><td>{{ "%.1f"|format(row.value_pct) }}</td><th>Quality %</th><td>{{ "%.1f"|format(row.quality_pct) }}</td></tr>
+          <tr><th>Momentum %</th><td>{{ "%.1f"|format(row.momentum_pct) }}</td><th>ROIC</th><td>{{ "%.2f"|format(row.ROIC) }}</td></tr>
+          <tr><th>Gross Margin</th><td>{{ "%.2f"|format(row.GrossMargin) }}</td><th>FCF Margin</th><td>{{ "%.2f"|format(row.FCFMargin) }}</td></tr>
+          <tr><th>Revenue Growth YoY</th><td>{{ "%.2f"|format(row.RevenueGrowthYoY) }}</td><th>EPS Growth YoY</th><td>{{ "%.2f"|format(row.EPSGrowthYoY) }}</td></tr>
+          <tr><th>Debt/EBITDA</th><td>{{ "%.2f"|format(row.DebtToEBITDA) }}</td><th>Interest Coverage</th><td>{{ "%.2f"|format(row.InterestCoverage) }}</td></tr>
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+
+    <div class="footer"><a class="chip" href="{{ base_path }}/index.html">Back to dashboard</a></div>
+  </div>
+
+  <script src="{{ asset_path }}/charts.js"></script>
+</body>
+</html>
