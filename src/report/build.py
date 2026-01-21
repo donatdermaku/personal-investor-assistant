@@ -130,7 +130,6 @@ def _build_watch_rows(scores: pd.DataFrame, prior_scores: pd.DataFrame, notes: d
     prior_scores = prior_scores.set_index("ticker") if not prior_scores.empty else pd.DataFrame()
     for t in weights.index:
         row = scores.loc[t] if t in scores.index else None
-        prev = prior_scores.loc[t] if not prior_scores.empty and t in prior_scores.index else None
         composite_delta = None
         composite_delta_7d = None
         if row is not None:
@@ -431,7 +430,6 @@ def main() -> None:
     prices = _safe_read_parquet(prices_path)
 
     watch_scores = scores[scores["ticker"].isin(tickers)] if not scores.empty else scores
-    watch_fundamentals = fundamentals[fundamentals["ticker"].isin(tickers)] if not fundamentals.empty else fundamentals
     watch_prices = prices[prices["ticker"].isin(tickers)] if not prices.empty else prices
 
     prior_scores = pd.DataFrame()

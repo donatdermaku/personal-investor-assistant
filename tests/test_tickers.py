@@ -1,5 +1,3 @@
-import pytest
-
 from src.utils_io import yahoo_ticker
 
 

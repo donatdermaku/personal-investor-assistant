@@ -93,15 +93,6 @@ def piotroski_f_score(df: pd.DataFrame) -> pd.Series:
             raise KeyError(f"Missing column '{col}' for Piotroski F-score computation")
 
     df = df.sort_values("fiscal_end")
-    roa = df["NetIncomeTTM"] / df["TotalAssets"].replace({0: np.nan})
-    cfo = df["OpCFTTM"] / df["TotalAssets"].replace({0: np.nan})
-    accrual = df["OpCFTTM"] - df["NetIncomeTTM"]
-    leverage = df["Debt"] / df["TotalAssets"].replace({0: np.nan})
-    current_ratio = df["CurrentAssets"] / df["CurrentLiabilities"].replace({0: np.nan})
-    gross_margin = df["GrossProfitTTM"] / df["RevenueTTM"].replace({0: np.nan})
-    asset_turnover = df["RevenueTTM"] / df["TotalAssets"].replace({0: np.nan})
-    shares = df["SharesDilutedTTM"]
-
     components = piotroski_components(df)
     return components.fillna(0).sum(axis=1)
 
