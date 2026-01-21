@@ -17,7 +17,15 @@ from src.streamlit_data import (
 from src.guidance import explain_portfolio
 from src.intelligence import drawdown_intelligence, factor_tilts
 from src.glossary import GLOSSARY
-from src.streamlit_ui import build_status, render_guidance, render_header, render_portfolio_errors, render_sidebar
+from src.streamlit_ui import (
+    build_status, 
+    render_guidance, 
+    render_header, 
+    render_portfolio_errors, 
+    render_sidebar,
+    ui_section_header,
+    ui_empty_state
+)
 from src.portfolio import align_benchmark, compute_drawdown
 
 st.set_page_config(page_title="Dashboard", page_icon="📊", layout="wide")
@@ -47,7 +55,7 @@ render_header("Dashboard", status, {"Prices": price_meta, "Fundamentals": fundam
 render_portfolio_errors(portfolio)
 
 if portfolio.source == "snapshot":
-    st.info("Holdings snapshot mode: performance history is limited to price history and does not include cashflows.")
+    ui_empty_state("Snapshot Mode", "Holdings snapshot mode: performance history is limited to price history and does not include cashflows.", icon="📸")
 
 summary = explain_portfolio(scores, portfolio.daily_returns, watch_tickers)
 mode = st.session_state.get("mode", "Simple")
@@ -56,9 +64,9 @@ render_guidance(summary, mode, not portfolio.daily_returns.empty)
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.subheader("Equity Curve vs Benchmark")
+    ui_section_header("Equity Curve vs Benchmark")
     if prices.empty or not watch_tickers or portfolio.daily_values.empty:
-        st.info("No price data available.")
+        ui_empty_state("No Data", "No price data available.", icon="📉")
     else:
         eq = portfolio.daily_values["value"]
         fig = go.Figure()
@@ -71,18 +79,18 @@ with col1:
         st.plotly_chart(fig, use_container_width=True)
 
 with col2:
-    st.subheader("Allocation")
+    ui_section_header("Allocation")
     weights = watchlist.get("weights", {}) or {}
     if weights:
         pie = go.Figure(data=[go.Pie(labels=list(weights.keys()), values=list(weights.values()))])
         pie.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(pie, use_container_width=True)
     else:
-        st.info("No weights configured.")
+        ui_empty_state("No Weights", "No weights configured.", icon="⚖️")
 
-st.subheader("Drawdown")
+ui_section_header("Drawdown")
 if portfolio.daily_values.empty:
-    st.info("No drawdown data available.")
+    ui_empty_state("No Data", "No drawdown data available.", icon="📉")
 else:
     eq = portfolio.daily_values["value"]
     drawdown = compute_drawdown(eq)
@@ -96,11 +104,11 @@ else:
         st.caption(f"Max drawdown: {dd_info['max_drawdown']:.2%} | Current drawdown: {dd_info['current_drawdown']:.2%}")
         st.caption(GLOSSARY.get("Drawdown", ""))
 
-st.subheader("Factor Tilts vs Benchmark")
+ui_section_header("Factor Tilts vs Benchmark")
 if not scores.empty and watch_tickers:
     tilts = factor_tilts(scores, watch_tickers)
     if tilts.empty:
-        st.info("No tilt data available.")
+        ui_empty_state("No Data", "No tilt data available.", icon="📊")
     else:
         st.dataframe(tilts, use_container_width=True)
         if mode.startswith("Pro"):
@@ -113,6 +121,6 @@ if not scores.empty and watch_tickers:
                 mime="text/csv",
             )
 else:
-    st.info("No tilt data available.")
+    ui_empty_state("No Data", "No tilt data available.", icon="📊")
 
 st.caption(f"Market: {market_label}")
