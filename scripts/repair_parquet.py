@@ -9,7 +9,6 @@ If --move is omitted, the script only reports files that fail to read.
 """
 import argparse
 import pathlib
-import sys
 
 import pandas as pd
 
