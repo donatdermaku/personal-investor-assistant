@@ -4,10 +4,11 @@ import pandas as pd
 import streamlit as st
 
 from src.streamlit_data import (
+    get_fundamentals,
+    get_prices,
+    get_scores,
     load_portfolio_cached,
     portfolio_cache_token,
-    load_prices,
-    load_scores,
     load_watchlist,
     market_status,
 )
@@ -17,17 +18,24 @@ st.set_page_config(page_title="Personal Investor Assistant", page_icon="📈", l
 
 render_sidebar()
 
-market_label, market_state = market_status()
+_, market_state = market_status()
 watchlist = load_watchlist()
 watch_tickers = watchlist.get("tickers", [])
 selected = st.sidebar.selectbox("Quick ticker", watch_tickers) if watch_tickers else None
 
-scores = load_scores()
-prices = load_prices(market_state)
-portfolio = load_portfolio_cached(prices, watch_tickers, portfolio_cache_token())
+scores, scores_meta = get_scores(watch_tickers)
+prices, price_meta = get_prices(market_state, watch_tickers)
+_, fundamentals_meta = get_fundamentals(watch_tickers)
+portfolio = load_portfolio_cached(
+    prices,
+    watch_tickers,
+    portfolio_cache_token(),
+    source_override=st.session_state.get("portfolio_source"),
+    uploads_active=st.session_state.get("uploads_active", False),
+)
 
-status = build_status(prices, scores, watch_tickers, portfolio)
-render_header("Personal Investor Assistant", status)
+status = build_status(price_meta, fundamentals_meta, portfolio)
+render_header("Personal Investor Assistant", status, {"Prices": price_meta, "Fundamentals": fundamentals_meta, "Scores": scores_meta})
 render_portfolio_errors(portfolio)
 
 col1, col2, col3, col4 = st.columns(4)

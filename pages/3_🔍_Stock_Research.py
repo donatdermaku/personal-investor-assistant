@@ -6,13 +6,13 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.streamlit_data import (
-    load_fundamentals,
-    load_news,
+    get_fundamentals,
+    get_news,
+    get_prices,
+    get_scores,
+    get_universe,
     load_portfolio_cached,
     portfolio_cache_token,
-    load_prices,
-    load_scores,
-    load_universe,
     load_watchlist,
     market_status,
 )
@@ -26,13 +26,23 @@ watchlist = load_watchlist()
 watch_tickers = watchlist.get("tickers", [])
 market_label, market_state = market_status()
 
-scores = load_scores()
-prices = load_prices(market_state)
-fundamentals = load_fundamentals()
-universe = load_universe()
-portfolio = load_portfolio_cached(prices, watch_tickers, portfolio_cache_token())
-status = build_status(prices, scores, watch_tickers, portfolio)
-render_header("Stock Research", status)
+scores, scores_meta = get_scores(watch_tickers)
+prices, price_meta = get_prices(market_state, watch_tickers)
+fundamentals, fundamentals_meta = get_fundamentals(watch_tickers)
+universe, universe_meta = get_universe()
+portfolio = load_portfolio_cached(
+    prices,
+    watch_tickers,
+    portfolio_cache_token(),
+    source_override=st.session_state.get("portfolio_source"),
+    uploads_active=st.session_state.get("uploads_active", False),
+)
+status = build_status(price_meta, fundamentals_meta, portfolio)
+render_header(
+    "Stock Research",
+    status,
+    {"Prices": price_meta, "Fundamentals": fundamentals_meta, "Scores": scores_meta, "Universe": universe_meta},
+)
 render_portfolio_errors(portfolio)
 
 query = st.query_params.get("ticker")
@@ -137,7 +147,7 @@ else:
     st.info("No peer data available.")
 
 st.subheader("News")
-news_items = load_news(vendor_ticker)
+news_items, news_meta = get_news(vendor_ticker)
 if not news_items:
     st.info("News feed not available.")
 else:
@@ -147,6 +157,9 @@ else:
         publisher = item.get("publisher")
         if title and link:
             st.markdown(f"- [{title}]({link}) — {publisher}")
+if news_meta.notes:
+    for note in news_meta.notes:
+        st.caption(note)
 
 st.caption(f"Market: {market_label}")
 
