@@ -15,32 +15,44 @@ def export_summary_html(path: Path, sections: Iterable[tuple[str, str]]) -> None
     path.write_text(html, encoding="utf-8")
 
 
-def export_summary_json(path: Path, portfolio: PortfolioResult) -> None:
+
+def export_summary_json(path: Path, portfolio: PortfolioResult, manifest=None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Base payload
+    payload = {
+        "source": portfolio.source,
+        "twr": portfolio.twr,
+        "mwr": portfolio.mwr,
+        "errors": portfolio.errors,
+    }
+    
+    # Add manifest details if available
+    if manifest:
+        payload.update({
+            "run_id": manifest.run_id,
+            "input_hash": manifest.input_hash,
+            "data_hash": manifest.data_hash,
+            "timestamp": manifest.timestamp,
+        })
+
     if portfolio.daily_values.empty:
-        payload = {
-            "source": portfolio.source,
-            "twr": portfolio.twr,
-            "mwr": portfolio.mwr,
+        payload.update({
             "final_value": None,
             "last_date": None,
             "max_drawdown": None,
-            "errors": portfolio.errors,
-        }
+        })
         path.write_text(pd.Series(payload).to_json(), encoding="utf-8")
         return
 
     values = portfolio.daily_values.copy()
     max_drawdown = compute_drawdown(values["value"]).min()
-    payload = {
-        "source": portfolio.source,
-        "twr": portfolio.twr,
-        "mwr": portfolio.mwr,
+    
+    payload.update({
         "final_value": float(values["value"].iloc[-1]),
         "last_date": values.index[-1].strftime("%Y-%m-%d"),
         "max_drawdown": float(max_drawdown),
-        "errors": portfolio.errors,
-    }
+    })
     path.write_text(pd.Series(payload).to_json(), encoding="utf-8")
 
 

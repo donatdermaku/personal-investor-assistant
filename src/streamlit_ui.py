@@ -43,6 +43,9 @@ def _save_ui_state() -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+from src.manifest import create_manifest
+
+
 def render_sidebar() -> None:
     init_session_state()
     if "portfolio_source_pending" in st.session_state:
@@ -79,8 +82,44 @@ def render_sidebar() -> None:
     st.sidebar.caption(f"Active source: {st.session_state.get('portfolio_source', '--')}")
     st.sidebar.caption(f"Uploads active: {st.session_state.get('uploads_active', False)}")
 
-    if st.sidebar.button("Clear cache"):
+    st.sidebar.divider()
+    
+    # Run Manifest
+    if "run_manifest" not in st.session_state:
+        # We create it once per session run (or refresh)
+        st.session_state["run_manifest"] = create_manifest()
+    
+    manifest = st.session_state["run_manifest"]
+    st.sidebar.caption(f"Run ID: {manifest.run_id[:8]}")
+    
+    # Safe Cache Clear
+    if st.sidebar.button("Clear derived cache"):
         st.cache_data.clear()
+        st.sidebar.success("Cache cleared! (Inputs preserved)")
+        
+    # Destructive Reset
+    with st.sidebar.expander("Danger Zone"):
+        st.warning("This will delete all uploaded data and reset settings.")
+        if st.button("Reset all inputs"):
+            _reset_all_inputs()
+            st.rerun()
+
+
+def _reset_all_inputs() -> None:
+    """Destructive reset of user inputs and state."""
+    # Delete uploaded files
+    uploads_dir = ROOT / "data" / "user_uploads"
+    for file in ["transactions.csv", "holdings.csv", "ui_state.json"]:
+        path = uploads_dir / file
+        if path.exists():
+            path.unlink()
+            
+    # Reset session state
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+        
+    # Clear cache to ensure fresh start
+    st.cache_data.clear()
 
 
 def render_header(title: str, status: dict, coverage_map: dict[str, CoverageMeta] | None = None) -> None:
