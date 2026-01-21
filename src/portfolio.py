@@ -112,6 +112,52 @@ def demo_portfolio(tickers: Iterable[str], prices: pd.DataFrame) -> pd.DataFrame
     return latest[["ticker", "quantity"]].dropna()
 
 
+def compute_twr(
+    valuation_series: pd.Series,
+    external_cashflows: pd.Series | None,
+) -> tuple[float | None, pd.Series]:
+    if valuation_series.empty:
+        return None, pd.Series(dtype=float)
+    if external_cashflows is None or external_cashflows.empty:
+        cf = pd.Series(0.0, index=valuation_series.index)
+    else:
+        cf = external_cashflows.reindex(valuation_series.index).fillna(0.0)
+    prev = valuation_series.shift(1)
+    daily = (valuation_series - cf) / prev - 1.0
+    daily = daily.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    twr = (1 + daily).prod() - 1
+    return twr, daily
+
+
+def compute_irr(cashflows: pd.Series, terminal_value: float | None) -> float | None:
+    return _xirr(cashflows, terminal_value)
+
+
+def compute_monthly_returns(daily_returns: pd.Series) -> pd.Series:
+    if daily_returns.empty:
+        return pd.Series(dtype=float)
+    return daily_returns.resample("ME").apply(lambda x: (1 + x).prod() - 1)
+
+
+def compute_drawdown(valuation_series: pd.Series) -> pd.Series:
+    if valuation_series.empty:
+        return pd.Series(dtype=float)
+    peak = valuation_series.cummax()
+    return valuation_series / peak - 1.0
+
+
+def align_benchmark(benchmark_prices: pd.DataFrame, portfolio_values: pd.Series) -> pd.Series:
+    if benchmark_prices.empty or portfolio_values.empty:
+        return pd.Series(dtype=float)
+    bench = benchmark_prices.copy()
+    bench["date"] = pd.to_datetime(bench["date"])
+    bench = bench.sort_values("date")
+    if bench["adj_close"].empty:
+        return pd.Series(dtype=float)
+    scaled = (bench["adj_close"] / bench["adj_close"].iloc[0]) * portfolio_values.iloc[0]
+    return pd.Series(scaled.values, index=bench["date"])
+
+
 @dataclass
 class PortfolioResult:
     source: str
@@ -231,16 +277,8 @@ def compute_portfolio_from_ledger(
     else:
         cashflows_mwr_series = pd.Series(dtype=float)
 
-    twr = None
-    daily_returns = pd.Series(dtype=float)
-    if not values_df.empty:
-        cf = cashflows_series.reindex(values_df.index).fillna(0.0)
-        prev = values_df["value"].shift(1)
-        daily = (values_df["value"] - cf) / prev - 1.0
-        daily = daily.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-        twr = (1 + daily).prod() - 1
-        daily_returns = daily
-    mwr = _xirr(cashflows_mwr_series, values_df["value"].iloc[-1] if not values_df.empty else None)
+    twr, daily_returns = compute_twr(values_df["value"], cashflows_series)
+    mwr = compute_irr(cashflows_mwr_series, values_df["value"].iloc[-1] if not values_df.empty else None)
 
     returns = daily_returns if not daily_returns.empty else values_df["value"].pct_change().fillna(0.0)
     holdings_daily = _expand_holdings(holdings, prices, values_df.index)
@@ -270,8 +308,7 @@ def compute_portfolio_from_snapshot(snapshot: pd.DataFrame, prices: pd.DataFrame
         daily_values.append({"date": d, "value": value, "cash": 0.0})
 
     values_df = pd.DataFrame(daily_values).set_index("date")
-    returns = values_df["value"].pct_change().fillna(0.0)
-    twr = (1 + returns).prod() - 1 if not values_df.empty else None
+    twr, returns = compute_twr(values_df["value"], None)
     return PortfolioResult("snapshot", values_df, returns, snapshot.reset_index(), pd.Series(dtype=float), None, twr, errors)
 
 
@@ -292,6 +329,8 @@ def _xirr(cashflows: pd.Series, terminal_value: float | None) -> float | None:
     amounts.append(terminal_value)
 
     def npv(rate: float) -> float:
+        if rate <= -0.999999:
+            return np.nan
         total = 0.0
         for d, cf in zip(dates, amounts):
             days = (d - dates[0]).days
@@ -301,12 +340,37 @@ def _xirr(cashflows: pd.Series, terminal_value: float | None) -> float | None:
     rate = 0.1
     for _ in range(100):
         f = npv(rate)
+        if f != f:
+            break
         if abs(f) < 1e-6:
             return rate
         # derivative approximation
         f1 = npv(rate + 1e-5)
+        if f1 != f1:
+            break
         derivative = (f1 - f) / 1e-5
         if derivative == 0:
             break
         rate -= f / derivative
-    return None
+        if rate <= -0.999999:
+            break
+
+    low, high = -0.9, 10.0
+    f_low = npv(low)
+    f_high = npv(high)
+    if f_low != f_low or f_high != f_high or f_low * f_high > 0:
+        return None
+    for _ in range(200):
+        mid = (low + high) / 2
+        f_mid = npv(mid)
+        if f_mid != f_mid:
+            return None
+        if abs(f_mid) < 1e-7:
+            return mid
+        if f_low * f_mid <= 0:
+            high = mid
+            f_high = f_mid
+        else:
+            low = mid
+            f_low = f_mid
+    return (low + high) / 2

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -18,6 +17,7 @@ from src.guidance import explain_portfolio
 from src.intelligence import drawdown_intelligence, factor_tilts
 from src.glossary import GLOSSARY
 from src.streamlit_ui import build_status, render_guidance, render_header, render_portfolio_errors, render_sidebar
+from src.portfolio import align_benchmark, compute_drawdown
 
 st.set_page_config(page_title="Dashboard", page_icon="📊", layout="wide")
 
@@ -56,11 +56,9 @@ with col1:
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=eq.index, y=eq.values, name="Portfolio"))
         if not bench_prices.empty:
-            bench = bench_prices.copy()
-            bench["date"] = pd.to_datetime(bench["date"])
-            bench = bench.sort_values("date")
-            bench_index = (bench["adj_close"] / bench["adj_close"].iloc[0]) * eq.iloc[0]
-            fig.add_trace(go.Scatter(x=bench["date"], y=bench_index, name=benchmark))
+            bench_index = align_benchmark(bench_prices, eq)
+            if not bench_index.empty:
+                fig.add_trace(go.Scatter(x=bench_index.index, y=bench_index.values, name=benchmark))
         fig.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig, use_container_width=True)
 
@@ -79,8 +77,7 @@ if portfolio.daily_values.empty:
     st.info("No drawdown data available.")
 else:
     eq = portfolio.daily_values["value"]
-    peak = eq.cummax()
-    drawdown = eq / peak - 1.0
+    drawdown = compute_drawdown(eq)
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=drawdown.index, y=drawdown.values, name="Drawdown"))
     fig.update_layout(height=240, margin=dict(l=10, r=10, t=30, b=10))

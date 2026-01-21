@@ -19,6 +19,7 @@ from src.guidance import explain_portfolio
 from src.glossary import GLOSSARY
 from src.intelligence import component_risk
 from src.utils_io import ROOT
+from src.portfolio import align_benchmark, compute_monthly_returns
 
 st.set_page_config(page_title="Performance", page_icon="📈", layout="wide")
 render_sidebar()
@@ -101,11 +102,9 @@ with col1:
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=portfolio_index.index, y=portfolio_index.values, name="Portfolio"))
     if not bench_prices.empty:
-        bench = bench_prices.copy()
-        bench["date"] = pd.to_datetime(bench["date"])
-        bench = bench.sort_values("date")
-        bench_index = (bench["adj_close"] / bench["adj_close"].iloc[0]) * portfolio_index.iloc[0]
-        fig.add_trace(go.Scatter(x=bench["date"], y=bench_index, name=benchmark))
+        bench_index = align_benchmark(bench_prices, portfolio_index)
+        if not bench_index.empty:
+            fig.add_trace(go.Scatter(x=bench_index.index, y=bench_index.values, name=benchmark))
     fig.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10))
     st.plotly_chart(fig, use_container_width=True)
 
@@ -119,7 +118,7 @@ with col2:
     st.plotly_chart(fig, use_container_width=True)
 
 st.subheader("Monthly Heatmap")
-monthly = portfolio_returns.resample("M").apply(lambda x: (1 + x).prod() - 1)
+monthly = compute_monthly_returns(portfolio_returns)
 if not monthly.empty:
     heat = monthly.to_frame("return")
     heat["year"] = heat.index.year
