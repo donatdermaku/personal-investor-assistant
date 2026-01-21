@@ -170,10 +170,38 @@ class PortfolioResult:
     errors: list[str]
 
 
-def load_portfolio(prices: pd.DataFrame, watchlist: Iterable[str]) -> PortfolioResult:
-    base_dir = Path(__file__).resolve().parents[1] / "data" / "user_uploads"
+def load_portfolio(
+    prices: pd.DataFrame,
+    watchlist: Iterable[str],
+    source_override: str | None = None,
+    uploads_active: bool = True,
+    base_dir: Path | None = None,
+) -> PortfolioResult:
+    if base_dir is None:
+        base_dir = Path(__file__).resolve().parents[1] / "data" / "user_uploads"
     ledger_path = base_dir / "transactions.csv"
     snapshot_path = base_dir / "holdings.csv"
+
+    if not uploads_active and source_override != "Demo":
+        return PortfolioResult("none", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, ["No uploads in this session."])
+
+    if source_override == "Ledger":
+        if not ledger_path.exists():
+            return PortfolioResult("ledger", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, ["Ledger file not found."])
+        ledger_df = pd.read_csv(ledger_path)
+        return compute_portfolio_from_ledger(ledger_df, prices)
+
+    if source_override == "Snapshot":
+        if not snapshot_path.exists():
+            return PortfolioResult("snapshot", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, ["Snapshot file not found."])
+        snapshot_df = pd.read_csv(snapshot_path)
+        return compute_portfolio_from_snapshot(snapshot_df, prices)
+
+    if source_override == "Demo":
+        demo = demo_portfolio(watchlist, prices)
+        if demo.empty:
+            return PortfolioResult("demo", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, ["No demo portfolio available."])
+        return compute_portfolio_from_snapshot(demo, prices)
 
     if ledger_path.exists():
         ledger_df = pd.read_csv(ledger_path)

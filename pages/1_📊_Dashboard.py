@@ -4,11 +4,12 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.streamlit_data import (
+    get_fundamentals,
+    get_prices,
+    get_scores,
+    get_scores_prior,
     load_benchmark_prices,
     load_portfolio_cached,
-    load_prices,
-    load_scores,
-    load_scores_prior,
     load_watchlist,
     market_status,
     portfolio_cache_token,
@@ -27,15 +28,22 @@ watchlist = load_watchlist()
 watch_tickers = watchlist.get("tickers", [])
 market_label, market_state = market_status()
 
-scores = load_scores()
-scores_prior = load_scores_prior()
-prices = load_prices(market_state)
-portfolio = load_portfolio_cached(prices, watch_tickers, portfolio_cache_token())
+scores, scores_meta = get_scores(watch_tickers)
+scores_prior, _ = get_scores_prior(watch_tickers)
+prices, price_meta = get_prices(market_state, watch_tickers)
+_, fundamentals_meta = get_fundamentals(watch_tickers)
+portfolio = load_portfolio_cached(
+    prices,
+    watch_tickers,
+    portfolio_cache_token(),
+    source_override=st.session_state.get("portfolio_source"),
+    uploads_active=st.session_state.get("uploads_active", False),
+)
 benchmark = st.session_state.get("benchmark", "SPY")
 bench_prices = load_benchmark_prices(benchmark)
 
-status = build_status(prices, scores, watch_tickers, portfolio)
-render_header("Dashboard", status)
+status = build_status(price_meta, fundamentals_meta, portfolio)
+render_header("Dashboard", status, {"Prices": price_meta, "Fundamentals": fundamentals_meta, "Scores": scores_meta})
 render_portfolio_errors(portfolio)
 
 if portfolio.source == "snapshot":

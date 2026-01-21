@@ -6,10 +6,11 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.streamlit_data import (
+    get_fundamentals,
+    get_prices,
+    get_scores,
     load_portfolio_cached,
     portfolio_cache_token,
-    load_prices,
-    load_scores,
     load_watchlist,
     market_status,
 )
@@ -24,11 +25,18 @@ render_sidebar()
 watchlist = load_watchlist()
 watch_tickers = watchlist.get("tickers", [])
 market_label, market_state = market_status()
-prices = load_prices(market_state)
-scores = load_scores()
-portfolio = load_portfolio_cached(prices, watch_tickers, portfolio_cache_token())
-status = build_status(prices, scores, watch_tickers, portfolio)
-render_header("Risk Management", status)
+prices, price_meta = get_prices(market_state, watch_tickers)
+scores, scores_meta = get_scores(watch_tickers)
+_, fundamentals_meta = get_fundamentals(watch_tickers)
+portfolio = load_portfolio_cached(
+    prices,
+    watch_tickers,
+    portfolio_cache_token(),
+    source_override=st.session_state.get("portfolio_source"),
+    uploads_active=st.session_state.get("uploads_active", False),
+)
+status = build_status(price_meta, fundamentals_meta, portfolio)
+render_header("Risk Management", status, {"Prices": price_meta, "Fundamentals": fundamentals_meta, "Scores": scores_meta})
 render_portfolio_errors(portfolio)
 
 if portfolio.source == "snapshot":
