@@ -1,0 +1,4 @@
+date,ticker,action,quantity,price
+2024-01-01,CASH,DEPOSIT,0,1000
+2024-01-01,AAA,BUY,10,100
+2025-01-31,CASH,INTEREST,0,1
