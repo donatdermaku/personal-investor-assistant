@@ -3,6 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from src.portfolio import compute_drawdown
+
 
 def factor_tilts(scores: pd.DataFrame, tickers: list[str], benchmark_scores: pd.DataFrame | None = None) -> pd.DataFrame:
     if scores.empty or not tickers:
@@ -23,9 +25,7 @@ def factor_tilts(scores: pd.DataFrame, tickers: list[str], benchmark_scores: pd.
 def drawdown_intelligence(portfolio_values: pd.Series) -> dict:
     if portfolio_values.empty:
         return {}
-    idx = portfolio_values
-    peak = idx.cummax()
-    drawdown = idx / peak - 1.0
+    drawdown = compute_drawdown(portfolio_values)
     max_dd = float(drawdown.min()) if not drawdown.empty else np.nan
     current_dd = float(drawdown.iloc[-1]) if not drawdown.empty else np.nan
     return {
