@@ -83,22 +83,22 @@ export default function HoldingsPage() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
                                     <div className="text-sm text-gray-900">
-                                        {holding.shares !== undefined ? holding.shares.toLocaleString() : "--"}
+                                        {holding.shares != null ? holding.shares.toLocaleString() : "--"}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
                                     <div className="text-sm text-gray-900">
-                                        {holding.price !== undefined ? `$${holding.price.toLocaleString()}` : "--"}
+                                        {holding.price != null ? `$${holding.price.toLocaleString()}` : "--"}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
                                     <div className="text-sm text-gray-900">
-                                        {holding.weight !== undefined ? `${(holding.weight * 100).toFixed(1)}%` : "--"}
+                                        {holding.weight != null ? `${(holding.weight * 100).toFixed(1)}%` : "--"}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
                                     <div className="text-sm font-medium text-gray-900">
-                                        {holding.value !== undefined ? `$${holding.value.toLocaleString()}` : "--"}
+                                        {holding.value != null ? `$${holding.value.toLocaleString()}` : "--"}
                                     </div>
                                 </td>
                             </tr>
