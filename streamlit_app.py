@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
+import plotly.graph_objects as go
+from pathlib import Path
 
+from src.nexus_ui import render_layout, render_kpi_card
 from src.streamlit_data import (
     get_fundamentals,
     get_prices,
@@ -11,112 +14,92 @@ from src.streamlit_data import (
     portfolio_cache_token,
     load_watchlist,
     market_status,
+    load_benchmark_prices
 )
-from src.streamlit_ui import (
-    build_status, 
-    render_header, 
-    render_portfolio_errors, 
-    render_sidebar,
-    ui_metric_card,
-    ui_section_header
-)
+from src.portfolio import align_benchmark, compute_drawdown
+from src.streamlit_ui import build_status, render_portfolio_errors
 
-st.set_page_config(page_title="Personal Investor Assistant", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Overview - Nexus Analytics", page_icon="📈", layout="wide")
 
-render_sidebar()
+def sidebar_content():
+    st.write("Settings and Input management will go here.")
+    # Legacy controls for now
+    st.session_state["portfolio_source"] = st.radio("Source", ["Auto", "Ledger", "Snapshot", "Demo"], index=0)
 
-_, market_state = market_status()
-watchlist = load_watchlist()
-watch_tickers = watchlist.get("tickers", [])
-selected = st.sidebar.selectbox("Quick ticker", watch_tickers) if watch_tickers else None
+def context_content(status_dict):
+    st.markdown("### Key Metrics")
+    render_kpi_card("TWR (Strategy)", status_dict.get("twr_str", "--"), "Time-Weighted Return")
+    render_kpi_card("MWR (Personal)", status_dict.get("mwr_str", "--"), "Money-Weighted Return")
+    
+    st.markdown("### System Status")
+    st.info(f"Last Update: {status_dict.get('last_run', 'N/A')}")
+    st.caption(f"Market: {status_dict.get('market_status', 'Unknown')}")
+    
+    # Export placeholder
+    if st.button("Export Report"):
+        st.toast("Export functionality coming in Phase 12.1 context integration.")
 
-scores, scores_meta = get_scores(watch_tickers)
-prices, price_meta = get_prices(market_state, watch_tickers)
-_, fundamentals_meta = get_fundamentals(watch_tickers)
-portfolio = load_portfolio_cached(
-    prices,
-    watch_tickers,
-    portfolio_cache_token(),
-    source_override=st.session_state.get("portfolio_source"),
-    uploads_active=st.session_state.get("uploads_active", False),
-)
+def main_content(portfolio, prices, bench_prices, benchmark):
+    st.write("### Equity Curve")
+    
+    if portfolio.daily_values.empty:
+        st.info("No portfolio data available.")
+        return
 
-status = build_status(price_meta, fundamentals_meta, portfolio)
-render_header("Personal Investor Assistant", status, {"Prices": price_meta, "Fundamentals": fundamentals_meta, "Scores": scores_meta})
-render_portfolio_errors(portfolio)
+    # Charting
+    eq = portfolio.daily_values["value"]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=eq.index, y=eq.values, name="Portfolio", line=dict(color="#0F172A", width=2)))
+    
+    if not bench_prices.empty:
+        bench_index = align_benchmark(bench_prices, eq)
+        if not bench_index.empty:
+            fig.add_trace(go.Scatter(x=bench_index.index, y=bench_index.values, name=benchmark, line=dict(color="#9CA3AF", width=1.5, dash="dot")))
+            
+    fig.update_layout(
+        template="plotly_white", 
+        height=400,
+        margin=dict(l=0, r=0, t=10, b=0),
+        legend=dict(orientation="h", y=1.02, yanchor="bottom", x=0, xanchor="left")
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-# --- Top Metrics using Components ---
-col1, col2, col3, col4 = st.columns(4)
+    # Errors
+    render_portfolio_errors(portfolio)
 
-with col1:
-    ui_metric_card("Watchlist size", len(watch_tickers), value_formatter="{:d}")
-with col2:
-    ui_metric_card("Universe size", int(scores["ticker"].nunique()) if not scores.empty else 0, value_formatter="{:d}")
-with col3:
-    if selected and not scores.empty and selected in scores["ticker"].values:
-        pct = scores.set_index("ticker").loc[selected, "composite_pct"]
-        ui_metric_card("Selected composite %", pct, value_formatter="{:.1f}")
-    else:
-        ui_metric_card("Selected composite %", None)
-with col4:
-    # Status dict already has formatted strings, so we pass as is
-    ui_metric_card("Last update", status["last_run"], value_formatter="{}")
-
-
-# --- Onboarding / Overview ---
-ui_section_header("Overview")
-
-# Check if portfolio is effectively empty/unset
-if not st.session_state.get("uploads_active", False) and portfolio.source == "demo":
-    # Onboarding Mode
-    with st.container():
-        st.info("Welcome! You are currently viewing **Demo Data**. Choose an option below to get started.")
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            st.subheader("🚀 Quick Start")
-            st.write("See what the app can do with pre-loaded demo data.")
-            if st.button("Continue with Demo"):
-                # Demo is default, so just maybe show a toast or nothing
-                st.toast("Using Demo Data")
-        
-        with c2:
-            st.subheader("📂 Upload Your Data")
-            st.write("Upload your ledger or holdings snapshot via the sidebar to see your own portfolio.")
-            st.caption("Supported formats: CSV (Ledger: date, ticker, amount | Snapshot: ticker, shares)")
-
-else:
-    # Standard Overview
-    st.write(
-        "Use the sidebar to navigate the dashboard and watchlist pages. "
-        "This app reads from your existing DuckDB/Parquet outputs and does not modify the pipeline."
+# --- Entry Point ---
+def main():
+    # Data Loading
+    watchlist = load_watchlist()
+    watch_tickers = watchlist.get("tickers", [])
+    _, market_state = market_status()
+    
+    scores, scores_meta = get_scores(watch_tickers)
+    prices, price_meta = get_prices(market_state, watch_tickers)
+    _, fundamentals_meta = get_fundamentals(watch_tickers)
+    
+    portfolio = load_portfolio_cached(
+        prices,
+        watch_tickers,
+        portfolio_cache_token(),
+        source_override=st.session_state.get("portfolio_source", "Auto"),
+        uploads_active=True, 
+    )
+    
+    benchmark = "SPY"
+    bench_prices = load_benchmark_prices(benchmark)
+    
+    status = build_status(price_meta, fundamentals_meta, portfolio)
+    status["market_status"] = market_state
+    
+    # Render Layout
+    # Closures to pass data
+    render_layout(
+        "Overview",
+        sidebar_content,
+        lambda: main_content(portfolio, prices, bench_prices, benchmark),
+        lambda: context_content(status)
     )
 
-
-if selected:
-    ui_section_header("Quick View")
-    if not scores.empty and selected in scores["ticker"].values:
-        row = scores.set_index("ticker").loc[selected]
-        q1, q2, q3, q4 = st.columns(4)
-        
-        with q1:
-            price = row.get("Price")
-            ui_metric_card("Price", price if pd.notna(price) else None)
-        with q2:
-            comp = row.get("composite_pct")
-            ui_metric_card("Composite %", comp if pd.notna(comp) else None, value_formatter="{:.1f}")
-        with q3:
-            val = row.get("value_pct")
-            ui_metric_card("Value %", val if pd.notna(val) else None, value_formatter="{:.1f}")
-        with q4:
-            mom = row.get("momentum_pct")
-            ui_metric_card("Momentum %", mom if pd.notna(mom) else None, value_formatter="{:.1f}")
-
-        if not prices.empty:
-            series = prices[prices["ticker"] == selected].copy()
-            if not series.empty:
-                series["date"] = pd.to_datetime(series["date"])
-                series = series.sort_values("date")
-                st.line_chart(series.set_index("date")["adj_close"], height=220)
-    else:
-        st.info(f"Quick view selected: {selected}")
+if __name__ == "__main__":
+    main()
