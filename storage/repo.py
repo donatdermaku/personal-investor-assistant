@@ -120,3 +120,27 @@ def add_artifact(run_id: str, artifact_type: str, path: str):
     with session_scope() as session:
         artifact = Artifact(run_id=run_id, type=artifact_type, path=path)
         session.add(artifact)
+
+
+# Repo class wrapper for FastAPI compatibility
+class Repo:
+    """
+    Repository class wrapper for FastAPI compatibility.
+    Wraps existing function-based API.
+    """
+    
+    def get_latest_run(self):
+        """Get the most recent completed run."""
+        with session_scope() as session:
+            run = session.query(Run).filter_by(status="completed").order_by(Run.completed_at.desc()).first()
+            if run:
+                session.expunge(run)
+            return run
+    
+    def get_run_by_id(self, run_id: str):
+        """Get a specific run by ID."""
+        with session_scope() as session:
+            run = session.query(Run).filter_by(id=run_id).first()
+            if run:
+                session.expunge(run)
+            return run

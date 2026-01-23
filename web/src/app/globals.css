@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  --font-mono: "SF Mono", "Roboto Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  
+  --color-nexus-primary: #0F172A; /* Slate 900 */
+  --color-nexus-accent: #3B82F6;  /* Blue 500 */
+  --color-nexus-bg: #F3F4F6;      /* Gray 50 */
+  --color-nexus-border: #E5E7EB;  /* Gray 200 */
+  
+  --radius-card: 0.5rem;
+}
+
+:root {
+  --background: var(--color-nexus-bg);
+  --foreground: var(--color-nexus-primary);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* Utility for card style */
+.nexus-card {
+  @apply bg-white p-6 rounded-[var(--radius-card)] border border-[var(--color-nexus-border)] shadow-sm;
+}
