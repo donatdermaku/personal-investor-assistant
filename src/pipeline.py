@@ -26,7 +26,9 @@ EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 def compute_app_state(
     portfolio_id: int | None = None,
-    save_run: bool = True
+    save_run: bool = True,
+    source_override: str | None = None,
+    uploads_active: bool = True,
 ) -> AppState:
     """
     Central logic to compute the application state.
@@ -63,7 +65,12 @@ def compute_app_state(
     # 6. Load Portfolio
     # Here we use the underlying 'load_portfolio' which now uses DataManager
     # Note: load_portfolio calls DataManager internally for trades/snapshot.
-    portfolio_result = load_portfolio(prices, watch_tickers, source_override=None, uploads_active=True)
+    portfolio_result = load_portfolio(
+        prices,
+        watch_tickers,
+        source_override=source_override,
+        uploads_active=uploads_active,
+    )
     
     # 7. Benchmark
     bench_ticker = "SPY" # Default, should come from settings

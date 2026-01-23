@@ -32,12 +32,12 @@ function coveragePercent(state: NexusState | null) {
 }
 
 export function ContextPanel() {
-    const { state, status, mode, lastFetched, backendOk, benchmark } = useNexus();
+    const { state, status, mode, lastFetched, backendOk, benchmark, runs, runId, setRunId } = useNexus();
     const [toast, setToast] = useState<string | null>(null);
 
     const coverage = useMemo(() => coveragePercent(state), [state]);
-    const runId = state?.manifest.run_id;
-    const exportsEnabled = Boolean(runId) && mode === "live";
+    const manifestRunId = state?.manifest.run_id;
+    const exportsEnabled = Boolean(manifestRunId) && mode === "live";
     const loading = status === "loading";
     const hasError = status === "error";
 
@@ -56,6 +56,22 @@ export function ContextPanel() {
                 <div className="text-xs text-gray-400 mt-1">
                     Mode: {mode === "live" ? "Live" : "Demo"}
                 </div>
+                {runs.length > 0 && (
+                    <div className="mt-3">
+                        <div className="text-xs uppercase tracking-wider text-gray-400">Run</div>
+                        <select
+                            className="mt-1 w-full rounded-md border border-gray-200 px-2 py-1 text-sm text-gray-700"
+                            value={runId ?? runs[0]?.run_id}
+                            onChange={(event) => setRunId(event.target.value)}
+                        >
+                            {runs.map((run) => (
+                                <option key={run.run_id} value={run.run_id}>
+                                    {run.run_id.slice(0, 8)} · {run.timestamp ? new Date(run.timestamp).toLocaleString() : "pending"}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -99,9 +115,9 @@ export function ContextPanel() {
                     <button
                         type="button"
                         onClick={async () => {
-                            if (!exportsEnabled || !runId) return;
+                            if (!exportsEnabled || !manifestRunId) return;
                             try {
-                                await downloadExport(runId, "summary-json");
+                                await downloadExport(manifestRunId, "summary-json");
                             } catch (err) {
                                 setToast(err instanceof Error ? err.message : "Export failed.");
                             }
@@ -114,9 +130,9 @@ export function ContextPanel() {
                     <button
                         type="button"
                         onClick={async () => {
-                            if (!exportsEnabled || !runId) return;
+                            if (!exportsEnabled || !manifestRunId) return;
                             try {
-                                await downloadExport(runId, "performance-csv");
+                                await downloadExport(manifestRunId, "performance-csv");
                             } catch (err) {
                                 setToast(err instanceof Error ? err.message : "Export failed.");
                             }
@@ -129,9 +145,9 @@ export function ContextPanel() {
                     <button
                         type="button"
                         onClick={async () => {
-                            if (!exportsEnabled || !runId) return;
+                            if (!exportsEnabled || !manifestRunId) return;
                             try {
-                                await downloadExport(runId, "monthly-returns-csv");
+                                await downloadExport(manifestRunId, "monthly-returns-csv");
                             } catch (err) {
                                 setToast(err instanceof Error ? err.message : "Export failed.");
                             }

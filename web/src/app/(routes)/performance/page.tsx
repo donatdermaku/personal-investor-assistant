@@ -8,7 +8,7 @@ import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
 import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 
 export default function PerformancePage() {
-    const { state, status, error, mode, setMode } = useNexus();
+    const { state, status, error, mode, setMode, openRunCreator } = useNexus();
 
     if (status === "error") {
         return (
@@ -26,8 +26,8 @@ export default function PerformancePage() {
             <EmptyState
                 title="No performance history yet"
                 description="Generate a run to see returns, drawdowns, and attribution data."
-                primaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
-                secondaryAction={{ label: "Stay in Live Mode", onClick: () => setMode("live") }}
+                primaryAction={{ label: "Create Run", onClick: openRunCreator }}
+                secondaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
             />
         );
     }

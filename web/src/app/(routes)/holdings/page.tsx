@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/nexus/EmptyState";
 import { SkeletonBlock } from "@/components/nexus/Skeleton";
 
 export default function HoldingsPage() {
-    const { state, status, error, mode, setMode } = useNexus();
+    const { state, status, error, mode, setMode, openRunCreator } = useNexus();
 
     if (status === "error") {
         return (
@@ -23,8 +23,8 @@ export default function HoldingsPage() {
             <EmptyState
                 title="No holdings yet"
                 description="Upload your portfolio or run a compute to see current positions."
-                primaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
-                secondaryAction={{ label: "Stay in Live Mode", onClick: () => setMode("live") }}
+                primaryAction={{ label: "Create Run", onClick: openRunCreator }}
+                secondaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
             />
         );
     }

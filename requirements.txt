@@ -41,4 +41,5 @@ sqlalchemy
 # Web API (Prompt 13)
 fastapi
 uvicorn[standard]
+python-multipart
 httpx

@@ -21,6 +21,7 @@ export function TopBar() {
         lastFetched,
         backendOk,
         refresh,
+        openRunCreator,
     } = useNexus();
 
     return (
@@ -78,6 +79,13 @@ export function TopBar() {
                     className="rounded-md border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
                 >
                     {status === "loading" ? "Refreshing..." : "Refresh data"}
+                </button>
+                <button
+                    type="button"
+                    onClick={openRunCreator}
+                    className="rounded-md bg-[#2563EB] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1E40AF]"
+                >
+                    Create Run
                 </button>
             </div>
         </div>

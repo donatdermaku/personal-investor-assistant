@@ -144,3 +144,16 @@ class Repo:
             if run:
                 session.expunge(run)
             return run
+
+    def list_runs(self, limit: int = 50):
+        """List recent runs, newest first."""
+        with session_scope() as session:
+            runs = (
+                session.query(Run)
+                .order_by(Run.completed_at.desc().nullslast(), Run.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+            for run in runs:
+                session.expunge(run)
+            return runs

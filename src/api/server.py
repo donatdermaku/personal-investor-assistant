@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from typing import Optional
@@ -6,6 +6,7 @@ import logging
 import json
 import csv
 import math
+import io
 from pathlib import Path
 import numpy as np
 
@@ -19,6 +20,9 @@ from storage.db import session_scope
 from storage.models import Portfolio
 from src.utils_io import ROOT
 from src.definitions import DEFINITIONS_REGISTRY
+from src.pipeline import compute_app_state, save_artifacts
+from src.portfolio import validate_ledger
+import pandas as pd
 
 logger = logging.getLogger("nexus.api")
 
@@ -241,6 +245,115 @@ def health_check():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.post("/run")
+async def create_run(
+    run_type: str = Form("uploaded"),
+    portfolio_id: str = Form("default"),
+    file: UploadFile | None = File(None),
+):
+    """
+    Create a new portfolio run from an uploaded trades CSV or demo data.
+    """
+    resolved_portfolio_id = _resolve_portfolio_id(portfolio_id)
+    run_type_clean = (run_type or "").strip().lower()
+
+    if run_type_clean == "demo":
+        try:
+            app_state = compute_app_state(
+                portfolio_id=resolved_portfolio_id,
+                save_run=True,
+                source_override="Demo",
+                uploads_active=False,
+            )
+            save_artifacts(app_state)
+            manifest = app_state.run_manifest
+            return {
+                "run_id": manifest.run_id if manifest else "",
+                "status": "completed",
+                "timestamp": manifest.timestamp if manifest else None,
+            }
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Demo run failed: {exc}")
+
+    if not file:
+        raise HTTPException(status_code=400, detail="Trades CSV file is required.")
+
+    try:
+        contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="Uploaded CSV is empty.")
+        df = pd.read_csv(io.BytesIO(contents))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to read CSV: {exc}")
+
+    df = df.rename(columns={c: str(c).strip().lower() for c in df.columns})
+    if "shares" in df.columns and "quantity" not in df.columns:
+        df = df.rename(columns={"shares": "quantity"})
+
+    validated, errors = validate_ledger(df)
+    if errors:
+        raise HTTPException(status_code=400, detail="; ".join(errors))
+
+    if "amount" not in validated.columns:
+        def _calc_amount(row: pd.Series) -> float:
+            qty = row.get("quantity")
+            price = row.get("price")
+            if pd.notna(qty) and pd.notna(price):
+                return float(qty) * float(price)
+            if pd.notna(price):
+                return float(price)
+            return 0.0
+        validated["amount"] = validated.apply(_calc_amount, axis=1)
+
+    data_manager.save_portfolio_inputs(resolved_portfolio_id, validated, None)
+
+    try:
+        app_state = compute_app_state(
+            portfolio_id=resolved_portfolio_id,
+            save_run=True,
+            source_override="Ledger",
+            uploads_active=True,
+        )
+        save_artifacts(app_state)
+        manifest = app_state.run_manifest
+        return {
+            "run_id": manifest.run_id if manifest else "",
+            "status": "completed",
+            "timestamp": manifest.timestamp if manifest else None,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Run compute failed: {exc}")
+
+@app.post("/api/v1/run")
+async def create_run_alias(
+    run_type: str = Form("uploaded"),
+    portfolio_id: str = Form("default"),
+    file: UploadFile | None = File(None),
+):
+    return await create_run(run_type=run_type, portfolio_id=portfolio_id, file=file)
+
+@app.get("/runs")
+def list_runs():
+    runs = repo.list_runs()
+    return {
+        "runs": [
+            {
+                "run_id": run.id,
+                "status": run.status,
+                "timestamp": run.completed_at.isoformat() if run.completed_at else None,
+                "input_hash": run.input_hash,
+                "data_hash": getattr(run, "data_hash", None),
+            }
+            for run in runs
+        ]
+    }
+
+@app.get("/api/v1/runs")
+def list_runs_alias():
+    return list_runs()
 
 @app.get("/api/v1/run/latest")
 def get_latest_run():
