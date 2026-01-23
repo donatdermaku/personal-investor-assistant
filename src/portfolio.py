@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 
 
+from storage.datamanager import data_manager
+
 LEDGER_REQUIRED = ["date", "ticker", "action", "quantity", "price"]
 SNAPSHOT_REQUIRED = ["ticker", "quantity"]
 
@@ -177,24 +179,25 @@ def load_portfolio(
     uploads_active: bool = True,
     base_dir: Path | None = None,
 ) -> PortfolioResult:
-    if base_dir is None:
-        base_dir = Path(__file__).resolve().parents[1] / "data" / "user_uploads"
-    ledger_path = base_dir / "transactions.csv"
-    snapshot_path = base_dir / "holdings.csv"
+    # Resolve Portfolio ID (assuming default user/portfolio for now)
+    user_id = data_manager.get_current_user_id()
+    portfolio_id = data_manager.get_main_portfolio_id(user_id)
 
     if not uploads_active and source_override != "Demo":
         return PortfolioResult("none", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, ["No uploads in this session."])
 
+    # Load Inputs
+    ledger_df = data_manager.load_trades(portfolio_id)
+    snapshot_df = data_manager.load_snapshot(portfolio_id)
+
     if source_override == "Ledger":
-        if not ledger_path.exists():
-            return PortfolioResult("ledger", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, ["Ledger file not found."])
-        ledger_df = pd.read_csv(ledger_path)
+        if ledger_df.empty:
+            return PortfolioResult("ledger", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, ["Ledger data empty."])
         return compute_portfolio_from_ledger(ledger_df, prices)
 
     if source_override == "Snapshot":
-        if not snapshot_path.exists():
-            return PortfolioResult("snapshot", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, ["Snapshot file not found."])
-        snapshot_df = pd.read_csv(snapshot_path)
+        if snapshot_df.empty:
+            return PortfolioResult("snapshot", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, ["Snapshot data empty."])
         return compute_portfolio_from_snapshot(snapshot_df, prices)
 
     if source_override == "Demo":
@@ -203,14 +206,13 @@ def load_portfolio(
             return PortfolioResult("demo", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, ["No demo portfolio available."])
         return compute_portfolio_from_snapshot(demo, prices)
 
-    if ledger_path.exists():
-        ledger_df = pd.read_csv(ledger_path)
+    # Auto-detect
+    if not ledger_df.empty:
         result = compute_portfolio_from_ledger(ledger_df, prices)
         if not result.errors:
             return result
 
-    if snapshot_path.exists():
-        snapshot_df = pd.read_csv(snapshot_path)
+    if not snapshot_df.empty:
         result = compute_portfolio_from_snapshot(snapshot_df, prices)
         if not result.errors:
             return result

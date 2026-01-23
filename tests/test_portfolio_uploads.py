@@ -16,14 +16,22 @@ def _prices_for(ticker: str) -> pd.DataFrame:
     )
 
 
+from unittest.mock import patch
+from storage import datamanager
+
 def test_load_portfolio_ignores_files_without_uploads(tmp_path: Path) -> None:
-    base_dir = tmp_path
+    # Setup Paths
+    base_dir = tmp_path / "data" / "user_uploads"
     base_dir.mkdir(parents=True, exist_ok=True)
     (base_dir / "transactions.csv").write_text("date,ticker,action,quantity,price\n2024-01-01,AAA,BUY,1,100\n")
     (base_dir / "holdings.csv").write_text("ticker,quantity\nAAA,1\n")
 
     prices = _prices_for("AAA")
-    result = load_portfolio(prices, ["AAA"], uploads_active=False, base_dir=base_dir)
+    
+    # We must patch ROOT because DataManager uses ROOT, not the passed base_dir
+    with patch("storage.datamanager.ROOT", tmp_path), \
+         patch("storage.datamanager.STORAGE_MODE", "files"):
+        result = load_portfolio(prices, ["AAA"], uploads_active=False)
 
     assert result.daily_values.empty
     assert result.errors
@@ -31,12 +39,16 @@ def test_load_portfolio_ignores_files_without_uploads(tmp_path: Path) -> None:
 
 
 def test_load_portfolio_snapshot_when_uploaded(tmp_path: Path) -> None:
-    base_dir = tmp_path
+    # Setup Paths
+    base_dir = tmp_path / "data" / "user_uploads"
     base_dir.mkdir(parents=True, exist_ok=True)
     (base_dir / "holdings.csv").write_text("ticker,quantity\nAAA,2\n")
 
     prices = _prices_for("AAA")
-    result = load_portfolio(prices, ["AAA"], source_override="Snapshot", uploads_active=True, base_dir=base_dir)
+    
+    with patch("storage.datamanager.ROOT", tmp_path), \
+         patch("storage.datamanager.STORAGE_MODE", "files"):
+        result = load_portfolio(prices, ["AAA"], source_override="Snapshot", uploads_active=True)
 
     assert not result.daily_values.empty
     assert result.source == "snapshot"

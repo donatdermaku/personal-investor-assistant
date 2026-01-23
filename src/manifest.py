@@ -54,14 +54,19 @@ def compute_file_hash(path: Path) -> str:
     return sha256.hexdigest()
 
 
-def compute_input_hash() -> str:
+def compute_input_hash(override_str: str | None = None) -> str:
     """
-    Compute hash of all user inputs:
+    Compute hash of all user inputs.
+    If override_str is provided, hash that.
+    Else hash:
     - watchlist.yml
     - ui_state.json
     - user_uploads/transactions.csv
     - user_uploads/holdings.csv
     """
+    if override_str is not None:
+        return hashlib.sha256(override_str.encode("utf-8")).hexdigest()
+
     hasher = hashlib.sha256()
     
     # Order matters for stable hashing
@@ -108,15 +113,29 @@ def get_git_revision() -> str:
     return "dev"
 
 
-def create_manifest(coverage_map: dict[str, CoverageMeta] | None = None) -> RunManifest:
+def create_manifest(
+    run_id: str | None = None,
+    input_hash: str | None = None, 
+    config_hash: str | None = None, # Placeholder for compatibility
+    market_data_hash: str | None = None, # Alias for data_hash
+    portfolio_result: Any | None = None, # New arg in usage
+    coverage_map: dict[str, CoverageMeta] | None = None
+) -> RunManifest:
     """
-    Create a new RunManifest for the current execution state.
+    Create a new RunManifest.
     """
-    run_id = str(uuid.uuid4())
+    if run_id is None:
+        run_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
     
-    input_h = compute_input_hash()
-    data_h = compute_data_hash()
+    if input_hash is None:
+        input_hash = compute_input_hash()
+        
+    if market_data_hash:
+        data_h = market_data_hash
+    else:
+        data_h = compute_data_hash()
+    
     version = get_git_revision()
     
     # Summarize coverage for the manifest (simplify complexity)
@@ -133,7 +152,7 @@ def create_manifest(coverage_map: dict[str, CoverageMeta] | None = None) -> RunM
     manifest = RunManifest(
         run_id=run_id,
         timestamp=timestamp,
-        input_hash=input_h,
+        input_hash=input_hash,
         data_hash=data_h,
         code_version=version,
         coverage_summary=cov_summary

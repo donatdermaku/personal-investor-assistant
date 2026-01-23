@@ -14,7 +14,7 @@ lxml                   # XML/HTML parsing for SEC data
 # Storage
 duckdb
 # Use a known stable pyarrow release compatible with NumPy<2
-pyarrow==12.0.0        # for Parquet support
+pyarrow>=14.0.0        # for Parquet support
 
 # optional numeric expression engine used by pandas; pin to avoid import issues
 numexpr
@@ -36,3 +36,4 @@ scipy                  # risk metrics (future Streamlit pages)
 # Testing
 pytest
 PyYAML
+sqlalchemy

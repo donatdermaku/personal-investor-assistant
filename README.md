@@ -56,4 +56,20 @@ Switch to **Pro** mode in the sidebar settings to unlock:
 - `make clean`: Clear local caches.
 - `make sample-data`: List location of sample CSVs.
 
+
 Built with [Streamlit](https://streamlit.io) and [DuckDB](https://duckdb.org).
+
+## 🏗 Data Architecture (New in v2.0)
+The app now runs on a robust hybrid backend:
+- **User Data (SQLite)**: Your trades, portfolios, and watchlists are stored in `data/user.db` for transactional integrity.
+- **Market Data (DuckDB)**: Heavy time-series data (prices, fundamentals) remains in optimized Parquet files for speed.
+- **Headless Mode**: Run updates without the UI.
+
+### CLI Commands (`manage.py`)
+```bash
+# Migrate legacy files (transactions.csv) to SQLite
+python manage.py migrate
+
+# Run a headless update/compute cycle (ideal for cron)
+python manage.py compute
+```
