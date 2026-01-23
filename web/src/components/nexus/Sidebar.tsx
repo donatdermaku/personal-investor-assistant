@@ -29,7 +29,7 @@ export function Sidebar() {
                                 key={item.href}
                                 href={item.href}
                                 className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
-                                    ? "bg-[#F3F4F6] text-[#0F172A]"
+                                    ? "bg-[#0F172A] text-white shadow-sm"
                                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                                     }`}
                             >

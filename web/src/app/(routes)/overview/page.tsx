@@ -1,35 +1,54 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { MetricCard } from "@/components/ui/MetricCard";
-import { getNexusState } from "@/lib/api";
 import { definitionTooltip } from "@/lib/definitions";
-import { NexusState } from "@/types/nexus";
+import { useNexus } from "@/components/nexus/NexusProvider";
+import { EmptyState } from "@/components/nexus/EmptyState";
+import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function OverviewPage() {
-    const [state, setState] = useState<NexusState | null>(null);
-    const [loading, setLoading] = useState(true);
+    const { state, status, error, mode, setMode } = useNexus();
 
-    useEffect(() => {
-        getNexusState().then(data => {
-            setState(data);
-            setLoading(false);
-        });
-    }, []);
-
-    if (loading) {
+    if (status === "error") {
         return (
-            <div className="flex items-center justify-center min-h-[400px]">
-                <div className="text-gray-500">Loading portfolio data...</div>
-            </div>
+            <EmptyState
+                title="Unable to load portfolio data"
+                description={error || "Check your backend connection and try again."}
+                primaryAction={{ label: "Retry in Live Mode", onClick: () => setMode("live") }}
+                secondaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
+            />
         );
     }
 
-    if (!state) {
+    if (status === "empty") {
         return (
-            <div className="flex items-center justify-center min-h-[400px]">
-                <div className="text-red-500">Failed to load data</div>
+            <EmptyState
+                title="No portfolio runs yet"
+                description="Run the pipeline to generate your first set of analytics, or switch to demo mode to preview Nexus."
+                primaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
+                secondaryAction={{ label: "Stay in Live Mode", onClick: () => setMode("live") }}
+            />
+        );
+    }
+
+    if (status === "loading" || !state) {
+        return (
+            <div className="space-y-8">
+                <div>
+                    <SkeletonBlock className="h-8 w-40" />
+                    <SkeletonBlock className="mt-2 h-4 w-56" />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                </div>
+                <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                    <SkeletonBlock className="h-5 w-32" />
+                    <SkeletonBlock className="mt-4 h-64 w-full" />
+                </div>
             </div>
         );
     }
@@ -40,7 +59,9 @@ export default function OverviewPage() {
         <div className="space-y-8">
             <div>
                 <h2 className="text-3xl font-bold text-[#0F172A] mb-2">Overview</h2>
-                <p className="text-gray-600">Portfolio performance summary</p>
+                <p className="text-gray-600">
+                    {mode === "demo" ? "Demo portfolio performance summary" : "Portfolio performance summary"}
+                </p>
             </div>
 
             {/* KPI Grid */}

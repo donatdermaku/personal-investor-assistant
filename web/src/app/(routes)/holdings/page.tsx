@@ -1,26 +1,45 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getNexusState } from "@/lib/api";
-import { NexusState } from "@/types/nexus";
+import { useNexus } from "@/components/nexus/NexusProvider";
+import { EmptyState } from "@/components/nexus/EmptyState";
+import { SkeletonBlock } from "@/components/nexus/Skeleton";
 
 export default function HoldingsPage() {
-    const [state, setState] = useState<NexusState | null>(null);
-    const [loading, setLoading] = useState(true);
+    const { state, status, error, mode, setMode } = useNexus();
 
-    useEffect(() => {
-        getNexusState().then(data => {
-            setState(data);
-            setLoading(false);
-        });
-    }, []);
-
-    if (loading) {
-        return <div className="text-gray-500">Loading...</div>;
+    if (status === "error") {
+        return (
+            <EmptyState
+                title="Unable to load holdings"
+                description={error || "Check your backend connection and try again."}
+                primaryAction={{ label: "Retry in Live Mode", onClick: () => setMode("live") }}
+                secondaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
+            />
+        );
     }
 
-    if (!state) {
-        return <div className="text-red-500">Failed to load data</div>;
+    if (status === "empty") {
+        return (
+            <EmptyState
+                title="No holdings yet"
+                description="Upload your portfolio or run a compute to see current positions."
+                primaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
+                secondaryAction={{ label: "Stay in Live Mode", onClick: () => setMode("live") }}
+            />
+        );
+    }
+
+    if (status === "loading" || !state) {
+        return (
+            <div className="space-y-6">
+                <SkeletonBlock className="h-8 w-40" />
+                <SkeletonBlock className="h-4 w-56" />
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                    <SkeletonBlock className="h-4 w-32" />
+                    <SkeletonBlock className="mt-4 h-40 w-full" />
+                </div>
+            </div>
+        );
     }
 
     const { holdings } = state;
@@ -29,7 +48,9 @@ export default function HoldingsPage() {
         <div className="space-y-8">
             <div>
                 <h2 className="text-3xl font-bold text-[#0F172A] mb-2">Holdings</h2>
-                <p className="text-gray-600">Current portfolio positions</p>
+                <p className="text-gray-600">
+                    {mode === "demo" ? "Demo portfolio positions" : "Current portfolio positions"}
+                </p>
             </div>
 
             {/* Holdings Table */}
@@ -62,22 +83,22 @@ export default function HoldingsPage() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
                                     <div className="text-sm text-gray-900">
-                                        {holding.shares !== undefined ? holding.shares.toLocaleString() : "--"}
+                                        {holding.shares != null ? holding.shares.toLocaleString() : "--"}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
                                     <div className="text-sm text-gray-900">
-                                        {holding.price !== undefined ? `$${holding.price.toLocaleString()}` : "--"}
+                                        {holding.price != null ? `$${holding.price.toLocaleString()}` : "--"}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
                                     <div className="text-sm text-gray-900">
-                                        {holding.weight !== undefined ? `${(holding.weight * 100).toFixed(1)}%` : "--"}
+                                        {holding.weight != null ? `${(holding.weight * 100).toFixed(1)}%` : "--"}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
                                     <div className="text-sm font-medium text-gray-900">
-                                        {holding.value !== undefined ? `$${holding.value.toLocaleString()}` : "--"}
+                                        {holding.value != null ? `$${holding.value.toLocaleString()}` : "--"}
                                     </div>
                                 </td>
                             </tr>

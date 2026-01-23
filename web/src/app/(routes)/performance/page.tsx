@@ -1,29 +1,55 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { MetricCard } from "@/components/ui/MetricCard";
-import { getNexusState } from "@/lib/api";
 import { definitionTooltip } from "@/lib/definitions";
-import { NexusState } from "@/types/nexus";
+import { useNexus } from "@/components/nexus/NexusProvider";
+import { EmptyState } from "@/components/nexus/EmptyState";
+import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 
 export default function PerformancePage() {
-    const [state, setState] = useState<NexusState | null>(null);
-    const [loading, setLoading] = useState(true);
+    const { state, status, error, mode, setMode } = useNexus();
 
-    useEffect(() => {
-        getNexusState().then(data => {
-            setState(data);
-            setLoading(false);
-        });
-    }, []);
-
-    if (loading) {
-        return <div className="text-gray-500">Loading...</div>;
+    if (status === "error") {
+        return (
+            <EmptyState
+                title="Unable to load performance data"
+                description={error || "Check your backend connection and try again."}
+                primaryAction={{ label: "Retry in Live Mode", onClick: () => setMode("live") }}
+                secondaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
+            />
+        );
     }
 
-    if (!state) {
-        return <div className="text-red-500">Failed to load data</div>;
+    if (status === "empty") {
+        return (
+            <EmptyState
+                title="No performance history yet"
+                description="Generate a run to see returns, drawdowns, and attribution data."
+                primaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
+                secondaryAction={{ label: "Stay in Live Mode", onClick: () => setMode("live") }}
+            />
+        );
+    }
+
+    if (status === "loading" || !state) {
+        return (
+            <div className="space-y-8">
+                <div>
+                    <SkeletonBlock className="h-8 w-40" />
+                    <SkeletonBlock className="mt-2 h-4 w-56" />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                </div>
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                    <SkeletonBlock className="h-5 w-32" />
+                    <SkeletonBlock className="mt-4 h-56 w-full" />
+                </div>
+            </div>
+        );
     }
 
     const { summary, performance, monthly_returns, definitions } = state;
@@ -36,7 +62,9 @@ export default function PerformancePage() {
         <div className="space-y-8">
             <div>
                 <h2 className="text-3xl font-bold text-[#0F172A] mb-2">Performance</h2>
-                <p className="text-gray-600">Detailed returns analysis</p>
+                <p className="text-gray-600">
+                    {mode === "demo" ? "Demo returns analysis" : "Detailed returns analysis"}
+                </p>
             </div>
 
             {/* Returns Summary */}
