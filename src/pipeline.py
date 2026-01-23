@@ -1,11 +1,13 @@
 import uuid
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
 
 from src.app_state import AppState
 from src.manifest import create_manifest, RunManifest, compute_input_hash
+from src.utils_io import ROOT
 from src.portfolio import load_portfolio, PortfolioResult
 from src.streamlit_data import (
     get_prices, get_scores, get_fundamentals, 
@@ -16,7 +18,11 @@ from storage.datamanager import data_manager
 from storage import repo
 
 # Define standard export paths relative to ROOT/data
-EXPORTS_DIR = Path("data/exports")
+EXPORTS_DIR_ENV = os.getenv("NEXUS_EXPORT_DIR", "data/exports")
+EXPORTS_DIR = Path(EXPORTS_DIR_ENV)
+if not EXPORTS_DIR.is_absolute():
+    EXPORTS_DIR = (ROOT / EXPORTS_DIR).resolve()
+EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 def compute_app_state(
     portfolio_id: int | None = None,
@@ -149,4 +155,3 @@ def save_artifacts(app_state: AppState):
         ret_path = base_path / "monthly_returns.csv"
         export_monthly_returns_csv(ret_path, app_state.portfolio)
         repo.add_artifact(run_id, "monthly_returns_csv", str(ret_path))
-

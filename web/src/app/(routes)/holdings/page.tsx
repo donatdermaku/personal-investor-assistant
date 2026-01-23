@@ -41,6 +41,12 @@ export default function HoldingsPage() {
                                 Ticker
                             </th>
                             <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                Shares
+                            </th>
+                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                Price
+                            </th>
+                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
                                 Weight
                             </th>
                             <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
@@ -53,6 +59,16 @@ export default function HoldingsPage() {
                             <tr key={idx} className="hover:bg-gray-50 transition-colors">
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="text-sm font-medium text-[#0F172A]">{holding.ticker}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right">
+                                    <div className="text-sm text-gray-900">
+                                        {holding.shares !== undefined ? holding.shares.toLocaleString() : "--"}
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right">
+                                    <div className="text-sm text-gray-900">
+                                        {holding.price !== undefined ? `$${holding.price.toLocaleString()}` : "--"}
+                                    </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
                                     <div className="text-sm text-gray-900">

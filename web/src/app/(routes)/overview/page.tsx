@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { getNexusState } from "@/lib/api";
+import { definitionTooltip } from "@/lib/definitions";
 import { NexusState } from "@/types/nexus";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -33,7 +34,7 @@ export default function OverviewPage() {
         );
     }
 
-    const { summary, equity_curve } = state;
+    const { summary, equity_curve, definitions } = state;
 
     return (
         <div className="space-y-8">
@@ -47,12 +48,12 @@ export default function OverviewPage() {
                 <MetricCard
                     label="Strategy Return (TWR)"
                     value={summary.twr !== null ? `${(summary.twr * 100).toFixed(2)}%` : "--"}
-                    tooltip="Time-Weighted Return: neutralizes external cashflows"
+                    tooltip={definitionTooltip(definitions, "twr")}
                 />
                 <MetricCard
                     label="Personal Return (MWR)"
                     value={summary.mwr !== null ? `${(summary.mwr * 100).toFixed(2)}%` : "--"}
-                    tooltip="Money-Weighted Return: your personal return using dated cashflows"
+                    tooltip={definitionTooltip(definitions, "mwr")}
                 />
                 <MetricCard
                     label="Portfolio Value"
@@ -62,45 +63,49 @@ export default function OverviewPage() {
                 <MetricCard
                     label="Max Drawdown"
                     value={summary.max_drawdown !== null ? `${(summary.max_drawdown * 100).toFixed(2)}%` : "--"}
-                    tooltip="Peak-to-trough decline from a prior high"
+                    tooltip={definitionTooltip(definitions, "max_drawdown")}
                 />
             </div>
 
             {/* Equity Curve */}
             <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
                 <h3 className="text-lg font-semibold text-[#0F172A] mb-4">Equity Curve</h3>
-                <ResponsiveContainer width="100%" height={400}>
-                    <LineChart data={equity_curve}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                        <XAxis
-                            dataKey="date"
-                            stroke="#6B7280"
-                            style={{ fontSize: '12px' }}
-                        />
-                        <YAxis
-                            stroke="#6B7280"
-                            style={{ fontSize: '12px' }}
-                            tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                        />
-                        <Tooltip
-                            contentStyle={{
-                                backgroundColor: 'white',
-                                border: '1px solid #E5E7EB',
-                                borderRadius: '0.5rem'
-                            }}
-                            formatter={(value) => value != null ? [`$${Number(value).toLocaleString()}`, 'Value'] : ['--', 'Value']}
-                        />
-                        <Legend />
-                        <Line
-                            type="monotone"
-                            dataKey="value"
-                            stroke="#0F172A"
-                            strokeWidth={2}
-                            dot={false}
-                            name="Portfolio Value"
-                        />
-                    </LineChart>
-                </ResponsiveContainer>
+                {equity_curve.length === 0 ? (
+                    <div className="text-sm text-gray-500">No equity curve data available.</div>
+                ) : (
+                    <ResponsiveContainer width="100%" height={400}>
+                        <LineChart data={equity_curve}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                            <XAxis
+                                dataKey="date"
+                                stroke="#6B7280"
+                                style={{ fontSize: '12px' }}
+                            />
+                            <YAxis
+                                stroke="#6B7280"
+                                style={{ fontSize: '12px' }}
+                                tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                            />
+                            <Tooltip
+                                contentStyle={{
+                                    backgroundColor: 'white',
+                                    border: '1px solid #E5E7EB',
+                                    borderRadius: '0.5rem'
+                                }}
+                                formatter={(value) => value != null ? [`$${Number(value).toLocaleString()}`, 'Value'] : ['--', 'Value']}
+                            />
+                            <Legend />
+                            <Line
+                                type="monotone"
+                                dataKey="value"
+                                stroke="#0F172A"
+                                strokeWidth={2}
+                                dot={false}
+                                name="Portfolio Value"
+                            />
+                        </LineChart>
+                    </ResponsiveContainer>
+                )}
             </div>
 
             {/* Errors */}

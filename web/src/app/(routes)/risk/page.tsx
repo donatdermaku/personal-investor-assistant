@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { getNexusState } from "@/lib/api";
+import { definitionTooltip } from "@/lib/definitions";
 import { NexusState } from "@/types/nexus";
 
 export default function RiskPage() {
@@ -24,7 +25,8 @@ export default function RiskPage() {
         return <div className="text-red-500">Failed to load data</div>;
     }
 
-    const { risk, summary } = state;
+    const { risk, summary, performance, definitions } = state;
+    const currentDrawdown = performance.length > 0 ? performance[performance.length - 1]?.drawdown ?? null : null;
 
     return (
         <div className="space-y-8">
@@ -38,24 +40,24 @@ export default function RiskPage() {
                 <MetricCard
                     label="VaR (95%)"
                     value={risk.var_95 !== null ? `${(risk.var_95 * 100).toFixed(2)}%` : "--"}
-                    tooltip="Value at Risk: estimated loss at 95% confidence"
+                    tooltip={definitionTooltip(definitions, "var_daily")}
                     subtext="Daily"
                 />
                 <MetricCard
                     label="CVaR (95%)"
                     value={risk.cvar_95 !== null ? `${(risk.cvar_95 * 100).toFixed(2)}%` : "--"}
-                    tooltip="Conditional VaR: average loss beyond VaR threshold"
+                    tooltip={definitionTooltip(definitions, "cvar_daily")}
                     subtext="Daily"
                 />
                 <MetricCard
                     label="Volatility"
                     value={risk.volatility !== null ? `${(risk.volatility * 100).toFixed(2)}%` : "--"}
-                    tooltip="Annualized standard deviation of returns"
+                    tooltip={definitionTooltip(definitions, "rolling_volatility")}
                 />
                 <MetricCard
                     label="Sharpe Ratio"
                     value={risk.sharpe !== null ? risk.sharpe.toFixed(2) : "--"}
-                    tooltip="Risk-adjusted return metric"
+                    tooltip={definitionTooltip(definitions, "sharpe_rolling")}
                 />
             </div>
 
@@ -72,9 +74,11 @@ export default function RiskPage() {
                     <div>
                         <div className="text-sm text-gray-500 mb-1">Current Drawdown</div>
                         <div className="text-2xl font-bold text-[#0F172A]">
-                            0.00%
+                            {currentDrawdown !== null && currentDrawdown !== undefined
+                                ? `${(currentDrawdown * 100).toFixed(2)}%`
+                                : "--"}
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">At peak</div>
+                        <div className="text-xs text-gray-400 mt-1">Latest observation</div>
                     </div>
                 </div>
             </div>

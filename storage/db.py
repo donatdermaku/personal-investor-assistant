@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
 # Configurable path via env var, validation/default happens at import or init time
-DB_PATH = os.getenv("USER_DB_PATH", "data/user.db")
+DB_PATH = os.getenv("NEXUS_DB_PATH", os.getenv("USER_DB_PATH", "data/user.db"))
 
 def get_db_url(path: str = DB_PATH) -> str:
     # Ensure dir exists

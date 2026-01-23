@@ -20,7 +20,7 @@ export default function RootLayout({
         <Sidebar />
 
         {/* Zone 2: Main Content (Fluid Center) */}
-        <main className="ml-64 mr-0 lg:mr-80 min-h-screen p-8">
+        <main className="min-h-screen p-6 lg:ml-64 lg:mr-80 lg:p-8 pb-24 lg:pb-8">
           <div className="max-w-5xl mx-auto">
             {children}
           </div>
