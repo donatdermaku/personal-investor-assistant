@@ -37,3 +37,7 @@ scipy                  # risk metrics (future Streamlit pages)
 pytest
 PyYAML
 sqlalchemy
+
+# Web API (Prompt 13)
+fastapi
+uvicorn[standard]
