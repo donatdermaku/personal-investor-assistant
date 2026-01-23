@@ -207,3 +207,54 @@ def _render_missingness(coverage_map: dict[str, CoverageMeta]) -> None:
                 if len(meta.missing_tickers) > len(preview):
                     more = f" (+{len(meta.missing_tickers) - len(preview)} more)"
                 st.markdown("Missing tickers: " + ", ".join(preview) + more)
+
+
+# --- Component Library ---
+
+def ui_metric_card(
+    label: str,
+    value: str | float | int | None,
+    delta: str | float | int | None = None,
+    help_text: str | None = None,
+    value_formatter: str = "{:.2f}",
+) -> None:
+    """Standardized metric card component."""
+    val_str = "--"
+    if value is not None:
+        if isinstance(value, (float, int)):
+            val_str = value_formatter.format(value)
+        else:
+            val_str = str(value)
+
+    st.metric(
+        label=label,
+        value=val_str,
+        delta=delta,
+        help=help_text,
+    )
+
+
+def ui_section_header(title: str, status_icon: str | None = None) -> None:
+    """Standardized section header."""
+    if status_icon:
+        st.subheader(f"{status_icon} {title}")
+    else:
+        st.subheader(title)
+
+
+def ui_empty_state(title: str, message: str, icon: str = "ℹ️", action_label: str | None = None, action_fn=None) -> None:
+    """Standardized empty state display."""
+    st.info(f"{icon} **{title}**\n\n{message}")
+    if action_label and action_fn:
+        if st.button(action_label):
+            action_fn()
+
+
+def ui_coverage_badge(meta: CoverageMeta, compact: bool = True) -> str:
+    """Return a string badge for coverage, e.g. '45/50'."""
+    if meta.total <= 0:
+        return "--"
+    if compact:
+        return f"{meta.covered}/{meta.total}"
+    return f"Coverage: {meta.covered}/{meta.total} ({meta.covered/meta.total:.0%})"
+
