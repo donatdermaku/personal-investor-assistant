@@ -32,6 +32,23 @@ st.set_page_config(page_title="Performance", page_icon="📈", layout="wide")
 render_sidebar()
 
 # ... (data loading)
+watchlist = load_watchlist()
+watch_tickers = watchlist.get("tickers", [])
+weights = watchlist.get("weights", {}) or {}
+market_label, market_state = market_status()
+
+# Restoring data loading calls
+prices, price_meta = get_prices(market_state, watch_tickers)
+scores, scores_meta = get_scores(watch_tickers)
+_, fundamentals_meta = get_fundamentals(watch_tickers)
+
+portfolio = load_portfolio_cached(
+    prices,
+    watch_tickers,
+    portfolio_cache_token(),
+    source_override=st.session_state.get("portfolio_source"),
+    uploads_active=st.session_state.get("uploads_active", False),
+)
 
 status = build_status(price_meta, fundamentals_meta, portfolio)
 render_header("Performance", status, {"Prices": price_meta, "Fundamentals": fundamentals_meta, "Scores": scores_meta})
