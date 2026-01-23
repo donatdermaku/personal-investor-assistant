@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { getNexusState } from "@/lib/api";
+import { useMemo, useState } from "react";
+import { downloadExport } from "@/lib/api";
+import { useNexus } from "@/components/nexus/NexusProvider";
 import type { NexusState } from "@/types/nexus";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { SkeletonBlock } from "@/components/nexus/Skeleton";
 
 function formatPercent(value: number | null) {
     if (value === null || Number.isNaN(value)) return "--";
@@ -32,19 +32,14 @@ function coveragePercent(state: NexusState | null) {
 }
 
 export function ContextPanel() {
-    const [state, setState] = useState<NexusState | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [open, setOpen] = useState(false);
-
-    useEffect(() => {
-        getNexusState().then((data) => {
-            setState(data);
-            setLoading(false);
-        });
-    }, []);
+    const { state, status, mode, lastFetched, backendOk, benchmark } = useNexus();
+    const [toast, setToast] = useState<string | null>(null);
 
     const coverage = useMemo(() => coveragePercent(state), [state]);
     const runId = state?.manifest.run_id;
+    const exportsEnabled = Boolean(runId) && mode === "live";
+    const loading = status === "loading";
+    const hasError = status === "error";
 
     const content = (
         <div className="space-y-4">
@@ -54,7 +49,10 @@ export function ContextPanel() {
                     {state?.portfolio?.name || "--"}
                 </div>
                 <div className="text-xs text-gray-500">
-                    Benchmark: {state?.portfolio?.benchmark || "--"}
+                    Benchmark: {state?.portfolio?.benchmark || benchmark || "--"}
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                    Mode: {mode === "live" ? "Live" : "Demo"}
                 </div>
             </div>
 
@@ -92,25 +90,61 @@ export function ContextPanel() {
             <div className="space-y-2">
                 <div className="text-xs uppercase tracking-wider text-gray-400">Export</div>
                 <div className="flex flex-col gap-2 text-sm">
-                    <a
-                        className="rounded-md border border-gray-200 px-3 py-2 text-gray-700 hover:bg-gray-50"
-                        href={runId ? `${API_BASE_URL}/run/${runId}/export/summary` : "#"}
+                    <button
+                        type="button"
+                        onClick={async () => {
+                            if (!exportsEnabled || !runId) return;
+                            try {
+                                await downloadExport(runId, "summary-json");
+                            } catch (err) {
+                                setToast(err instanceof Error ? err.message : "Export failed.");
+                            }
+                        }}
+                        disabled={!exportsEnabled}
+                        className="rounded-md border border-gray-200 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                     >
                         Summary JSON
-                    </a>
-                    <a
-                        className="rounded-md border border-gray-200 px-3 py-2 text-gray-700 hover:bg-gray-50"
-                        href={runId ? `${API_BASE_URL}/run/${runId}/export/performance` : "#"}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={async () => {
+                            if (!exportsEnabled || !runId) return;
+                            try {
+                                await downloadExport(runId, "performance-csv");
+                            } catch (err) {
+                                setToast(err instanceof Error ? err.message : "Export failed.");
+                            }
+                        }}
+                        disabled={!exportsEnabled}
+                        className="rounded-md border border-gray-200 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                     >
                         Performance CSV
-                    </a>
-                    <a
-                        className="rounded-md border border-gray-200 px-3 py-2 text-gray-700 hover:bg-gray-50"
-                        href={runId ? `${API_BASE_URL}/run/${runId}/export/monthly-returns` : "#"}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={async () => {
+                            if (!exportsEnabled || !runId) return;
+                            try {
+                                await downloadExport(runId, "monthly-returns-csv");
+                            } catch (err) {
+                                setToast(err instanceof Error ? err.message : "Export failed.");
+                            }
+                        }}
+                        disabled={!exportsEnabled}
+                        className="rounded-md border border-gray-200 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                     >
                         Monthly Returns
-                    </a>
+                    </button>
                 </div>
+                {!exportsEnabled && (
+                    <div className="text-xs text-gray-400">
+                        Exports are available after a live run completes.
+                    </div>
+                )}
+            </div>
+
+            <div className="text-xs text-gray-400">
+                Backend: {backendOk ? "Connected" : "Offline"} · Last fetch {formatTimestamp(lastFetched)}
             </div>
         </div>
     );
@@ -121,25 +155,46 @@ export function ContextPanel() {
                 <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">
                     Context
                 </h3>
-                {loading ? <div className="text-xs text-gray-400">Loading...</div> : content}
+                {loading ? (
+                    <div className="space-y-3">
+                        <SkeletonBlock className="h-4 w-32" />
+                        <SkeletonBlock className="h-10 w-full" />
+                        <SkeletonBlock className="h-24 w-full" />
+                        <SkeletonBlock className="h-32 w-full" />
+                    </div>
+                ) : hasError ? (
+                    <div className="text-sm text-red-500">Unable to load context data.</div>
+                ) : content}
             </aside>
 
-            <div className="lg:hidden fixed right-4 bottom-16 z-20">
-                <button
-                    type="button"
-                    onClick={() => setOpen((prev) => !prev)}
-                    className="rounded-full bg-[#0F172A] text-white px-4 py-2 text-xs uppercase tracking-wider shadow-lg"
-                >
-                    {open ? "Close" : "Context"}
-                </button>
-            </div>
-
-            {open && (
-                <div className="lg:hidden fixed inset-x-0 bottom-0 z-10 bg-white border-t border-[#E5E7EB] p-6 shadow-2xl max-h-[70vh] overflow-y-auto">
+            <div className="lg:hidden mt-8 px-6 pb-8">
+                <div className="rounded-xl border border-[#E5E7EB] bg-white p-6 shadow-sm">
                     <div className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">
                         Context
                     </div>
-                    {loading ? <div className="text-xs text-gray-400">Loading...</div> : content}
+                    {loading ? (
+                        <div className="space-y-3">
+                            <SkeletonBlock className="h-4 w-32" />
+                            <SkeletonBlock className="h-10 w-full" />
+                            <SkeletonBlock className="h-24 w-full" />
+                            <SkeletonBlock className="h-32 w-full" />
+                        </div>
+                    ) : hasError ? (
+                        <div className="text-sm text-red-500">Unable to load context data.</div>
+                    ) : content}
+                </div>
+            </div>
+
+            {toast && (
+                <div className="fixed bottom-24 right-6 z-30 rounded-md bg-[#0F172A] px-4 py-2 text-xs text-white shadow-lg">
+                    {toast}
+                    <button
+                        type="button"
+                        className="ml-3 text-gray-200"
+                        onClick={() => setToast(null)}
+                    >
+                        Close
+                    </button>
                 </div>
             )}
         </>

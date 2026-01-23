@@ -10,13 +10,13 @@ interface MetricCardProps {
 export function MetricCard({ label, value, subtext, tooltip }: MetricCardProps) {
     return (
         <div
-            className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
+            className="nexus-card hover:shadow-md transition-shadow"
             title={tooltip}
         >
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
                 {label}
             </div>
-            <div className="text-2xl font-bold text-[#0F172A] font-mono">
+            <div className="text-2xl font-bold text-[#0F172A]">
                 {value}
             </div>
             {subtext && (

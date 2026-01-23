@@ -14,76 +14,178 @@ import {
     MOCK_SUMMARY,
 } from "@/lib/mock-data";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export type NexusMode = "live" | "demo";
 
-async function fetchJson<T>(url: string, fallback: T): Promise<T> {
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+async function fetchJson<T>(url: string, allow404 = false): Promise<T | null> {
+    const res = await fetch(url, { cache: "no-store" });
+    if (res.status === 404 && allow404) {
+        return null;
+    }
+    if (!res.ok) {
+        throw new Error(`Request failed (${res.status})`);
+    }
+    return res.json();
+}
+
+export async function getHealth(): Promise<boolean> {
+    if (!API_BASE) return false;
     try {
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) {
-            if (res.status === 404) {
-                return fallback;
-            }
-            console.warn(`Failed to fetch ${url}, using fallback`);
-            return fallback;
-        }
-        return await res.json();
-    } catch (error) {
-        console.error("API Error:", error);
-        return fallback;
+        const res = await fetch(`${API_BASE}/health`, { cache: "no-store" });
+        return res.ok;
+    } catch {
+        return false;
     }
 }
 
-export async function getLatestRun(): Promise<RunManifest> {
-    return fetchJson(`${API_BASE}/latest-run`, MOCK_MANIFEST);
+export async function getLatestRun(): Promise<RunManifest | null> {
+    if (!API_BASE) return null;
+    return fetchJson(`${API_BASE}/latest-run`, true);
 }
 
 export async function getDefinitions(): Promise<DefinitionsRegistry> {
-    return fetchJson(`${API_BASE}/definitions`, MOCK_DEFINITIONS);
+    if (!API_BASE) return {};
+    const data = await fetchJson<DefinitionsRegistry>(`${API_BASE}/definitions`);
+    return data ?? {};
 }
 
-export async function getPortfolio(portfolioId = "default"): Promise<PortfolioResponse> {
-    return fetchJson(
-        `${API_BASE}/portfolio/${portfolioId}`,
-        { portfolio: MOCK_PORTFOLIO, holdings: MOCK_HOLDINGS }
-    );
+export async function getPortfolio(portfolioId = "default"): Promise<PortfolioResponse | null> {
+    if (!API_BASE) return null;
+    return fetchJson(`${API_BASE}/portfolio/${portfolioId}`, true);
 }
 
 export async function getRunMetrics(runId: string): Promise<RunMetricsResponse> {
-    return fetchJson(`${API_BASE}/run/${runId}`, MOCK_METRICS);
+    if (!API_BASE) {
+        throw new Error("Backend URL is not configured.");
+    }
+    const data = await fetchJson<RunMetricsResponse>(`${API_BASE}/run/${runId}`);
+    if (!data) {
+        throw new Error("Run metrics unavailable.");
+    }
+    return data;
 }
 
-export async function getNexusState(): Promise<NexusState> {
-    const latest = await getLatestRun();
-    const [definitions, portfolio] = await Promise.all([
+export async function getNexusState(
+    mode: NexusMode,
+    portfolioId = "default"
+): Promise<{
+    state: NexusState | null;
+    empty: boolean;
+}> {
+    if (mode === "demo") {
+        return {
+            state: {
+                manifest: MOCK_MANIFEST,
+                summary: MOCK_SUMMARY,
+                equity_curve: MOCK_METRICS.equity_curve,
+                performance: MOCK_METRICS.performance,
+                monthly_returns: MOCK_METRICS.monthly_returns,
+                holdings: MOCK_HOLDINGS,
+                risk: MOCK_METRICS.risk,
+                portfolio: MOCK_PORTFOLIO,
+                definitions: MOCK_DEFINITIONS,
+            },
+            empty: false,
+        };
+    }
+
+    if (!API_BASE) {
+        throw new Error("Backend URL is not configured.");
+    }
+
+    const [latest, definitions, portfolio] = await Promise.all([
+        getLatestRun(),
         getDefinitions(),
-        getPortfolio(),
+        getPortfolio(portfolioId),
     ]);
 
-    if (!latest || latest.run_id === MOCK_MANIFEST.run_id) {
+    if (!latest) {
         return {
-            manifest: MOCK_MANIFEST,
-            summary: MOCK_SUMMARY,
-            equity_curve: MOCK_METRICS.equity_curve,
-            performance: MOCK_METRICS.performance,
-            monthly_returns: MOCK_METRICS.monthly_returns,
-            holdings: portfolio.holdings || MOCK_HOLDINGS,
-            risk: MOCK_METRICS.risk,
-            portfolio: portfolio.portfolio || MOCK_PORTFOLIO,
-            definitions,
+            state: {
+                manifest: {
+                    run_id: "",
+                    timestamp: null,
+                    input_hash: null,
+                    data_hash: null,
+                },
+                summary: {
+                    source: "",
+                    twr: null,
+                    mwr: null,
+                    final_value: null,
+                    last_date: null,
+                    max_drawdown: null,
+                    errors: [],
+                },
+                equity_curve: [],
+                performance: [],
+                monthly_returns: [],
+                holdings: portfolio?.holdings ?? [],
+                risk: {
+                    var_95: null,
+                    cvar_95: null,
+                    volatility: null,
+                    sharpe: null,
+                },
+                portfolio: portfolio?.portfolio ?? null,
+                definitions,
+            },
+            empty: true,
         };
     }
 
     const metrics = await getRunMetrics(latest.run_id);
 
-    return {
-        manifest: metrics.manifest || latest,
-        summary: metrics.summary || MOCK_SUMMARY,
-        equity_curve: metrics.equity_curve || MOCK_METRICS.equity_curve,
-        performance: metrics.performance || MOCK_METRICS.performance,
-        monthly_returns: metrics.monthly_returns || MOCK_METRICS.monthly_returns,
-        holdings: portfolio.holdings || MOCK_HOLDINGS,
-        risk: metrics.risk || MOCK_METRICS.risk,
-        portfolio: portfolio.portfolio || MOCK_PORTFOLIO,
-        definitions,
+    const summary = metrics.summary || {
+        source: "",
+        twr: null,
+        mwr: null,
+        final_value: null,
+        last_date: null,
+        max_drawdown: null,
+        errors: [],
     };
+
+    return {
+        state: {
+            manifest: metrics.manifest || latest,
+            summary,
+            equity_curve: metrics.equity_curve || [],
+            performance: metrics.performance || [],
+            monthly_returns: metrics.monthly_returns || [],
+            holdings: portfolio?.holdings ?? [],
+            risk: metrics.risk || {
+                var_95: null,
+                cvar_95: null,
+                volatility: null,
+                sharpe: null,
+            },
+            portfolio: portfolio?.portfolio ?? null,
+            definitions,
+        },
+        empty: false,
+    };
+}
+
+export async function downloadExport(runId: string, artifact: string): Promise<void> {
+    if (!API_BASE) {
+        throw new Error("Backend URL is not configured.");
+    }
+    const res = await fetch(`${API_BASE}/run/${runId}/export/${artifact}`);
+    if (!res.ok) {
+        if (res.status === 404) {
+            throw new Error("Artifact not available.");
+        }
+        throw new Error("Export failed.");
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${artifact}-${runId}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
 }
