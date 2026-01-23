@@ -232,6 +232,18 @@ def compute_portfolio_from_ledger(
     if errors:
         return PortfolioResult("ledger", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, errors)
 
+    if "date" not in prices.columns:
+        return PortfolioResult(
+            "ledger",
+            pd.DataFrame(),
+            pd.Series(dtype=float),
+            pd.DataFrame(),
+            pd.Series(dtype=float),
+            None,
+            None,
+            ["Market price data missing date column."],
+        )
+
     prices = prices.copy()
     prices["date"] = pd.to_datetime(prices["date"])
     price_dates = prices["date"].dropna().sort_values().unique()
@@ -320,6 +332,18 @@ def compute_portfolio_from_snapshot(snapshot: pd.DataFrame, prices: pd.DataFrame
     snapshot, errors = load_snapshot(snapshot)
     if errors:
         return PortfolioResult("snapshot", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, errors)
+
+    if "date" not in prices.columns:
+        return PortfolioResult(
+            "snapshot",
+            pd.DataFrame(),
+            pd.Series(dtype=float),
+            pd.DataFrame(),
+            pd.Series(dtype=float),
+            None,
+            None,
+            ["Market price data missing date column."],
+        )
 
     prices = prices.copy()
     prices["date"] = pd.to_datetime(prices["date"])
