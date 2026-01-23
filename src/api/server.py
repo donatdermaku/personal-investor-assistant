@@ -297,6 +297,9 @@ async def create_run(
     if errors:
         raise HTTPException(status_code=400, detail="; ".join(errors))
 
+    if "quantity" in validated.columns:
+        validated["quantity"] = validated["quantity"].fillna(0)
+
     if "amount" not in validated.columns:
         def _calc_amount(row: pd.Series) -> float:
             qty = row.get("quantity")
