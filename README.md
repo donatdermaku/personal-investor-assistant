@@ -1,57 +1,59 @@
-# Personal Investor Assistant — Watchlist Pulse
+# Personal Investor Assistant
 
-Static, universe-first investor analytics built on SEC EDGAR + yfinance, rendered as a GitHub Pages dashboard.
+A privacy-focused, local-first dashboard for tracking your investment portfolio against the market. Compare your performance (TWR/MWR) against S&P 500, Nasdaq 100, or any custom benchmark.
 
-## What it does
-- Builds a scoring universe (S&P 500 / Nasdaq 100 / manual list) and computes z-score factor analytics against that universe.
-- Produces a daily dashboard in `reports/index.html` with sortable/filterable watchlist tables.
-- Generates a daily pulse summary (`reports/pulse.json`, `reports/pulse.md`) and a pulse archive.
-- Creates per-ticker drilldown pages for watchlist tickers.
+## 🚀 Quick Start (5 Minutes)
 
-## Key folders
-- `src/ingest/`: universe, price, and SEC fundamentals ingestion
-- `src/compute/`: factor modeling + QA checks
-- `src/report/`: HTML/JSON/Markdown outputs
-- `data/`: DuckDB + cached JSON + Parquet snapshots
-- `reports/`: GitHub Pages output
+### Prerequisites
+- Python 3.10+
+- (Optional) Docker
 
-## Config
-Edit `config.yml`:
-```yaml
-universe:
-  mode: "sp500"   # manual | sp500 | nasdaq100
-  tickers: []
-  min_size: 200
+### Option A: Local Run
+1.  **Clone the repo:**
+    ```bash
+    git clone https://github.com/donatdermaku/personal-investor-assistant.git
+    cd personal-investor-assistant
+    ```
 
-weights:
-  value: 0.4
-  quality: 0.4
-  momentum: 0.2
+2.  **Setup & Run:**
+    ```bash
+    make setup
+    make run
+    ```
+    The app will open at `http://localhost:8501`.
 
-report:
-  ticker_history_days: 365
-  max_history_snapshots: 260
-```
+3.  **Load Data:**
+    - On the Dashboard, choose **"🚀 Quick Start"** to see Demo Data.
+    - Or upload one of the samples from `data/sample/` via the Sidebar > "Data Uploads".
 
-Watchlist lives in `watchlist.yml`.
-
-## Run locally
+### Option B: Docker
 ```bash
-python -m src.ingest_universe
-python -m src.ingest_prices
-python -m src.ingest_fundamentals_sec
-python -m src.compute_factors
-python -m src.build_report
+docker build -t investor-assistant .
+docker run -p 8501:8501 investor-assistant
 ```
 
-## GitHub Actions
-The nightly workflow runs the same sequence and uploads `reports/` as the Pages artifact. Set the `SEC_USER_AGENT` secret for EDGAR compliance.
+---
 
-## Extend data sources
-- Add more universe providers in `src/ingest/universe.py`.
-- Add new factor definitions in `src/compute/factors.py`.
-- Adjust pulse logic in `src/report/build.py`.
+## 📊 Features
+- **Privacy First**: All data stays on your machine. No external servers receive your financial data.
+- **Performance Analytics**: Time-Weighted Return (TWR) and Money-Weighted Return (MWR).
+- **Benchmarking**: Compare against SPY, QQQ, or custom tickers.
+- **Risk Analysis**: Drawdown charts, Rolling Volatility, Sharpe Ratio, and Factor Tilts.
+- **Reports**: Generate offline HTML reports and JSON summaries with Proof-of-Execution (RunManifest).
 
-## Notes
-- No Parquet or report artifacts are committed to the repo.
-- This project is for educational use only.
+## 📂 Configuration
+- `config.yml`: Core app settings (market hours, update frequency).
+- `watchlist.yml`: (Optional) Pre-define a list of tickers to track if better than UI.
+
+## 💾 Exports (Pro Mode)
+Switch to **Pro** mode in the sidebar settings to unlock:
+- **HTML Report**: A standalone file to share or archive.
+- **Summary JSON**: Machine-readable metadata including data hashes (for audit).
+- **Raw Data**: CSV dumps of daily values and cashflows.
+
+## 🛠 Developer
+- `make verify`: Run all tests and linters.
+- `make clean`: Clear local caches.
+- `make sample-data`: List location of sample CSVs.
+
+Built with [Streamlit](https://streamlit.io) and [DuckDB](https://duckdb.org).
