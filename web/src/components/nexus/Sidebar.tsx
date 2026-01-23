@@ -15,10 +15,10 @@ export function Sidebar() {
 
     return (
         <>
-            <aside className="hidden lg:flex w-64 bg-white border-r border-[#E5E7EB] h-screen flex-col fixed left-0 top-0">
-                <div className="p-6 border-b border-[#E5E7EB]">
-                    <h1 className="text-[#0F172A] font-sans font-bold text-lg">Nexus</h1>
-                    <p className="text-xs text-gray-500 uppercase tracking-wider">Analytics Platform</p>
+            <aside className="hidden lg:flex w-64 bg-gradient-to-b from-[#0B1220] via-[#1E3A8A] to-[#2563EB] h-screen flex-col fixed left-0 top-0">
+                <div className="p-6 border-b border-white/10">
+                    <h1 className="text-white font-bold text-lg">Nexus</h1>
+                    <p className="text-xs text-white/70 uppercase tracking-wider">Analytics Platform</p>
                 </div>
 
                 <nav className="flex-1 p-4 space-y-1">
@@ -29,8 +29,8 @@ export function Sidebar() {
                                 key={item.href}
                                 href={item.href}
                                 className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
-                                    ? "bg-[#0F172A] text-white shadow-sm"
-                                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                    ? "bg-[#E8F0FF] text-[#1E40AF] shadow-sm"
+                                    : "text-white/80 hover:bg-white/10 hover:text-white"
                                     }`}
                             >
                                 {item.label}
@@ -39,8 +39,8 @@ export function Sidebar() {
                     })}
                 </nav>
 
-                <div className="p-4 border-t border-[#E5E7EB]">
-                    <div className="text-xs text-gray-400">
+                <div className="p-4 border-t border-white/10">
+                    <div className="text-xs text-white/60">
                         v2.0.0 (Web Shell)
                     </div>
                 </div>

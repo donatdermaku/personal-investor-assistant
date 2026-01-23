@@ -5,7 +5,7 @@ import { definitionTooltip } from "@/lib/definitions";
 import { useNexus } from "@/components/nexus/NexusProvider";
 import { EmptyState } from "@/components/nexus/EmptyState";
 import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function OverviewPage() {
     const { state, status, error, mode, setMode } = useNexus();
@@ -54,6 +54,8 @@ export default function OverviewPage() {
     }
 
     const { summary, equity_curve, definitions } = state;
+    const equitySeries = equity_curve as Array<{ date: string; value: number; benchmark?: number | null }>;
+    const hasBenchmark = equitySeries.some((point) => point.benchmark != null);
 
     return (
         <div className="space-y-8">
@@ -95,31 +97,49 @@ export default function OverviewPage() {
                     <div className="text-sm text-gray-500">No equity curve data available.</div>
                 ) : (
                     <ResponsiveContainer width="100%" height={400}>
-                        <LineChart data={equity_curve}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                        <LineChart data={equitySeries}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E3E7EE" />
                             <XAxis
                                 dataKey="date"
-                                stroke="#6B7280"
+                                stroke="#64748B"
                                 style={{ fontSize: '12px' }}
                             />
                             <YAxis
-                                stroke="#6B7280"
+                                stroke="#64748B"
                                 style={{ fontSize: '12px' }}
                                 tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
                             />
                             <Tooltip
                                 contentStyle={{
                                     backgroundColor: 'white',
-                                    border: '1px solid #E5E7EB',
+                                    border: '1px solid #E3E7EE',
                                     borderRadius: '0.5rem'
                                 }}
                                 formatter={(value) => value != null ? [`$${Number(value).toLocaleString()}`, 'Value'] : ['--', 'Value']}
                             />
                             <Legend />
+                            <Area
+                                type="monotone"
+                                dataKey="value"
+                                stroke="none"
+                                fill="rgba(37, 99, 235, 0.08)"
+                                name="Portfolio Value"
+                            />
+                            {hasBenchmark && (
+                                <Line
+                                    type="monotone"
+                                    dataKey="benchmark"
+                                    stroke="#94A3B8"
+                                    strokeWidth={2}
+                                    strokeDasharray="4 4"
+                                    dot={false}
+                                    name="Benchmark"
+                                />
+                            )}
                             <Line
                                 type="monotone"
                                 dataKey="value"
-                                stroke="#0F172A"
+                                stroke="#2563EB"
                                 strokeWidth={2}
                                 dot={false}
                                 name="Portfolio Value"

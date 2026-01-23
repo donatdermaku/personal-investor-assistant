@@ -5,7 +5,7 @@ import { definitionTooltip } from "@/lib/definitions";
 import { useNexus } from "@/components/nexus/NexusProvider";
 import { EmptyState } from "@/components/nexus/EmptyState";
 import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 
 export default function PerformancePage() {
     const { state, status, error, mode, setMode } = useNexus();
@@ -53,6 +53,8 @@ export default function PerformancePage() {
     }
 
     const { summary, performance, monthly_returns, definitions } = state;
+    const performanceSeries = performance as Array<{ date: string; value: number | null; benchmark?: number | null; drawdown?: number | null }>;
+    const hasBenchmark = performanceSeries.some((point) => point.benchmark != null);
     const firstValue = performance[0]?.value ?? null;
     const lastValue = performance[performance.length - 1]?.value ?? null;
     const totalReturn =
@@ -93,24 +95,42 @@ export default function PerformancePage() {
                     <div className="text-sm text-gray-500">No performance data available.</div>
                 ) : (
                     <ResponsiveContainer width="100%" height={320}>
-                        <LineChart data={performance}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                            <XAxis dataKey="date" stroke="#6B7280" style={{ fontSize: "12px" }} />
-                            <YAxis stroke="#6B7280" style={{ fontSize: "12px" }} />
+                        <LineChart data={performanceSeries}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E3E7EE" />
+                            <XAxis dataKey="date" stroke="#64748B" style={{ fontSize: "12px" }} />
+                            <YAxis stroke="#64748B" style={{ fontSize: "12px" }} />
                             <Tooltip
                                 contentStyle={{
                                     backgroundColor: "white",
-                                    border: "1px solid #E5E7EB",
+                                    border: "1px solid #E3E7EE",
                                     borderRadius: "0.5rem",
                                 }}
                                 formatter={(value) =>
                                     value != null ? [`$${Number(value).toLocaleString()}`, "Value"] : ["--", "Value"]
                                 }
                             />
+                            <Area
+                                type="monotone"
+                                dataKey="value"
+                                stroke="none"
+                                fill="rgba(37, 99, 235, 0.08)"
+                                name="Portfolio Value"
+                            />
+                            {hasBenchmark && (
+                                <Line
+                                    type="monotone"
+                                    dataKey="benchmark"
+                                    stroke="#94A3B8"
+                                    strokeWidth={2}
+                                    strokeDasharray="4 4"
+                                    dot={false}
+                                    name="Benchmark"
+                                />
+                            )}
                             <Line
                                 type="monotone"
                                 dataKey="value"
-                                stroke="#0F172A"
+                                stroke="#2563EB"
                                 strokeWidth={2}
                                 dot={false}
                                 name="Portfolio Value"
@@ -127,18 +147,18 @@ export default function PerformancePage() {
                     <div className="text-sm text-gray-500">No drawdown data available.</div>
                 ) : (
                     <ResponsiveContainer width="100%" height={260}>
-                        <LineChart data={performance}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                            <XAxis dataKey="date" stroke="#6B7280" style={{ fontSize: "12px" }} />
+                        <LineChart data={performanceSeries}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E3E7EE" />
+                            <XAxis dataKey="date" stroke="#64748B" style={{ fontSize: "12px" }} />
                             <YAxis
-                                stroke="#6B7280"
+                                stroke="#64748B"
                                 style={{ fontSize: "12px" }}
                                 tickFormatter={(value) => `${(Number(value) * 100).toFixed(0)}%`}
                             />
                             <Tooltip
                                 contentStyle={{
                                     backgroundColor: "white",
-                                    border: "1px solid #E5E7EB",
+                                    border: "1px solid #E3E7EE",
                                     borderRadius: "0.5rem",
                                 }}
                                 formatter={(value) =>
@@ -166,24 +186,24 @@ export default function PerformancePage() {
                 ) : (
                     <ResponsiveContainer width="100%" height={260}>
                         <BarChart data={monthly_returns}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                            <XAxis dataKey="date" stroke="#6B7280" style={{ fontSize: "12px" }} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E3E7EE" />
+                            <XAxis dataKey="date" stroke="#64748B" style={{ fontSize: "12px" }} />
                             <YAxis
-                                stroke="#6B7280"
+                                stroke="#64748B"
                                 style={{ fontSize: "12px" }}
                                 tickFormatter={(value) => `${(Number(value) * 100).toFixed(0)}%`}
                             />
                             <Tooltip
                                 contentStyle={{
                                     backgroundColor: "white",
-                                    border: "1px solid #E5E7EB",
+                                    border: "1px solid #E3E7EE",
                                     borderRadius: "0.5rem",
                                 }}
                                 formatter={(value) =>
                                     value != null ? [`${(Number(value) * 100).toFixed(2)}%`, "Return"] : ["--", "Return"]
                                 }
                             />
-                            <Bar dataKey="return" fill="#0F172A" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="return" fill="#2563EB" radius={[4, 4, 0, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 )}
