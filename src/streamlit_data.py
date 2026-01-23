@@ -10,6 +10,7 @@ import streamlit as st
 
 from src.portfolio import load_portfolio
 from src.utils_io import ROOT
+from storage.datamanager import data_manager
 
 
 DATA_DIR = ROOT / "data"
@@ -140,12 +141,8 @@ def _previous_parquet(prefix: str) -> Path | None:
 
 @st.cache_data(ttl=3600)
 def load_watchlist() -> dict:
-    import yaml
-
-    path = ROOT / "watchlist.yml"
-    if not path.exists():
-        return {"tickers": []}
-    return yaml.safe_load(path.read_text())
+    tickers = data_manager.load_watchlist()
+    return {"tickers": tickers}
 
 
 @st.cache_data(ttl=1800)
