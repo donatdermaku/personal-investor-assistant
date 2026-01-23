@@ -12,6 +12,8 @@ import numpy as np
 import os
 
 from storage.repo import Repo
+from storage import db
+from storage import models
 from storage.datamanager import data_manager
 from storage.db import session_scope
 from storage.models import Portfolio
@@ -47,6 +49,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+def init_db_tables() -> None:
+    try:
+        engine = db.init_db()
+        models.Base.metadata.create_all(bind=engine)
+        logger.info("Database initialized (tables ensured).")
+    except Exception as exc:
+        logger.error("Database initialization failed: %s", exc)
 
 repo = Repo()
 EXPORTS_DIR_ENV = os.getenv("NEXUS_EXPORT_DIR", "./data/exports")
