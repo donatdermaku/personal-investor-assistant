@@ -1,5 +1,7 @@
+from __future__ import annotations
 import streamlit as st
 import datetime
+from typing import Callable
 
 # --- Design Tokens ---
 COLOR_PRIMARY = "#0F172A"  # Dark Slate (Fintech trust)
@@ -66,9 +68,9 @@ def set_fintech_style():
 
 def render_layout(
     curr_page: str,
-    sidebar_content_func: callable,
-    main_content_func: callable,
-    context_content_func: callable | None = None
+    sidebar_content_func: Callable,
+    main_content_func: Callable,
+    context_content_func: Callable | None = None
 ):
     """
     Implements the 3-zone layout:
