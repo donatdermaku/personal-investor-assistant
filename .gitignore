@@ -36,6 +36,10 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Allow Next.js web lib sources
+!web/src/lib/
+!web/src/lib/**
+
 # Unit test / coverage reports
 htmlcov/
 .tox/
