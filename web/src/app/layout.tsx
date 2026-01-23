@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/nexus/Sidebar";
 import { ContextPanel } from "@/components/nexus/ContextPanel";
 import { NexusProvider } from "@/components/nexus/NexusProvider";
 import { TopBar } from "@/components/nexus/TopBar";
+import { RunCreationModal } from "@/components/nexus/RunCreationModal";
 
 export const metadata: Metadata = {
   title: "Nexus Analytics Platform",
@@ -32,6 +33,8 @@ export default function RootLayout({
 
           {/* Zone 3: Context Panel (Fixed Right on Large screens) */}
           <ContextPanel />
+
+          <RunCreationModal />
         </NexusProvider>
       </body>
     </html>

@@ -9,6 +9,20 @@ export interface RunManifest {
     meta?: Record<string, unknown>;
 }
 
+export interface RunListItem {
+    run_id: string;
+    status: string;
+    timestamp: string | null;
+    input_hash?: string | null;
+    data_hash?: string | null;
+}
+
+export interface RunCreateResponse {
+    run_id: string;
+    status: string;
+    timestamp: string | null;
+}
+
 export interface PortfolioSummary {
     source: string;
     twr: number | null;

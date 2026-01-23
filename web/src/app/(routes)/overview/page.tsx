@@ -8,7 +8,7 @@ import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
 import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function OverviewPage() {
-    const { state, status, error, mode, setMode } = useNexus();
+    const { state, status, error, mode, setMode, openRunCreator, lastRunCreated, clearRunCreated } = useNexus();
 
     if (status === "error") {
         return (
@@ -26,8 +26,8 @@ export default function OverviewPage() {
             <EmptyState
                 title="No portfolio runs yet"
                 description="Run the pipeline to generate your first set of analytics, or switch to demo mode to preview Nexus."
-                primaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
-                secondaryAction={{ label: "Stay in Live Mode", onClick: () => setMode("live") }}
+                primaryAction={{ label: "Create Run", onClick: openRunCreator }}
+                secondaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
             />
         );
     }
@@ -65,6 +65,21 @@ export default function OverviewPage() {
                     {mode === "demo" ? "Demo portfolio performance summary" : "Portfolio performance summary"}
                 </p>
             </div>
+            {lastRunCreated && (
+                <div className="rounded-lg border border-[#E3E7EE] bg-[#F2F6FF] px-4 py-3 text-sm text-[#1E40AF] flex items-center justify-between">
+                    <div>
+                        New run created · {lastRunCreated.run_id.slice(0, 8)} ·{" "}
+                        {lastRunCreated.timestamp ? new Date(lastRunCreated.timestamp).toLocaleString() : "just now"}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={clearRunCreated}
+                        className="text-xs font-semibold"
+                    >
+                        Dismiss
+                    </button>
+                </div>
+            )}
 
             {/* KPI Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

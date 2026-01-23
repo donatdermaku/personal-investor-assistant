@@ -4,6 +4,8 @@ import type {
     PortfolioResponse,
     RunManifest,
     RunMetricsResponse,
+    RunListItem,
+    RunCreateResponse,
 } from "@/types/nexus";
 import {
     MOCK_DEFINITIONS,
@@ -44,6 +46,12 @@ export async function getLatestRun(): Promise<RunManifest | null> {
     return fetchJson(`${API_BASE}/latest-run`, true);
 }
 
+export async function getRuns(): Promise<RunListItem[]> {
+    if (!API_BASE) return [];
+    const data = await fetchJson<{ runs: RunListItem[] }>(`${API_BASE}/runs`, true);
+    return data?.runs ?? [];
+}
+
 export async function getDefinitions(): Promise<DefinitionsRegistry> {
     if (!API_BASE) return {};
     const data = await fetchJson<DefinitionsRegistry>(`${API_BASE}/definitions`);
@@ -66,12 +74,47 @@ export async function getRunMetrics(runId: string): Promise<RunMetricsResponse> 
     return data;
 }
 
+export async function createRun(params: {
+    runType: "demo" | "uploaded";
+    portfolioId?: string;
+    file?: File | null;
+}): Promise<RunCreateResponse> {
+    if (!API_BASE) {
+        throw new Error("Backend URL is not configured.");
+    }
+    const formData = new FormData();
+    formData.append("run_type", params.runType);
+    formData.append("portfolio_id", params.portfolioId ?? "default");
+    if (params.file) {
+        formData.append("file", params.file);
+    }
+    const res = await fetch(`${API_BASE}/run`, {
+        method: "POST",
+        body: formData,
+    });
+    if (!res.ok) {
+        let detail = "Run creation failed.";
+        try {
+            const payload = await res.json();
+            if (payload?.detail) {
+                detail = payload.detail;
+            }
+        } catch {
+            // ignore parse errors
+        }
+        throw new Error(detail);
+    }
+    return res.json();
+}
+
 export async function getNexusState(
     mode: NexusMode,
-    portfolioId = "default"
+    portfolioId = "default",
+    runId?: string | null
 ): Promise<{
     state: NexusState | null;
     empty: boolean;
+    activeRunId?: string | null;
 }> {
     if (mode === "demo") {
         return {
@@ -87,6 +130,7 @@ export async function getNexusState(
                 definitions: MOCK_DEFINITIONS,
             },
             empty: false,
+            activeRunId: MOCK_MANIFEST.run_id,
         };
     }
 
@@ -100,7 +144,9 @@ export async function getNexusState(
         getPortfolio(portfolioId),
     ]);
 
-    if (!latest) {
+    const resolvedRunId = runId || latest?.run_id || null;
+
+    if (!resolvedRunId) {
         return {
             state: {
                 manifest: {
@@ -132,10 +178,11 @@ export async function getNexusState(
                 definitions,
             },
             empty: true,
+            activeRunId: null,
         };
     }
 
-    const metrics = await getRunMetrics(latest.run_id);
+    const metrics = await getRunMetrics(resolvedRunId);
 
     const summary = metrics.summary || {
         source: "",
@@ -165,6 +212,7 @@ export async function getNexusState(
             definitions,
         },
         empty: false,
+        activeRunId: resolvedRunId,
     };
 }
 

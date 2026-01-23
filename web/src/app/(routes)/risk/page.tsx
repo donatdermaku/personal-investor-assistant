@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/nexus/EmptyState";
 import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
 
 export default function RiskPage() {
-    const { state, status, error, mode, setMode } = useNexus();
+    const { state, status, error, mode, setMode, openRunCreator } = useNexus();
 
     if (status === "error") {
         return (
@@ -25,8 +25,8 @@ export default function RiskPage() {
             <EmptyState
                 title="No risk metrics yet"
                 description="Generate a run to see VaR, drawdowns, and concentration risk."
-                primaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
-                secondaryAction={{ label: "Stay in Live Mode", onClick: () => setMode("live") }}
+                primaryAction={{ label: "Create Run", onClick: openRunCreator }}
+                secondaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
             />
         );
     }
