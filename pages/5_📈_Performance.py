@@ -11,9 +11,9 @@ from src.streamlit_data import (
     get_scores,
     load_benchmark_prices,
     load_portfolio_cached,
-    portfolio_cache_token,
     load_watchlist,
     market_status,
+    portfolio_cache_token,
 )
 from src.streamlit_ui import (
     build_status, 
@@ -25,6 +25,11 @@ from src.streamlit_ui import (
     ui_section_header,
     ui_empty_state
 )
+from src.guidance import explain_portfolio
+from src.glossary import GLOSSARY
+from src.intelligence import component_risk
+from src.utils_io import ROOT
+from src.portfolio import align_benchmark, compute_monthly_returns
 
 # ... (rest of imports)
 
@@ -88,11 +93,28 @@ render_guidance(summary, mode, not portfolio.daily_returns.empty)
 
 # ... (chart prep code unchanged)
 
+prices = prices[prices["ticker"].isin(watch_tickers)].copy()
+prices["date"] = pd.to_datetime(prices["date"])
+wide = prices.pivot_table(index="date", columns="ticker", values="adj_close").sort_index()
+wide = wide.ffill().dropna(how="all")
+
 if wide.empty:
     ui_empty_state("Insufficient Data", "Insufficient price history.", icon="📉")
     st.stop()
 
-# ... (calculation code unchanged)
+returns = wide.pct_change().dropna()
+
+if weights:
+    w = pd.Series(weights).reindex(returns.columns).fillna(0.0)
+    if w.sum() > 0:
+        w = w / w.sum()
+    else:
+        w[:] = 1 / len(w)
+else:
+    w = pd.Series(1 / len(returns.columns), index=returns.columns)
+
+portfolio_returns = portfolio.daily_returns
+portfolio_index = portfolio.daily_values["value"]
 
 col1, col2 = st.columns([2, 1])
 with col1:
@@ -184,7 +206,7 @@ if is_pro:
     st.subheader("Exports (Pro)")
     
     # ... Imports ...
-    from src.streamlit_data import AppState
+    from src.app_state import AppState
     from src.streamlit_export import generate_html_report
     import json
 
@@ -262,5 +284,4 @@ if is_pro:
             file_name="cashflows.csv",
             mime="text/csv",
         )
-
 

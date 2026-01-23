@@ -18,8 +18,7 @@ from src.streamlit_ui import (
     render_portfolio_errors, 
     render_sidebar,
     ui_metric_card,
-    ui_section_header,
-    ui_empty_state
+    ui_section_header
 )
 
 st.set_page_config(page_title="Personal Investor Assistant", page_icon="📈", layout="wide")

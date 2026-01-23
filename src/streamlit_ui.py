@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import streamlit as st
 
+from src.manifest import create_manifest
 from src.streamlit_data import CoverageMeta
 from src.utils_io import ROOT
 
@@ -41,9 +42,6 @@ def _save_ui_state() -> None:
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload), encoding="utf-8")
-
-
-from src.manifest import create_manifest
 
 
 def render_sidebar() -> None:
@@ -257,4 +255,3 @@ def ui_coverage_badge(meta: CoverageMeta, compact: bool = True) -> str:
     if compact:
         return f"{meta.covered}/{meta.total}"
     return f"Coverage: {meta.covered}/{meta.total} ({meta.covered/meta.total:.0%})"
-

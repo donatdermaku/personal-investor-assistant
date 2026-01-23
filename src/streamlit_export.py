@@ -75,6 +75,8 @@ def export_monthly_returns_csv(path: Path, portfolio: PortfolioResult) -> None:
         pd.DataFrame(columns=["date", "return"]).to_csv(path, index=False)
         return
     monthly = compute_monthly_returns(portfolio.daily_returns)
+    out = monthly.reset_index()
+    out.columns = ["date", "return"]
     out["date"] = out["date"].dt.strftime("%Y-%m-%d")
     out.to_csv(path, index=False)
 
