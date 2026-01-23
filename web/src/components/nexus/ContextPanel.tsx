@@ -44,7 +44,9 @@ export function ContextPanel() {
     const content = (
         <div className="space-y-4">
             <div>
-                <div className="text-xs uppercase tracking-wider text-gray-400">Portfolio</div>
+                <div className="inline-flex items-center rounded-full bg-[#F2F6FF] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#1E40AF]">
+                    Portfolio
+                </div>
                 <div className="text-base font-semibold text-[#0F172A]">
                     {state?.portfolio?.name || "--"}
                 </div>
@@ -72,7 +74,9 @@ export function ContextPanel() {
             </div>
 
             <div className="nexus-card">
-                <div className="text-xs uppercase tracking-wider text-gray-400 mb-2">Key KPIs</div>
+                <div className="inline-flex items-center rounded-full bg-[#F2F6FF] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#1E40AF] mb-2">
+                    Key KPIs
+                </div>
                 <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-500">TWR</span>
                     <span className="font-semibold text-gray-900">
@@ -88,7 +92,9 @@ export function ContextPanel() {
             </div>
 
             <div className="space-y-2">
-                <div className="text-xs uppercase tracking-wider text-gray-400">Export</div>
+                <div className="inline-flex items-center rounded-full bg-[#F2F6FF] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#1E40AF]">
+                    Export
+                </div>
                 <div className="flex flex-col gap-2 text-sm">
                     <button
                         type="button"
@@ -152,7 +158,7 @@ export function ContextPanel() {
     return (
         <>
             <aside className="w-80 bg-white border-l border-[#E5E7EB] h-screen fixed right-0 top-0 p-6 hidden lg:block">
-                <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">
+                <h3 className="inline-flex items-center rounded-full bg-[#F2F6FF] px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[#1E40AF] mb-4">
                     Context
                 </h3>
                 {loading ? (
@@ -169,7 +175,7 @@ export function ContextPanel() {
 
             <div className="lg:hidden mt-8 px-6 pb-8">
                 <div className="rounded-xl border border-[#E5E7EB] bg-white p-6 shadow-sm">
-                    <div className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">
+                    <div className="inline-flex items-center rounded-full bg-[#F2F6FF] px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[#1E40AF] mb-4">
                         Context
                     </div>
                     {loading ? (
