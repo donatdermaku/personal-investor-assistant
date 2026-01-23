@@ -183,60 +183,84 @@ if is_pro:
 
     st.subheader("Exports (Pro)")
     
-    # Manifest integration for exports
-    manifest = st.session_state.get("run_manifest")
-    
-    # We create a temporary structure for summary JSON that includes the manifest
-    # Since we can't easily hook into the download button's internal callback to generate on fly with arguments,
-    # we pre-generate the summary JSON with manifest if needed.
-    
-    # Note: For strict correctness, we'd refactor export_summary_json to return string/bytes 
-    # instead of writing to file, but we'll stick to the existing pattern or adapt.
-    # Actually, export_summary_json writes to a path, which isn't ideal for st.download_button.
-    # The existing code doesn't seem to use export_summary_json for a button?
-    # Ah, I see the existing code only has CSV downloads.
-    
-    # Let's ADD a summary JSON export which is the point of this feature.
-    
-    from src.streamlit_export import export_summary_json
+    # ... Imports ...
+    from src.streamlit_data import AppState
+    from src.streamlit_export import generate_html_report
     import json
-    
-    # We will compute the JSON string in memory for the download button
-    summary_payload = {
-        "source": portfolio.source,
-        "twr": portfolio.twr,
-        "mwr": portfolio.mwr,
-        "final_value": portfolio.daily_values["value"].iloc[-1] if not portfolio.daily_values.empty else None,
-        "last_date": portfolio.daily_values.index[-1].strftime("%Y-%m-%d") if not portfolio.daily_values.empty else None,
-        "run_id": manifest.run_id if manifest else None,
-        "input_hash": manifest.input_hash if manifest else None,
-        "timestamp": manifest.timestamp if manifest else None,
-        "errors": portfolio.errors,
-    }
-    
-    st.download_button(
-        "Download summary.json (Run Metadata)",
-        data=json.dumps(summary_payload, indent=2).encode("utf-8"),
-        file_name=f"summary_{manifest.run_id[:8] if manifest else 'run'}.json",
-        mime="application/json",
+
+    # Construct AppState
+    manifest = st.session_state.get("run_manifest")
+    app_state = AppState(
+        run_manifest=manifest,
+        portfolio=portfolio,
+        prices=prices,
+        scores=scores,
+        watch_tickers=watch_tickers,
+        price_meta=price_meta,
+        fundamentals_meta=fundamentals_meta,
+        scores_meta=scores_meta,
+        benchmark_prices=bench_prices,
+        market_state=market_state
     )
 
-    st.download_button(
-        "Download portfolio_daily_values.csv",
-        data=portfolio.daily_values.to_csv().encode("utf-8"),
-        file_name="portfolio_daily_values.csv",
-        mime="text/csv",
-    )
-    st.download_button(
-        "Download portfolio_daily_returns.csv",
-        data=portfolio.daily_returns.to_csv().encode("utf-8"),
-        file_name="portfolio_daily_returns.csv",
-        mime="text/csv",
-    )
-    st.download_button(
-        "Download cashflows.csv",
-        data=portfolio.cashflows.to_csv().encode("utf-8"),
-        file_name="cashflows.csv",
-        mime="text/csv",
-    )
+    # Generate HTML Report content
+    html_report = generate_html_report(app_state)
+    
+    col_exp1, col_exp2 = st.columns(2)
+    
+    with col_exp1:
+        st.download_button(
+            "📄 Download Full Report (HTML)",
+            data=html_report.encode("utf-8"),
+            file_name=f"investor_report_{manifest.run_id[:8] if manifest else 'run'}.html",
+            mime="text/html",
+            help="Self-contained HTML report with charts and metrics."
+        )
+
+    with col_exp2:
+        # We will compute the JSON string in memory for the download button
+        summary_payload = {
+            "source": portfolio.source,
+            "twr": portfolio.twr,
+            "mwr": portfolio.mwr,
+            "final_value": portfolio.daily_values["value"].iloc[-1] if not portfolio.daily_values.empty else None,
+            "last_date": portfolio.daily_values.index[-1].strftime("%Y-%m-%d") if not portfolio.daily_values.empty else None,
+            "run_id": manifest.run_id if manifest else None,
+            "input_hash": manifest.input_hash if manifest else None,
+            "timestamp": manifest.timestamp if manifest else None,
+            "errors": portfolio.errors,
+        }
+        
+        st.download_button(
+            "💾 Download Summary (JSON)",
+            data=json.dumps(summary_payload, indent=2).encode("utf-8"),
+            file_name=f"summary_{manifest.run_id[:8] if manifest else 'run'}.json",
+            mime="application/json",
+            help="Machine-readable run metadata and core metrics."
+        )
+    
+    st.caption("Raw Data Exports:")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.download_button(
+            "daily_values.csv",
+            data=portfolio.daily_values.to_csv().encode("utf-8"),
+            file_name="portfolio_daily_values.csv",
+            mime="text/csv",
+        )
+    with c2:
+        st.download_button(
+            "daily_returns.csv",
+            data=portfolio.daily_returns.to_csv().encode("utf-8"),
+            file_name="portfolio_daily_returns.csv",
+            mime="text/csv",
+        )
+    with c3:
+        st.download_button(
+            "cashflows.csv",
+            data=portfolio.cashflows.to_csv().encode("utf-8"),
+            file_name="cashflows.csv",
+            mime="text/csv",
+        )
+
 

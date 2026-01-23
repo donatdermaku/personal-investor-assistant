@@ -284,3 +284,27 @@ def market_status() -> tuple[str, str]:
     if market_open <= now.time() <= market_close:
         return "Open", "open"
     return "Closed", "closed"
+
+
+# --- App State for Exports ---
+from src.manifest import RunManifest
+from src.portfolio import PortfolioResult
+
+@dataclass
+class AppState:
+    """Unified state object for exports and reporting."""
+    run_manifest: RunManifest | None
+    portfolio: PortfolioResult
+    prices: pd.DataFrame
+    scores: pd.DataFrame
+    watch_tickers: list[str]
+    price_meta: CoverageMeta
+    fundamentals_meta: CoverageMeta
+    scores_meta: CoverageMeta
+    benchmark_prices: pd.DataFrame
+    market_state: str
+
+    @property
+    def has_data(self) -> bool:
+        return not self.portfolio.daily_values.empty
+
