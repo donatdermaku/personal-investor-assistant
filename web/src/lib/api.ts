@@ -14,11 +14,16 @@ import {
     MOCK_SUMMARY,
 } from "@/lib/mock-data";
 
-async function fetchJson<T>(path: string, fallback: T): Promise<T> {
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+async function fetchJson<T>(url: string, fallback: T): Promise<T> {
     try {
-        const res = await fetch(path, { cache: "no-store" });
+        const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) {
-            console.warn(`Failed to fetch ${path}, using mock data`);
+            if (res.status === 404) {
+                return fallback;
+            }
+            console.warn(`Failed to fetch ${url}, using fallback`);
             return fallback;
         }
         return await res.json();
@@ -29,30 +34,49 @@ async function fetchJson<T>(path: string, fallback: T): Promise<T> {
 }
 
 export async function getLatestRun(): Promise<RunManifest> {
-    return fetchJson("/api/latest-run", MOCK_MANIFEST);
-}
-
-export async function getRunMetrics(): Promise<RunMetricsResponse> {
-    return fetchJson("/api/metrics", MOCK_METRICS);
-}
-
-export async function getPortfolio(): Promise<PortfolioResponse> {
-    return fetchJson("/api/portfolio", { portfolio: MOCK_PORTFOLIO, holdings: MOCK_HOLDINGS });
+    return fetchJson(`${API_BASE}/latest-run`, MOCK_MANIFEST);
 }
 
 export async function getDefinitions(): Promise<DefinitionsRegistry> {
-    return fetchJson("/api/definitions", MOCK_DEFINITIONS);
+    return fetchJson(`${API_BASE}/definitions`, MOCK_DEFINITIONS);
+}
+
+export async function getPortfolio(portfolioId = "default"): Promise<PortfolioResponse> {
+    return fetchJson(
+        `${API_BASE}/portfolio/${portfolioId}`,
+        { portfolio: MOCK_PORTFOLIO, holdings: MOCK_HOLDINGS }
+    );
+}
+
+export async function getRunMetrics(runId: string): Promise<RunMetricsResponse> {
+    return fetchJson(`${API_BASE}/run/${runId}`, MOCK_METRICS);
 }
 
 export async function getNexusState(): Promise<NexusState> {
-    const [metrics, portfolio, definitions] = await Promise.all([
-        getRunMetrics(),
-        getPortfolio(),
+    const latest = await getLatestRun();
+    const [definitions, portfolio] = await Promise.all([
         getDefinitions(),
+        getPortfolio(),
     ]);
 
+    if (!latest || latest.run_id === MOCK_MANIFEST.run_id) {
+        return {
+            manifest: MOCK_MANIFEST,
+            summary: MOCK_SUMMARY,
+            equity_curve: MOCK_METRICS.equity_curve,
+            performance: MOCK_METRICS.performance,
+            monthly_returns: MOCK_METRICS.monthly_returns,
+            holdings: portfolio.holdings || MOCK_HOLDINGS,
+            risk: MOCK_METRICS.risk,
+            portfolio: portfolio.portfolio || MOCK_PORTFOLIO,
+            definitions,
+        };
+    }
+
+    const metrics = await getRunMetrics(latest.run_id);
+
     return {
-        manifest: metrics.manifest || MOCK_MANIFEST,
+        manifest: metrics.manifest || latest,
         summary: metrics.summary || MOCK_SUMMARY,
         equity_curve: metrics.equity_curve || MOCK_METRICS.equity_curve,
         performance: metrics.performance || MOCK_METRICS.performance,
