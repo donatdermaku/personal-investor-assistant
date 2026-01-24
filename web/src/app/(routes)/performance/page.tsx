@@ -61,6 +61,7 @@ export default function PerformancePage() {
         attribution_timeseries,
         benchmark_comparison,
         benchmark_timeseries,
+        macro,
         macro_regimes,
     } = state;
     const performanceSeries = performance as Array<{ date: string; value: number | null; benchmark?: number | null; drawdown?: number | null }>;
@@ -70,7 +71,9 @@ export default function PerformancePage() {
     const totalReturn =
         firstValue && lastValue ? (lastValue / firstValue) - 1 : null;
     const attributionRows = attribution_summary?.per_asset?.slice(0, 5) ?? [];
-    const latestMacro = macro_regimes && macro_regimes.length > 0 ? macro_regimes[macro_regimes.length - 1] : null;
+    const macroFlags = macro?.flags ?? macro_regimes ?? [];
+    const macroStatus = macro?.status ?? (macroFlags.length > 0 ? "ok" : "unavailable");
+    const latestMacro = macroFlags.length > 0 ? macroFlags[macroFlags.length - 1] : null;
     const hasAttribution = attribution_summary && typeof attribution_summary.allocation === "number";
     const hasBenchmarkComparison = benchmark_comparison && typeof benchmark_comparison.tracking_error === "number";
 
@@ -295,7 +298,11 @@ export default function PerformancePage() {
             {/* Macro Regimes */}
             <div className="bg-white border border-gray-200 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-[#0F172A] mb-4">Macro Context</h3>
-                {!latestMacro ? (
+                {macroStatus !== "ok" ? (
+                    <div className="text-sm text-gray-500">
+                        {macroStatus === "partial" ? "Macro context limited." : "Macro context unavailable."}
+                    </div>
+                ) : !latestMacro ? (
                     <div className="text-sm text-gray-500">No macro regime data available.</div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">

@@ -17,6 +17,7 @@ from src.streamlit_export import (
     export_benchmark_comparison_json,
     export_benchmark_timeseries_csv,
     export_macro_regime_flags_csv,
+    export_macro_regime_summary_json,
     export_monthly_returns_csv,
     export_performance_csv,
     export_risk_contribution_csv,
@@ -118,6 +119,10 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
         ]
     )
     export_macro_regime_flags_csv(export_dir / "macro_regime_flags.csv", macro_flags)
+    export_macro_regime_summary_json(
+        export_dir / "macro_regime_summary.json",
+        {"status": "ok", "missing_series": [], "as_of": "2024-01-31"},
+    )
 
     benchmark_prices = _prices_growth("2024-01-31", 6, "SPY", 100.0, 0.005)
     comparison = compute_benchmark_comparison(result.daily_returns, result.daily_values, benchmark_prices)
@@ -135,6 +140,7 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
         risk_payload = api_server._load_risk_contribution(run_id)
         rolling_metrics = api_server._load_rolling_metrics(run_id)
         macro = api_server._load_macro_regimes(run_id)
+        macro_summary = api_server._load_macro_summary(run_id)
         bench_summary = api_server._load_benchmark_comparison(run_id)
         bench_timeseries = api_server._load_benchmark_timeseries(run_id)
     finally:
@@ -173,5 +179,6 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
     assert len(risk_payload["contributions"]) == len(risk_output.contributions)
     assert len(rolling_metrics) == len(rolling)
     assert len(macro) == len(macro_flags)
+    assert macro_summary.get("status") == "ok"
     assert_close(bench_summary.get("tracking_error"), comparison.summary.get("tracking_error"), tol=1e-6)
     assert len(bench_timeseries) == len(comparison.timeseries)

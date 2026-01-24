@@ -161,6 +161,7 @@ def save_artifacts(app_state: AppState):
         export_risk_contribution_csv,
         export_risk_contribution_json,
         export_macro_regime_flags_csv,
+        export_macro_regime_summary_json,
         export_rolling_metrics_csv,
         export_benchmark_comparison_json,
         export_benchmark_timeseries_csv,
@@ -169,7 +170,7 @@ def save_artifacts(app_state: AppState):
     from src.analytics.risk import compute_risk_contributions
     from src.analytics.rolling import compute_rolling_metrics
     from src.analytics.comparative import compute_benchmark_comparison
-    from src.analytics.macro import compute_macro_regime_flags, load_cached_fred_series
+    from src.analytics.macro import compute_macro_regime_payload, load_cached_fred_series
     
     manifest = app_state.run_manifest
     if not manifest:
@@ -257,10 +258,18 @@ def save_artifacts(app_state: AppState):
         cpi = load_cached_fred_series("CPIAUCSL")
         fed_funds = load_cached_fred_series("DFF")
         vix = load_cached_fred_series("VIXCLS")
-        macro_flags = compute_macro_regime_flags(dates, cpi, fed_funds, vix)
+        macro_payload = compute_macro_regime_payload(dates, cpi, fed_funds, vix)
         macro_path = base_path / "macro_regime_flags.csv"
-        export_macro_regime_flags_csv(macro_path, macro_flags)
+        export_macro_regime_flags_csv(macro_path, macro_payload.flags)
         repo.add_artifact(run_id, "macro_regime_flags_csv", str(macro_path))
+
+        macro_summary_path = base_path / "macro_regime_summary.json"
+        export_macro_regime_summary_json(macro_summary_path, {
+            "status": macro_payload.status,
+            "missing_series": macro_payload.missing_series,
+            "as_of": macro_payload.as_of,
+        })
+        repo.add_artifact(run_id, "macro_regime_summary_json", str(macro_summary_path))
 
     comparison = compute_benchmark_comparison(
         app_state.portfolio.daily_returns,

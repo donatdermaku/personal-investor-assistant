@@ -145,6 +145,11 @@ def export_macro_regime_flags_csv(path: Path, flags: pd.DataFrame) -> None:
     out.to_csv(path, index=False)
 
 
+def export_macro_regime_summary_json(path: Path, summary: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(summary, indent=2, default=_json_default), encoding="utf-8")
+
+
 def export_rolling_metrics_csv(path: Path, rolling: pd.DataFrame) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if rolling.empty:

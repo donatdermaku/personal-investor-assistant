@@ -4,7 +4,7 @@ import pandas as pd
 
 from src.analytics.attribution import compute_attribution
 from src.analytics.comparative import compute_benchmark_comparison
-from src.analytics.macro import compute_macro_regime_flags
+from src.analytics.macro import compute_macro_regime_payload
 from src.analytics.risk import compute_risk_contributions
 from src.analytics.rolling import compute_rolling_metrics
 from src.portfolio import compute_portfolio_from_ledger
@@ -74,9 +74,10 @@ def test_macro_regime_flags_thresholds() -> None:
     fed = pd.DataFrame({"date": monthly_dates, "value": [4.0 + 0.1 * i for i in range(14)]})
     vix = pd.DataFrame({"date": monthly_dates, "value": [18.0] * 11 + [25.0] * 3})
 
-    flags = compute_macro_regime_flags(pd.DatetimeIndex(daily_dates), cpi, fed, vix)
-    assert not flags.empty
-    latest = flags.iloc[-1]
+    payload = compute_macro_regime_payload(pd.DatetimeIndex(daily_dates), cpi, fed, vix)
+    assert payload.status == "ok"
+    assert not payload.flags.empty
+    latest = payload.flags.iloc[-1]
     assert bool(latest["high_inflation"]) is True
     assert bool(latest["rising_rates"]) is True
     assert bool(latest["risk_off"]) is True

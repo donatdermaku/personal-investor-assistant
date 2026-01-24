@@ -133,6 +133,13 @@ export interface MacroRegimeFlag {
     risk_off?: boolean | number;
 }
 
+export interface MacroPayload {
+    status: "ok" | "partial" | "unavailable";
+    missing_series: string[];
+    as_of: string | null;
+    flags: MacroRegimeFlag[];
+}
+
 export interface BenchmarkComparisonSummary {
     tracking_error?: number | null;
     portfolio_volatility?: number | null;
@@ -185,6 +192,7 @@ export interface NexusState {
     risk_contribution?: RiskContributionPayload | null;
     rolling_metrics?: RollingMetricPoint[];
     macro_regimes?: MacroRegimeFlag[];
+    macro?: MacroPayload | null;
     benchmark_comparison?: BenchmarkComparisonSummary | null;
     benchmark_timeseries?: BenchmarkTimeseriesPoint[];
     portfolio: PortfolioMeta | null;
@@ -203,6 +211,7 @@ export interface RunMetricsResponse {
     risk_contribution?: RiskContributionPayload | null;
     rolling_metrics?: RollingMetricPoint[];
     macro_regimes?: MacroRegimeFlag[];
+    macro?: MacroPayload | null;
     benchmark_comparison?: BenchmarkComparisonSummary | null;
     benchmark_timeseries?: BenchmarkTimeseriesPoint[];
 }

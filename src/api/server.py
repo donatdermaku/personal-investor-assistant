@@ -187,6 +187,15 @@ def _load_macro_regimes(run_id: str) -> list[dict]:
     return []
 
 
+def _load_macro_summary(run_id: str) -> dict:
+    path = EXPORTS_DIR / run_id / "macro_regime_summary.json"
+    if path.exists():
+        return _load_json(path)
+    if use_supabase():
+        return _load_supabase_json(run_id, "macro_regime_summary.json")
+    return {}
+
+
 def _load_rolling_metrics(run_id: str) -> list[dict]:
     path = EXPORTS_DIR / run_id / "rolling_metrics.csv"
     if path.exists():
@@ -612,6 +621,7 @@ def get_run(run_id: str):
         risk_contribution = {"summary": {}, "contributions": []}
     rolling_metrics = _load_rolling_metrics(run_id)
     macro_regimes = _load_macro_regimes(run_id)
+    macro_summary = _load_macro_summary(run_id)
     try:
         benchmark_comparison = _load_benchmark_comparison(run_id)
     except HTTPException:
@@ -635,6 +645,12 @@ def get_run(run_id: str):
         "risk_contribution": risk_contribution,
         "rolling_metrics": rolling_metrics,
         "macro_regimes": macro_regimes,
+        "macro": {
+            "status": macro_summary.get("status", "unavailable"),
+            "missing_series": macro_summary.get("missing_series", []),
+            "as_of": macro_summary.get("as_of"),
+            "flags": macro_regimes,
+        },
         "benchmark_comparison": benchmark_comparison,
         "benchmark_timeseries": benchmark_timeseries,
     }
@@ -680,6 +696,7 @@ def export_artifact(run_id: str, artifact: str):
         "risk-contribution": "risk_contribution.csv",
         "risk-contribution-json": "risk_contribution.json",
         "macro-regimes": "macro_regime_flags.csv",
+        "macro-regime-summary": "macro_regime_summary.json",
         "rolling-metrics": "rolling_metrics.csv",
         "benchmark-comparison": "benchmark_comparison.json",
         "benchmark-timeseries": "benchmark_timeseries.csv",
