@@ -86,3 +86,84 @@ Formulas are descriptive only; the implementation remains unchanged.
 - Domain: requires coverage in both sets
 - Invariants:
   - Tilts are finite when input scores are finite
+
+## Allocation Effect
+- Formula: allocation = sum(weights * benchmark return)
+- Time basis: daily
+- Inputs: asset weights, benchmark return
+- Domain: requires weights and benchmark return
+- Invariants:
+  - Allocation contribution is finite when inputs are finite
+
+## Selection Effect
+- Formula: selection = sum(benchmark weights * (asset return - benchmark return))
+- Time basis: daily
+- Inputs: benchmark weights, asset returns, benchmark return
+- Domain: requires asset returns and benchmark return
+- Invariants:
+  - Selection contribution is finite when inputs are finite
+
+## Interaction Effect
+- Formula: interaction = sum((weights - benchmark weights) * (asset return - benchmark return))
+- Time basis: daily
+- Inputs: weights, benchmark weights, asset returns, benchmark return
+- Domain: requires asset returns and weights
+- Invariants:
+  - Interaction contribution is finite when inputs are finite
+
+## Tracking Error
+- Formula: std dev of active returns, annualized by sqrt(252)
+- Time basis: daily
+- Inputs: portfolio returns, benchmark returns
+- Domain: requires overlapping return series
+- Invariants:
+  - Tracking error >= 0
+
+## Benchmark Volatility
+- Formula: std dev of benchmark daily returns, annualized
+- Time basis: daily
+- Inputs: benchmark returns
+- Domain: requires benchmark returns
+- Invariants:
+  - Benchmark volatility >= 0
+
+## Benchmark Correlation
+- Formula: correlation of portfolio and benchmark daily returns
+- Time basis: daily
+- Inputs: portfolio returns, benchmark returns
+- Domain: requires overlapping returns
+- Invariants:
+  - Correlation in [-1, 1] when defined
+
+## Rolling Drawdown
+- Formula: rolling minimum of drawdown over the window
+- Time basis: daily
+- Inputs: drawdown series
+- Domain: requires drawdown series and window
+- Invariants:
+  - Rolling drawdown <= 0
+
+## Risk Contribution
+- Formula: volatility contribution = w_i * (cov @ w)_i / vol_p
+- Time basis: daily
+- Inputs: asset returns, weights
+- Domain: requires returns and non-zero volatility
+- Invariants:
+  - Contributions sum to total volatility
+  - Cash contribution is zero
+
+## Macro Regime Flags
+- Formula: inflation YoY from CPI; rates change from Fed Funds; risk-off from VIX
+- Time basis: daily (forward-filled)
+- Inputs: CPI, Fed Funds, VIX (cached FRED)
+- Domain: requires cached series
+- Invariants:
+  - Flags are boolean and derived from thresholds
+
+## Benchmark Comparison
+- Formula: active return = portfolio - benchmark; tracking error = std(active) * sqrt(252)
+- Time basis: daily
+- Inputs: portfolio returns, benchmark returns
+- Domain: requires overlapping return series
+- Invariants:
+  - Tracking error >= 0

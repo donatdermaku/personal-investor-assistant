@@ -5,6 +5,7 @@ import { definitionTooltip } from "@/lib/definitions";
 import { useNexus } from "@/components/nexus/NexusProvider";
 import { EmptyState } from "@/components/nexus/EmptyState";
 import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function RiskPage() {
     const { state, status, error, mode, setMode, openRunCreator } = useNexus();
@@ -52,8 +53,9 @@ export default function RiskPage() {
         );
     }
 
-    const { risk, summary, performance, definitions } = state;
+    const { risk, summary, performance, definitions, risk_contribution, rolling_metrics } = state;
     const currentDrawdown = performance.length > 0 ? performance[performance.length - 1]?.drawdown ?? null : null;
+    const topRisk = risk_contribution?.contributions?.slice(0, 6) ?? [];
 
     return (
         <div className="space-y-8">
@@ -118,6 +120,93 @@ export default function RiskPage() {
                 <p className="text-gray-500 text-sm">
                     Holdings correlation heatmap will be implemented when backend provides correlation data.
                 </p>
+            </div>
+
+            {/* Risk Contribution */}
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-[#0F172A] mb-4">Risk Contribution</h3>
+                {topRisk.length === 0 ? (
+                    <div className="text-sm text-gray-500">No risk contribution data available.</div>
+                ) : (
+                    <div className="divide-y divide-gray-200 text-sm">
+                        {topRisk.map((row) => (
+                            <div key={row.ticker} className="py-2 flex items-center justify-between">
+                                <span className="font-medium text-gray-700">{row.ticker}</span>
+                                <span className="text-gray-500">
+                                    {(row.volatility_pct * 100).toFixed(1)}% of volatility
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Rolling Risk Metrics */}
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-[#0F172A] mb-4">Rolling Risk</h3>
+                {!rolling_metrics || rolling_metrics.length === 0 ? (
+                    <div className="text-sm text-gray-500">No rolling risk metrics available.</div>
+                ) : (
+                    <ResponsiveContainer width="100%" height={240}>
+                        <LineChart data={rolling_metrics}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E3E7EE" />
+                            <XAxis dataKey="date" stroke="#64748B" style={{ fontSize: "12px" }} />
+                            <YAxis
+                                yAxisId="left"
+                                stroke="#64748B"
+                                style={{ fontSize: "12px" }}
+                                tickFormatter={(value) => `${(Number(value) * 100).toFixed(0)}%`}
+                            />
+                            <YAxis
+                                yAxisId="right"
+                                orientation="right"
+                                stroke="#94A3B8"
+                                style={{ fontSize: "12px" }}
+                                tickFormatter={(value) => Number(value).toFixed(1)}
+                            />
+                            <Tooltip
+                                contentStyle={{
+                                    backgroundColor: "white",
+                                    border: "1px solid #E3E7EE",
+                                    borderRadius: "0.5rem",
+                                }}
+                                formatter={(value, name) => {
+                                    if (name === "Rolling Sharpe") {
+                                        return value != null ? [Number(value).toFixed(2), name] : ["--", name];
+                                    }
+                                    return value != null ? [`${(Number(value) * 100).toFixed(2)}%`, name] : ["--", name];
+                                }}
+                            />
+                            <Line
+                                yAxisId="left"
+                                type="monotone"
+                                dataKey="rolling_volatility"
+                                stroke="#2563EB"
+                                strokeWidth={2}
+                                dot={false}
+                                name="Rolling Volatility"
+                            />
+                            <Line
+                                yAxisId="right"
+                                type="monotone"
+                                dataKey="rolling_sharpe"
+                                stroke="#16A34A"
+                                strokeWidth={2}
+                                dot={false}
+                                name="Rolling Sharpe"
+                            />
+                            <Line
+                                yAxisId="left"
+                                type="monotone"
+                                dataKey="rolling_drawdown"
+                                stroke="#F97316"
+                                strokeWidth={2}
+                                dot={false}
+                                name="Rolling Drawdown"
+                            />
+                        </LineChart>
+                    </ResponsiveContainer>
+                )}
             </div>
         </div>
     );

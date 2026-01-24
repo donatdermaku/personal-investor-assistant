@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
+
+import numpy as np
 from typing import Iterable
 
 import pandas as pd
@@ -79,6 +82,100 @@ def export_monthly_returns_csv(path: Path, portfolio: PortfolioResult) -> None:
     out.columns = ["date", "return"]
     out["date"] = out["date"].dt.strftime("%Y-%m-%d")
     out.to_csv(path, index=False)
+
+
+def export_attribution_summary_json(path: Path, summary: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(summary, indent=2, default=_json_default), encoding="utf-8")
+
+
+def export_attribution_timeseries_csv(path: Path, timeseries: pd.DataFrame) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if timeseries.empty:
+        pd.DataFrame(columns=["date", "allocation", "selection", "interaction", "total_return"]).to_csv(path, index=False)
+        return
+    timeseries.to_csv(path, index=False)
+
+
+def export_risk_contribution_csv(path: Path, risk_df: pd.DataFrame) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if risk_df.empty:
+        pd.DataFrame(
+            columns=[
+                "ticker",
+                "volatility_contribution",
+                "volatility_pct",
+                "var_contribution",
+                "var_pct",
+            ]
+        ).to_csv(path, index=False)
+        return
+    risk_df.to_csv(path, index=False)
+
+
+def export_risk_contribution_json(path: Path, summary: dict, risk_df: pd.DataFrame) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "summary": summary,
+        "contributions": risk_df.to_dict(orient="records") if not risk_df.empty else [],
+    }
+    path.write_text(json.dumps(payload, indent=2, default=_json_default), encoding="utf-8")
+
+
+def export_macro_regime_flags_csv(path: Path, flags: pd.DataFrame) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if flags.empty:
+        pd.DataFrame(
+            columns=[
+                "date",
+                "inflation_yoy",
+                "fed_funds",
+                "vix",
+                "rates_change_6m",
+                "high_inflation",
+                "rising_rates",
+                "risk_off",
+            ]
+        ).to_csv(path, index=False)
+        return
+    out = flags.copy()
+    for col in ["high_inflation", "rising_rates", "risk_off"]:
+        if col in out.columns:
+            out[col] = out[col].astype(int)
+    out.to_csv(path, index=False)
+
+
+def export_rolling_metrics_csv(path: Path, rolling: pd.DataFrame) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if rolling.empty:
+        pd.DataFrame(
+            columns=["date", "rolling_volatility", "rolling_sharpe", "rolling_drawdown"]
+        ).to_csv(path, index=False)
+        return
+    rolling.to_csv(path, index=False)
+
+
+def export_benchmark_comparison_json(path: Path, summary: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(summary, indent=2, default=_json_default), encoding="utf-8")
+
+
+def _json_default(value):
+    if isinstance(value, (np.floating, np.integer)):
+        return value.item()
+    if isinstance(value, pd.Timestamp):
+        return value.isoformat()
+    return str(value)
+
+
+def export_benchmark_timeseries_csv(path: Path, timeseries: pd.DataFrame) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if timeseries.empty:
+        pd.DataFrame(
+            columns=["date", "portfolio_return", "benchmark_return", "active_return", "relative_drawdown"]
+        ).to_csv(path, index=False)
+        return
+    timeseries.to_csv(path, index=False)
 
 
 def generate_html_report(app_state) -> str:
@@ -195,4 +292,3 @@ def save_html_report(path: Path, app_state) -> None:
     html = generate_html_report(app_state)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(html, encoding="utf-8")
-

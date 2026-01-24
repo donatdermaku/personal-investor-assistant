@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
+import numpy as np
 
 from src.app_state import AppState
 from src.manifest import create_manifest, RunManifest, compute_input_hash
@@ -154,8 +155,21 @@ def save_artifacts(app_state: AppState):
         export_summary_json, 
         export_performance_csv, 
         export_monthly_returns_csv, 
-        save_html_report
+        save_html_report,
+        export_attribution_summary_json,
+        export_attribution_timeseries_csv,
+        export_risk_contribution_csv,
+        export_risk_contribution_json,
+        export_macro_regime_flags_csv,
+        export_rolling_metrics_csv,
+        export_benchmark_comparison_json,
+        export_benchmark_timeseries_csv,
     )
+    from src.analytics.attribution import compute_attribution
+    from src.analytics.risk import compute_risk_contributions
+    from src.analytics.rolling import compute_rolling_metrics
+    from src.analytics.comparative import compute_benchmark_comparison
+    from src.analytics.macro import compute_macro_regime_flags, load_cached_fred_series
     
     manifest = app_state.run_manifest
     if not manifest:
@@ -184,3 +198,79 @@ def save_artifacts(app_state: AppState):
         ret_path = base_path / "monthly_returns.csv"
         export_monthly_returns_csv(ret_path, app_state.portfolio)
         repo.add_artifact(run_id, "monthly_returns_csv", str(ret_path))
+
+        performance = pd.read_csv(perf_path)
+
+        rolling = compute_rolling_metrics(performance)
+        rolling_path = base_path / "rolling_metrics.csv"
+        export_rolling_metrics_csv(rolling_path, rolling)
+        repo.add_artifact(run_id, "rolling_metrics_csv", str(rolling_path))
+
+    attribution = compute_attribution(
+        app_state.prices,
+        app_state.portfolio.holdings_daily,
+        app_state.portfolio.daily_values,
+        app_state.portfolio.daily_returns,
+    )
+    attribution_summary_path = base_path / "attribution_summary.json"
+    export_attribution_summary_json(attribution_summary_path, attribution.summary)
+    repo.add_artifact(run_id, "attribution_summary_json", str(attribution_summary_path))
+
+    attribution_ts_path = base_path / "attribution_timeseries.csv"
+    export_attribution_timeseries_csv(attribution_ts_path, attribution.timeseries)
+    repo.add_artifact(run_id, "attribution_timeseries_csv", str(attribution_ts_path))
+
+    risk_prices = app_state.prices.copy()
+    returns = pd.DataFrame()
+    weights = pd.Series(dtype=float)
+    cash_weight = 0.0
+    if not risk_prices.empty and {"date", "ticker", "adj_close"}.issubset(risk_prices.columns):
+        risk_prices["date"] = pd.to_datetime(risk_prices["date"], errors="coerce")
+        returns = (
+            risk_prices.pivot_table(index="date", columns="ticker", values="adj_close")
+            .sort_index()
+            .pct_change()
+            .replace([np.inf, -np.inf], np.nan)
+            .fillna(0.0)
+        )
+        latest_holdings = app_state.portfolio.holdings_daily
+        if not latest_holdings.empty and not app_state.portfolio.daily_values.empty:
+            latest_date = pd.to_datetime(latest_holdings["date"], errors="coerce").max()
+            latest = latest_holdings[latest_holdings["date"] == latest_date]
+            prices = risk_prices[risk_prices["date"] == latest_date].set_index("ticker")["adj_close"]
+            values = latest.set_index("ticker")["quantity"].mul(prices, fill_value=0.0)
+            total_value = app_state.portfolio.daily_values["value"].iloc[-1]
+            weights = values / total_value if total_value else values * 0.0
+            cash_weight = float(max(0.0, 1.0 - weights.sum()))
+
+    risk_output = compute_risk_contributions(returns, weights, cash_weight=cash_weight)
+    risk_csv_path = base_path / "risk_contribution.csv"
+    export_risk_contribution_csv(risk_csv_path, risk_output.contributions)
+    repo.add_artifact(run_id, "risk_contribution_csv", str(risk_csv_path))
+
+    risk_json_path = base_path / "risk_contribution.json"
+    export_risk_contribution_json(risk_json_path, risk_output.summary, risk_output.contributions)
+    repo.add_artifact(run_id, "risk_contribution_json", str(risk_json_path))
+
+    if not app_state.portfolio.daily_values.empty:
+        dates = pd.to_datetime(app_state.portfolio.daily_values.index, errors="coerce")
+        cpi = load_cached_fred_series("CPIAUCSL")
+        fed_funds = load_cached_fred_series("DFF")
+        vix = load_cached_fred_series("VIXCLS")
+        macro_flags = compute_macro_regime_flags(dates, cpi, fed_funds, vix)
+        macro_path = base_path / "macro_regime_flags.csv"
+        export_macro_regime_flags_csv(macro_path, macro_flags)
+        repo.add_artifact(run_id, "macro_regime_flags_csv", str(macro_path))
+
+    comparison = compute_benchmark_comparison(
+        app_state.portfolio.daily_returns,
+        app_state.portfolio.daily_values,
+        app_state.benchmark_prices,
+    )
+    bench_summary_path = base_path / "benchmark_comparison.json"
+    export_benchmark_comparison_json(bench_summary_path, comparison.summary)
+    repo.add_artifact(run_id, "benchmark_comparison_json", str(bench_summary_path))
+
+    bench_timeseries_path = base_path / "benchmark_timeseries.csv"
+    export_benchmark_timeseries_csv(bench_timeseries_path, comparison.timeseries)
+    repo.add_artifact(run_id, "benchmark_timeseries_csv", str(bench_timeseries_path))

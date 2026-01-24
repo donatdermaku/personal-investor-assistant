@@ -93,6 +93,76 @@ METRICS_REGISTRY = {
             "Sum(components) ~= total return.",
         ],
     },
+    "allocation_effect": {
+        "title": "Allocation Effect",
+        "formula": "Allocation = sum(weights * benchmark_return).",
+        "time_basis": "daily",
+        "inputs": ["weights", "benchmark_return"],
+        "domain": "Requires asset weights and benchmark return.",
+        "invariants": [
+            "Allocation contribution is finite when inputs are finite.",
+        ],
+    },
+    "selection_effect": {
+        "title": "Selection Effect",
+        "formula": "Selection = sum(benchmark_weights * (asset_return - benchmark_return)).",
+        "time_basis": "daily",
+        "inputs": ["benchmark_weights", "asset_returns", "benchmark_return"],
+        "domain": "Requires asset returns and benchmark return.",
+        "invariants": [
+            "Selection contribution is finite when inputs are finite.",
+        ],
+    },
+    "interaction_effect": {
+        "title": "Interaction Effect",
+        "formula": "Interaction = sum((weights - benchmark_weights) * (asset_return - benchmark_return)).",
+        "time_basis": "daily",
+        "inputs": ["weights", "benchmark_weights", "asset_returns", "benchmark_return"],
+        "domain": "Requires asset returns and weights.",
+        "invariants": [
+            "Interaction contribution is finite when inputs are finite.",
+        ],
+    },
+    "tracking_error": {
+        "title": "Tracking Error",
+        "formula": "Std dev of active returns, annualized by sqrt(252).",
+        "time_basis": "daily",
+        "inputs": ["portfolio_returns", "benchmark_returns"],
+        "domain": "Requires overlapping return series.",
+        "invariants": [
+            "Tracking error >= 0.",
+        ],
+    },
+    "benchmark_volatility": {
+        "title": "Benchmark Volatility",
+        "formula": "Std dev of benchmark daily returns, annualized.",
+        "time_basis": "daily",
+        "inputs": ["benchmark_returns"],
+        "domain": "Requires benchmark returns.",
+        "invariants": [
+            "Benchmark volatility >= 0.",
+        ],
+    },
+    "benchmark_correlation": {
+        "title": "Benchmark Correlation",
+        "formula": "Correlation of portfolio and benchmark daily returns.",
+        "time_basis": "daily",
+        "inputs": ["portfolio_returns", "benchmark_returns"],
+        "domain": "Requires overlapping return series.",
+        "invariants": [
+            "Correlation in [-1, 1] when defined.",
+        ],
+    },
+    "rolling_drawdown": {
+        "title": "Rolling Drawdown",
+        "formula": "Rolling minimum of drawdown over the window.",
+        "time_basis": "daily",
+        "inputs": ["drawdown_series"],
+        "domain": "Requires drawdown series and window.",
+        "invariants": [
+            "Rolling drawdown <= 0.",
+        ],
+    },
     "factor_tilts": {
         "title": "Factor Tilts",
         "formula": "Tilt = mean(portfolio factor pct) - mean(universe factor pct).",
