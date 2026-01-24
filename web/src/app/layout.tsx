@@ -28,6 +28,12 @@ export default function RootLayout({
             <div className="max-w-5xl mx-auto">
               <TopBar />
               {children}
+              <footer className="mt-12 border-t border-[#E5E7EB] pt-6 text-xs text-gray-500">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>Data sources: Yahoo Finance, FRED.</div>
+                  <div>Informational only · Metrics reflect available data and documented assumptions.</div>
+                </div>
+              </footer>
             </div>
           </main>
 

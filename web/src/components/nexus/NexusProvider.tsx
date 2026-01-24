@@ -61,12 +61,19 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
     const [backendOk, setBackendOk] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
 
+    /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
-        setMode(readStorage(STORAGE_KEYS.mode, "live") as NexusMode);
-        setPortfolioId(readStorage(STORAGE_KEYS.portfolioId, "default"));
-        setBenchmark(readStorage(STORAGE_KEYS.benchmark, "SPY"));
-        setRunId(readStorage(STORAGE_KEYS.runId, ""));
+        // Hydrate from localStorage after mount to avoid SSR/client mismatch.
+        const storedMode = readStorage(STORAGE_KEYS.mode, "live") as NexusMode;
+        const storedPortfolio = readStorage(STORAGE_KEYS.portfolioId, "default");
+        const storedBenchmark = readStorage(STORAGE_KEYS.benchmark, "SPY");
+        const storedRunId = readStorage(STORAGE_KEYS.runId, "");
+        setMode(storedMode);
+        setPortfolioId(storedPortfolio);
+        setBenchmark(storedBenchmark);
+        setRunId(storedRunId ? storedRunId : null);
     }, []);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     useEffect(() => {
         if (typeof window === "undefined") return;

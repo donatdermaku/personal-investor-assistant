@@ -5,6 +5,8 @@ import { definitionTooltip } from "@/lib/definitions";
 import { useNexus } from "@/components/nexus/NexusProvider";
 import { EmptyState } from "@/components/nexus/EmptyState";
 import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
+import { SectionContext } from "@/components/nexus/SectionContext";
+import { coverageStatus } from "@/lib/coverage";
 import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 
 export default function PerformancePage() {
@@ -63,6 +65,7 @@ export default function PerformancePage() {
         benchmark_timeseries,
         macro,
         macro_regimes,
+        manifest,
     } = state;
     const performanceSeries = performance as Array<{ date: string; value: number | null; benchmark?: number | null; drawdown?: number | null }>;
     const hasBenchmark = performanceSeries.some((point) => point.benchmark != null);
@@ -76,6 +79,8 @@ export default function PerformancePage() {
     const latestMacro = macroFlags.length > 0 ? macroFlags[macroFlags.length - 1] : null;
     const hasAttribution = attribution_summary && typeof attribution_summary.allocation === "number";
     const hasBenchmarkComparison = benchmark_comparison && typeof benchmark_comparison.tracking_error === "number";
+    const coverage = coverageStatus(manifest);
+    const asOf = summary.last_date || manifest.timestamp;
 
     return (
         <div className="space-y-8">
@@ -86,22 +91,56 @@ export default function PerformancePage() {
                 </p>
             </div>
 
+            <SectionContext
+                title="Performance Context"
+                items={[
+                    {
+                        label: "What it measures",
+                        text: "Portfolio returns over time, including time-weighted and money-weighted views.",
+                    },
+                    {
+                        label: "Why it matters",
+                        text: "Separates market movement from cash-flow timing so results are comparable over time.",
+                    },
+                    {
+                        label: "When it misleads",
+                        text: "Sparse price history or short windows can understate drawdowns and overstate volatility.",
+                    },
+                    {
+                        label: "Assumptions",
+                        text: "Returns assume end-of-day prices and follow the TWR/MWR definitions.",
+                    },
+                ]}
+            />
+
+            {summary.errors && summary.errors.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    Some inputs are missing or incomplete for this run. Metrics relying on those inputs may be limited.
+                </div>
+            )}
+
             {/* Returns Summary */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <MetricCard
                     label="TWR (Strategy)"
                     value={summary.twr !== null ? `${(summary.twr * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "twr")}
+                    coverageStatus={summary.twr !== null ? coverage : "insufficient"}
+                    asOf={asOf}
                 />
                 <MetricCard
                     label="MWR (Personal)"
                     value={summary.mwr !== null ? `${(summary.mwr * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "mwr")}
+                    coverageStatus={summary.mwr !== null ? coverage : "insufficient"}
+                    asOf={asOf}
                 />
                 <MetricCard
                     label="Total Return"
                     value={totalReturn !== null ? `${(totalReturn * 100).toFixed(2)}%` : "--"}
                     subtext="From first valuation"
+                    coverageStatus={totalReturn !== null ? coverage : "insufficient"}
+                    asOf={asOf}
                 />
             </div>
 
@@ -157,9 +196,8 @@ export default function PerformancePage() {
                 )}
             </div>
 
-            {/* Drawdowns */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-[#0F172A] mb-4">Drawdowns</h3>
+            <details className="bg-white border border-gray-200 rounded-lg p-6">
+                <summary className="cursor-pointer text-lg font-semibold text-[#0F172A] mb-4">Drawdowns</summary>
                 {performance.length === 0 ? (
                     <div className="text-sm text-gray-500">No drawdown data available.</div>
                 ) : (
@@ -193,11 +231,10 @@ export default function PerformancePage() {
                         </LineChart>
                     </ResponsiveContainer>
                 )}
-            </div>
+            </details>
 
-            {/* Monthly Returns */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-[#0F172A] mb-4">Monthly Returns</h3>
+            <details className="bg-white border border-gray-200 rounded-lg p-6">
+                <summary className="cursor-pointer text-lg font-semibold text-[#0F172A] mb-4">Monthly Returns</summary>
                 {monthly_returns.length === 0 ? (
                     <div className="text-sm text-gray-500">No monthly return data available.</div>
                 ) : (
@@ -224,11 +261,10 @@ export default function PerformancePage() {
                         </BarChart>
                     </ResponsiveContainer>
                 )}
-            </div>
+            </details>
 
-            {/* Attribution */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-[#0F172A] mb-4">Return Drivers</h3>
+            <details className="bg-white border border-gray-200 rounded-lg p-6">
+                <summary className="cursor-pointer text-lg font-semibold text-[#0F172A] mb-4">Return Drivers</summary>
                 {!hasAttribution ? (
                     <div className="text-sm text-gray-500">No attribution data available.</div>
                 ) : (
@@ -236,18 +272,24 @@ export default function PerformancePage() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <MetricCard
                                 label="Allocation Effect"
-                                value={`${(attribution_summary.allocation * 100).toFixed(2)}%`}
+                                value={attribution_summary.allocation !== null ? `${(attribution_summary.allocation * 100).toFixed(2)}%` : "--"}
                                 tooltip={definitionTooltip(definitions, "allocation_effect")}
+                                coverageStatus={attribution_summary.allocation !== null ? coverage : "insufficient"}
+                                asOf={asOf}
                             />
                             <MetricCard
                                 label="Selection Effect"
-                                value={`${(attribution_summary.selection * 100).toFixed(2)}%`}
+                                value={attribution_summary.selection !== null ? `${(attribution_summary.selection * 100).toFixed(2)}%` : "--"}
                                 tooltip={definitionTooltip(definitions, "selection_effect")}
+                                coverageStatus={attribution_summary.selection !== null ? coverage : "insufficient"}
+                                asOf={asOf}
                             />
                             <MetricCard
                                 label="Interaction Effect"
-                                value={`${(attribution_summary.interaction * 100).toFixed(2)}%`}
+                                value={attribution_summary.interaction !== null ? `${(attribution_summary.interaction * 100).toFixed(2)}%` : "--"}
                                 tooltip={definitionTooltip(definitions, "interaction_effect")}
+                                coverageStatus={attribution_summary.interaction !== null ? coverage : "insufficient"}
+                                asOf={asOf}
                             />
                         </div>
                         {attribution_timeseries && attribution_timeseries.length > 0 ? (
@@ -293,11 +335,10 @@ export default function PerformancePage() {
                         )}
                     </div>
                 )}
-            </div>
+            </details>
 
-            {/* Macro Regimes */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-[#0F172A] mb-4">Macro Context</h3>
+            <details className="bg-white border border-gray-200 rounded-lg p-6">
+                <summary className="cursor-pointer text-lg font-semibold text-[#0F172A] mb-4">Macro Context</summary>
                 {macroStatus !== "ok" ? (
                     <div className="text-sm text-gray-500">
                         {macroStatus === "partial" ? "Macro context limited." : "Macro context unavailable."}
@@ -335,11 +376,10 @@ export default function PerformancePage() {
                         </div>
                     </div>
                 )}
-            </div>
+            </details>
 
-            {/* Benchmark Comparison */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-[#0F172A] mb-4">Portfolio vs Benchmark</h3>
+            <details className="bg-white border border-gray-200 rounded-lg p-6">
+                <summary className="cursor-pointer text-lg font-semibold text-[#0F172A] mb-4">Portfolio vs Benchmark</summary>
                 {!hasBenchmarkComparison ? (
                     <div className="text-sm text-gray-500">No benchmark comparison data available.</div>
                 ) : (
@@ -353,6 +393,8 @@ export default function PerformancePage() {
                                         : "--"
                                 }
                                 tooltip={definitionTooltip(definitions, "tracking_error")}
+                                coverageStatus={benchmark_comparison.tracking_error != null ? coverage : "insufficient"}
+                                asOf={asOf}
                             />
                             <MetricCard
                                 label="Correlation"
@@ -362,6 +404,8 @@ export default function PerformancePage() {
                                         : "--"
                                 }
                                 tooltip={definitionTooltip(definitions, "benchmark_correlation")}
+                                coverageStatus={benchmark_comparison.correlation != null ? coverage : "insufficient"}
+                                asOf={asOf}
                             />
                             <MetricCard
                                 label="Benchmark Volatility"
@@ -371,6 +415,8 @@ export default function PerformancePage() {
                                         : "--"
                                 }
                                 tooltip={definitionTooltip(definitions, "benchmark_volatility")}
+                                coverageStatus={benchmark_comparison.benchmark_volatility != null ? coverage : "insufficient"}
+                                asOf={asOf}
                             />
                         </div>
                         {benchmark_timeseries && benchmark_timeseries.length > 0 ? (
@@ -401,7 +447,7 @@ export default function PerformancePage() {
                         )}
                     </div>
                 )}
-            </div>
+            </details>
         </div>
     );
 }
