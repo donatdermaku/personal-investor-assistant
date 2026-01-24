@@ -1,6 +1,6 @@
 import type { RunManifest } from "@/types/nexus";
 
-export type CoverageStatus = "full" | "partial" | "insufficient";
+export type CoverageStatus = "full" | "partial" | "insufficient" | "unknown";
 
 export function coveragePercent(manifest?: RunManifest | null): number | null {
     const summary = manifest?.coverage_summary;
@@ -17,7 +17,7 @@ export function coveragePercent(manifest?: RunManifest | null): number | null {
 
 export function coverageStatus(manifest?: RunManifest | null): CoverageStatus {
     const percent = coveragePercent(manifest);
-    if (percent === null) return "insufficient";
+    if (percent === null) return "unknown";
     if (percent >= 0.95) return "full";
     if (percent >= 0.75) return "partial";
     return "insufficient";
@@ -29,6 +29,8 @@ export function coverageLabel(status: CoverageStatus): string {
             return "Full coverage";
         case "partial":
             return "Partial coverage";
+        case "unknown":
+            return "Coverage unknown";
         default:
             return "Insufficient data";
     }

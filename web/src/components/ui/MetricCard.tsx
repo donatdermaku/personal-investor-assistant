@@ -6,15 +6,19 @@ interface MetricCardProps {
     subtext?: string;
     tooltip?: string;
     asOf?: string | null;
-    coverageStatus?: "full" | "partial" | "insufficient";
+    coverageStatus?: "full" | "partial" | "insufficient" | "unknown";
     hideWhenInsufficient?: boolean;
 }
 
 function formatAsOf(value?: string | null) {
     if (!value) return null;
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleDateString();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return value;
+    }
+    if (value.includes("T")) {
+        return value.replace("Z", "").split(".")[0].replace("T", " ");
+    }
+    return value;
 }
 
 export function MetricCard({
