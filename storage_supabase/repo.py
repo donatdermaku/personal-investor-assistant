@@ -106,20 +106,29 @@ class SupabaseRepo:
 
     def get_latest_run(self):
         with session_scope() as session:
-            return session.query(models.Run).filter_by(status="completed").order_by(models.Run.completed_at.desc()).first()
+            run = session.query(models.Run).filter_by(status="completed").order_by(models.Run.completed_at.desc()).first()
+            if run:
+                session.expunge(run)
+            return run
 
     def get_run_by_id(self, run_id: str):
         with session_scope() as session:
-            return session.query(models.Run).filter_by(id=run_id).first()
+            run = session.query(models.Run).filter_by(id=run_id).first()
+            if run:
+                session.expunge(run)
+            return run
 
     def list_runs(self, limit: int = 50):
         with session_scope() as session:
-            return (
+            runs = (
                 session.query(models.Run)
                 .order_by(models.Run.completed_at.desc().nullslast(), models.Run.created_at.desc())
                 .limit(limit)
                 .all()
             )
+            for run in runs:
+                session.expunge(run)
+            return runs
 
     # Artifacts
     def add_artifact(self, run_id: str, artifact_type: str, path: str):
