@@ -213,6 +213,23 @@ def _empty_summary(message: str) -> dict:
     }
 
 def _load_portfolio(portfolio_id: int) -> dict:
+    if use_supabase():
+        from storage_supabase.db import session_scope as supa_session_scope
+        from storage_supabase import models as supa_models
+
+        with supa_session_scope() as session:
+            try:
+                portfolio = session.query(supa_models.Portfolio).filter_by(id=portfolio_id).first()
+            except Exception:
+                raise HTTPException(status_code=404, detail="Portfolio data unavailable (database uninitialized).")
+            if not portfolio:
+                raise HTTPException(status_code=404, detail="Portfolio not found")
+            return {
+                "id": portfolio.id,
+                "name": portfolio.name,
+                "currency": getattr(portfolio, "base_currency", None),
+            }
+
     with session_scope() as session:
         try:
             portfolio = session.query(Portfolio).filter_by(id=portfolio_id).first()
@@ -223,7 +240,7 @@ def _load_portfolio(portfolio_id: int) -> dict:
         return {
             "id": portfolio.id,
             "name": portfolio.name,
-            "currency": portfolio.currency,
+            "currency": getattr(portfolio, "currency", None) or getattr(portfolio, "base_currency", None),
         }
 
 def _load_ui_state() -> dict:
