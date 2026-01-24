@@ -129,7 +129,19 @@ def BenchmarkSeriesContract() -> ContractSpec:
 
 def CoverageSummaryContract(payload: dict[str, Any]) -> list[ContractError]:
     errors: list[ContractError] = []
-    for key in ["as_of", "status", "score", "policy", "required", "per_ticker", "aggregate", "reason_codes"]:
+    for key in [
+        "as_of",
+        "status",
+        "score",
+        "policy",
+        "required",
+        "per_ticker",
+        "aggregate",
+        "reason_codes",
+        "coverage",
+        "metric_status",
+        "metric_reasons",
+    ]:
         if key not in payload:
             errors.append(ContractError(key, "Missing required field."))
     policy = payload.get("policy", {})
@@ -168,7 +180,7 @@ def contract_registry() -> dict[str, dict[str, str]]:
         "PriceSeriesContract": {"version": "1.0"},
         "RiskFreeSeriesContract": {"version": "1.0"},
         "BenchmarkSeriesContract": {"version": "1.0"},
-        "CoverageSummaryContract": {"version": "1.0"},
+        "CoverageSummaryContract": {"version": "2.0"},
         "MacroContextContract": {"version": "1.0"},
         "EnrichmentContract": {"version": "1.0"},
     }

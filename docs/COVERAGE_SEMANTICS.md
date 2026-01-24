@@ -35,8 +35,23 @@ The summary is exported as `coverage_summary.json` and returned by the API.
     "benchmark_score": 1.0,
     "rf_score": null
   },
+  "coverage": {
+    "prices": { "status": "sufficient", "reason_codes": [] },
+    "benchmark": { "status": "insufficient", "reason_codes": ["BENCHMARK_MISSING"] },
+    "risk_free": { "status": "insufficient", "reason_codes": ["RF_MISSING"] },
+    "macro": { "status": "unknown", "reason_codes": [] }
+  },
+  "metric_status": {
+    "twr": "sufficient",
+    "sharpe": "insufficient"
+  },
+  "metric_reasons": {
+    "twr": [],
+    "sharpe": ["RF_MISSING"]
+  },
   "reason_codes": ["OK"],
-  "contract_version": "coverage_summary_v1"
+  "contract_version": "coverage_summary_v2",
+  "version": "2.0"
 }
 ```
 
@@ -61,3 +76,15 @@ Risk-free rate coverage is tracked separately as `aggregate.rf_score` and may ad
 - `unknown`: KPI values are shown, no warning badge.
 - `insufficient`: KPI values are hidden and a reason code is shown.
 - `sufficient`: KPI values are shown with coverage badge.
+
+## Metric-Level Gating
+
+Coverage applies per metric using `metric_status` and `metric_reasons`:
+
+- KPI values are hidden **only** when the metric status is `insufficient`.
+- Missing or unknown coverage keeps KPI values visible without warnings.
+- Reason codes are attached to each metric and shown only when insufficient.
+
+## Changelog
+
+- `coverage_summary_v2`: Added `coverage`, `metric_status`, and `metric_reasons` so KPI gating is tied to required dependencies.

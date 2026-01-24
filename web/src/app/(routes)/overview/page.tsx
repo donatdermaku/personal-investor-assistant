@@ -6,7 +6,7 @@ import { useNexus } from "@/components/nexus/NexusProvider";
 import { EmptyState } from "@/components/nexus/EmptyState";
 import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
 import { SectionContext } from "@/components/nexus/SectionContext";
-import { coverageStatus } from "@/lib/coverage";
+import { getMetricReasons, getMetricStatus } from "@/lib/coverageLogic";
 import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function OverviewPage() {
@@ -58,7 +58,11 @@ export default function OverviewPage() {
     const { summary, equity_curve, definitions, manifest, coverage_summary } = state;
     const equitySeries = equity_curve as Array<{ date: string; value: number; benchmark?: number | null }>;
     const hasBenchmark = equitySeries.some((point) => point.benchmark != null);
-    const coverage = coverageStatus(manifest, coverage_summary ?? null);
+    const metricStatus = (kpiKey: string) => getMetricStatus(kpiKey, coverage_summary ?? null);
+    const metricReasons = (kpiKey: string) => getMetricReasons(kpiKey, coverage_summary ?? null);
+    const metricCoverage = (kpiKey: string) => (metricStatus(kpiKey) === "insufficient" ? "insufficient" : undefined);
+    const metricReasonCodes = (kpiKey: string) =>
+        metricStatus(kpiKey) === "insufficient" ? metricReasons(kpiKey) : undefined;
     const asOf = summary.last_date || manifest.timestamp;
 
     return (
@@ -113,33 +117,33 @@ export default function OverviewPage() {
                     label="Strategy Return (TWR)"
                     value={summary.twr !== null ? `${(summary.twr * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "twr")}
-                    coverageStatus={summary.twr !== null ? coverage : "insufficient"}
+                    coverageStatus={metricCoverage("twr")}
                     asOf={asOf}
-                    reasonCodes={coverage_summary?.reason_codes}
+                    reasonCodes={metricReasonCodes("twr")}
                 />
                 <MetricCard
                     label="Personal Return (MWR)"
                     value={summary.mwr !== null ? `${(summary.mwr * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "mwr")}
-                    coverageStatus={summary.mwr !== null ? coverage : "insufficient"}
+                    coverageStatus={metricCoverage("mwr")}
                     asOf={asOf}
-                    reasonCodes={coverage_summary?.reason_codes}
+                    reasonCodes={metricReasonCodes("mwr")}
                 />
                 <MetricCard
                     label="Portfolio Value"
                     value={summary.final_value !== null ? `$${summary.final_value.toLocaleString()}` : "--"}
                     subtext={summary.last_date || undefined}
-                    coverageStatus={summary.final_value !== null ? coverage : "insufficient"}
+                    coverageStatus={metricCoverage("portfolio_value")}
                     asOf={asOf}
-                    reasonCodes={coverage_summary?.reason_codes}
+                    reasonCodes={metricReasonCodes("portfolio_value")}
                 />
                 <MetricCard
                     label="Max Drawdown"
                     value={summary.max_drawdown !== null ? `${(summary.max_drawdown * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "max_drawdown")}
-                    coverageStatus={summary.max_drawdown !== null ? coverage : "insufficient"}
+                    coverageStatus={metricCoverage("max_drawdown")}
                     asOf={asOf}
-                    reasonCodes={coverage_summary?.reason_codes}
+                    reasonCodes={metricReasonCodes("max_drawdown")}
                 />
             </div>
 

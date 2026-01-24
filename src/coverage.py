@@ -5,6 +5,8 @@ from datetime import date, timedelta
 
 import pandas as pd
 
+from src.analytics.contracts import KPI_DEPENDENCIES, evaluate_metric_status
+
 
 @dataclass(frozen=True)
 class CoveragePolicy:
@@ -104,10 +106,26 @@ def build_coverage_summary(
 ) -> dict:
     policy = policy or CoveragePolicy()
 
+    def metric_status_from_coverage(coverage: dict[str, dict[str, object]]) -> tuple[dict[str, str], dict[str, list[str]]]:
+        metric_status: dict[str, str] = {}
+        metric_reasons: dict[str, list[str]] = {}
+        for key, deps in KPI_DEPENDENCIES.items():
+            status, reasons = evaluate_metric_status(coverage, deps)
+            metric_status[key] = status
+            metric_reasons[key] = reasons
+        return metric_status, metric_reasons
+
     if prices is None or prices.empty or "date" not in prices.columns or "ticker" not in prices.columns:
+        coverage = {
+            "prices": {"status": "insufficient", "reason_codes": ["NO_PRICES"]},
+            "benchmark": {"status": "unknown", "reason_codes": []},
+            "risk_free": {"status": "unknown", "reason_codes": []},
+            "macro": {"status": "unknown", "reason_codes": []},
+        }
+        metric_status, metric_reasons = metric_status_from_coverage(coverage)
         return {
             "as_of": _as_date(as_of).isoformat() if _as_date(as_of) else None,
-            "status": "unknown",
+            "status": "insufficient",
             "score": 0.0,
             "policy": {
                 "min_score_for_kpis": policy.min_score_for_kpis,
@@ -125,8 +143,12 @@ def build_coverage_summary(
                 "benchmark_score": None,
                 "rf_score": None,
             },
+            "coverage": coverage,
+            "metric_status": metric_status,
+            "metric_reasons": metric_reasons,
             "reason_codes": ["NO_PRICES"],
-            "contract_version": "coverage_summary_v1",
+            "contract_version": "coverage_summary_v2",
+            "version": "2.0",
         }
 
     prices = prices.copy()
@@ -141,6 +163,13 @@ def build_coverage_summary(
     as_of_date = _as_date(as_of) or inferred_as_of
 
     if not as_of_date:
+        coverage = {
+            "prices": {"status": "insufficient", "reason_codes": ["NO_DATES"]},
+            "benchmark": {"status": "unknown", "reason_codes": []},
+            "risk_free": {"status": "unknown", "reason_codes": []},
+            "macro": {"status": "unknown", "reason_codes": []},
+        }
+        metric_status, metric_reasons = metric_status_from_coverage(coverage)
         return {
             "as_of": None,
             "status": "unknown",
@@ -161,8 +190,12 @@ def build_coverage_summary(
                 "benchmark_score": None,
                 "rf_score": None,
             },
+            "coverage": coverage,
+            "metric_status": metric_status,
+            "metric_reasons": metric_reasons,
             "reason_codes": ["NO_DATES"],
-            "contract_version": "coverage_summary_v1",
+            "contract_version": "coverage_summary_v2",
+            "version": "2.0",
         }
 
     per_ticker: dict[str, dict] = {}
@@ -185,20 +218,45 @@ def build_coverage_summary(
 
     status = "unknown"
     reason_codes: list[str] = []
+    prices_status = "unknown"
+    prices_reasons: list[str] = []
     if not core_scores:
         reason_codes.append("NO_CORE_TICKERS")
+        prices_status = "insufficient"
+        prices_reasons.append("NO_CORE_TICKERS")
     else:
         score = min(core_scores)
         if score >= policy.min_score_for_kpis:
             status = "sufficient"
             reason_codes.append("OK")
+            prices_status = "sufficient"
         else:
             status = "insufficient"
             reason_codes.append("CORE_TICKER_INSUFFICIENT")
+            prices_status = "insufficient"
+            prices_reasons.append("CORE_TICKER_INSUFFICIENT")
 
-    if benchmark_ticker and benchmark_score is not None and benchmark_score < policy.min_score_for_kpis:
-        reason_codes.append("BENCHMARK_INSUFFICIENT")
+    benchmark_status = "unknown"
+    benchmark_reasons: list[str] = []
+    if benchmark_ticker:
+        if benchmark_score is None:
+            benchmark_status = "insufficient"
+            benchmark_reasons.append("BENCHMARK_MISSING")
+        elif benchmark_score >= policy.min_score_for_kpis:
+            benchmark_status = "sufficient"
+        else:
+            benchmark_status = "insufficient"
+            benchmark_reasons.append("BENCHMARK_INSUFFICIENT")
+            reason_codes.append("BENCHMARK_INSUFFICIENT")
+    else:
+        benchmark_status = "insufficient"
+        benchmark_reasons.append("BENCHMARK_MISSING")
+
+    risk_free_status = "unknown"
+    risk_free_reasons: list[str] = []
     if risk_free_series is None or risk_free_series.empty:
+        risk_free_status = "insufficient"
+        risk_free_reasons.append("RF_MISSING")
         reason_codes.append("RF_MISSING")
 
     rf_score = None
@@ -206,6 +264,11 @@ def build_coverage_summary(
         rf_dates = pd.to_datetime(risk_free_series["date"], errors="coerce").dt.date.dropna().tolist()
         rf_result = _score_ticker(rf_dates, policy=policy, as_of=as_of_date)
         rf_score = rf_result["score"]
+        if rf_score >= policy.min_score_for_kpis:
+            risk_free_status = "sufficient"
+        else:
+            risk_free_status = "insufficient"
+            risk_free_reasons.append("RF_INSUFFICIENT")
 
     aggregate = {
         "coverage_ratio": float(sum(core_scores) / len(core_scores)) if core_scores else 0.0,
@@ -213,6 +276,13 @@ def build_coverage_summary(
         "benchmark_score": benchmark_score,
         "rf_score": rf_score,
     }
+    coverage = {
+        "prices": {"status": prices_status, "reason_codes": prices_reasons},
+        "benchmark": {"status": benchmark_status, "reason_codes": benchmark_reasons},
+        "risk_free": {"status": risk_free_status, "reason_codes": risk_free_reasons},
+        "macro": {"status": "unknown", "reason_codes": []},
+    }
+    metric_status, metric_reasons = metric_status_from_coverage(coverage)
 
     return {
         "as_of": as_of_date.isoformat(),
@@ -229,6 +299,10 @@ def build_coverage_summary(
         },
         "per_ticker": per_ticker,
         "aggregate": aggregate,
+        "coverage": coverage,
+        "metric_status": metric_status,
+        "metric_reasons": metric_reasons,
         "reason_codes": reason_codes,
-        "contract_version": "coverage_summary_v1",
+        "contract_version": "coverage_summary_v2",
+        "version": "2.0",
     }

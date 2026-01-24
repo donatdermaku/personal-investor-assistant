@@ -6,7 +6,7 @@ import { useNexus } from "@/components/nexus/NexusProvider";
 import { EmptyState } from "@/components/nexus/EmptyState";
 import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
 import { SectionContext } from "@/components/nexus/SectionContext";
-import { coverageStatus } from "@/lib/coverage";
+import { getMetricReasons, getMetricStatus } from "@/lib/coverageLogic";
 import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 
 export default function PerformancePage() {
@@ -80,7 +80,11 @@ export default function PerformancePage() {
     const latestMacro = macroFlags.length > 0 ? macroFlags[macroFlags.length - 1] : null;
     const hasAttribution = attribution_summary && typeof attribution_summary.allocation === "number";
     const hasBenchmarkComparison = benchmark_comparison && typeof benchmark_comparison.tracking_error === "number";
-    const coverage = coverageStatus(manifest, coverage_summary ?? null);
+    const metricStatus = (kpiKey: string) => getMetricStatus(kpiKey, coverage_summary ?? null);
+    const metricReasons = (kpiKey: string) => getMetricReasons(kpiKey, coverage_summary ?? null);
+    const metricCoverage = (kpiKey: string) => (metricStatus(kpiKey) === "insufficient" ? "insufficient" : undefined);
+    const metricReasonCodes = (kpiKey: string) =>
+        metricStatus(kpiKey) === "insufficient" ? metricReasons(kpiKey) : undefined;
     const asOf = summary.last_date || manifest.timestamp;
 
     return (
@@ -126,25 +130,25 @@ export default function PerformancePage() {
                     label="TWR (Strategy)"
                     value={summary.twr !== null ? `${(summary.twr * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "twr")}
-                    coverageStatus={summary.twr !== null ? coverage : "insufficient"}
+                    coverageStatus={metricCoverage("twr")}
                     asOf={asOf}
-                    reasonCodes={coverage_summary?.reason_codes}
+                    reasonCodes={metricReasonCodes("twr")}
                 />
                 <MetricCard
                     label="MWR (Personal)"
                     value={summary.mwr !== null ? `${(summary.mwr * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "mwr")}
-                    coverageStatus={summary.mwr !== null ? coverage : "insufficient"}
+                    coverageStatus={metricCoverage("mwr")}
                     asOf={asOf}
-                    reasonCodes={coverage_summary?.reason_codes}
+                    reasonCodes={metricReasonCodes("mwr")}
                 />
                 <MetricCard
                     label="Total Return"
                     value={totalReturn !== null ? `${(totalReturn * 100).toFixed(2)}%` : "--"}
                     subtext="From first valuation"
-                    coverageStatus={totalReturn !== null ? coverage : "insufficient"}
+                    coverageStatus={metricCoverage("total_return")}
                     asOf={asOf}
-                    reasonCodes={coverage_summary?.reason_codes}
+                    reasonCodes={metricReasonCodes("total_return")}
                 />
             </div>
 
@@ -278,25 +282,25 @@ export default function PerformancePage() {
                                 label="Allocation Effect"
                                 value={attribution_summary.allocation !== null ? `${(attribution_summary.allocation * 100).toFixed(2)}%` : "--"}
                                 tooltip={definitionTooltip(definitions, "allocation_effect")}
-                                coverageStatus={attribution_summary.allocation !== null ? coverage : "insufficient"}
+                                coverageStatus={metricCoverage("allocation_effect")}
                                 asOf={asOf}
-                                reasonCodes={coverage_summary?.reason_codes}
+                                reasonCodes={metricReasonCodes("allocation_effect")}
                             />
                             <MetricCard
                                 label="Selection Effect"
                                 value={attribution_summary.selection !== null ? `${(attribution_summary.selection * 100).toFixed(2)}%` : "--"}
                                 tooltip={definitionTooltip(definitions, "selection_effect")}
-                                coverageStatus={attribution_summary.selection !== null ? coverage : "insufficient"}
+                                coverageStatus={metricCoverage("selection_effect")}
                                 asOf={asOf}
-                                reasonCodes={coverage_summary?.reason_codes}
+                                reasonCodes={metricReasonCodes("selection_effect")}
                             />
                             <MetricCard
                                 label="Interaction Effect"
                                 value={attribution_summary.interaction !== null ? `${(attribution_summary.interaction * 100).toFixed(2)}%` : "--"}
                                 tooltip={definitionTooltip(definitions, "interaction_effect")}
-                                coverageStatus={attribution_summary.interaction !== null ? coverage : "insufficient"}
+                                coverageStatus={metricCoverage("interaction_effect")}
                                 asOf={asOf}
-                                reasonCodes={coverage_summary?.reason_codes}
+                                reasonCodes={metricReasonCodes("interaction_effect")}
                             />
                         </div>
                         {attribution_timeseries && attribution_timeseries.length > 0 ? (
@@ -400,9 +404,9 @@ export default function PerformancePage() {
                                         : "--"
                                 }
                                 tooltip={definitionTooltip(definitions, "tracking_error")}
-                                coverageStatus={benchmark_comparison.tracking_error != null ? coverage : "insufficient"}
+                                coverageStatus={metricCoverage("tracking_error")}
                                 asOf={asOf}
-                                reasonCodes={coverage_summary?.reason_codes}
+                                reasonCodes={metricReasonCodes("tracking_error")}
                             />
                             <MetricCard
                                 label="Correlation"
@@ -412,9 +416,9 @@ export default function PerformancePage() {
                                         : "--"
                                 }
                                 tooltip={definitionTooltip(definitions, "benchmark_correlation")}
-                                coverageStatus={benchmark_comparison.correlation != null ? coverage : "insufficient"}
+                                coverageStatus={metricCoverage("benchmark_correlation")}
                                 asOf={asOf}
-                                reasonCodes={coverage_summary?.reason_codes}
+                                reasonCodes={metricReasonCodes("benchmark_correlation")}
                             />
                             <MetricCard
                                 label="Benchmark Volatility"
@@ -424,9 +428,9 @@ export default function PerformancePage() {
                                         : "--"
                                 }
                                 tooltip={definitionTooltip(definitions, "benchmark_volatility")}
-                                coverageStatus={benchmark_comparison.benchmark_volatility != null ? coverage : "insufficient"}
+                                coverageStatus={metricCoverage("benchmark_volatility")}
                                 asOf={asOf}
-                                reasonCodes={coverage_summary?.reason_codes}
+                                reasonCodes={metricReasonCodes("benchmark_volatility")}
                             />
                         </div>
                         {benchmark_timeseries && benchmark_timeseries.length > 0 ? (

@@ -140,7 +140,17 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
                 "benchmark_score": None,
                 "rf_score": None,
             },
+            "coverage": {
+                "prices": {"status": "sufficient", "reason_codes": []},
+                "benchmark": {"status": "insufficient", "reason_codes": ["BENCHMARK_MISSING"]},
+                "risk_free": {"status": "insufficient", "reason_codes": ["RF_MISSING"]},
+                "macro": {"status": "unknown", "reason_codes": []},
+            },
+            "metric_status": {"twr": "sufficient"},
+            "metric_reasons": {"twr": []},
             "reason_codes": ["OK"],
+            "contract_version": "coverage_summary_v2",
+            "version": "2.0",
         },
     )
     export_macro_regime_summary_json(

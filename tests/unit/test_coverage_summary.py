@@ -18,8 +18,10 @@ def _price_frame(ticker: str, dates: list[str]) -> pd.DataFrame:
 
 def test_coverage_unknown_without_prices() -> None:
     summary = build_coverage_summary(pd.DataFrame(), required_tickers=["AAPL"])
-    assert summary["status"] == "unknown"
+    assert summary["status"] == "insufficient"
     assert "NO_PRICES" in summary["reason_codes"]
+    assert summary["coverage"]["prices"]["status"] == "insufficient"
+    assert summary["metric_status"]["twr"] == "insufficient"
 
 
 def test_coverage_insufficient_short_history() -> None:
@@ -49,3 +51,19 @@ def test_coverage_sufficient_history() -> None:
     )
     assert summary["status"] == "sufficient"
     assert summary["aggregate"]["min_ticker_score"] >= policy.min_score_for_kpis
+
+
+def test_metric_status_depends_on_required_sources() -> None:
+    policy = CoveragePolicy(min_score_for_kpis=0.8, min_history_days=2, max_gap_days=2)
+    prices = _price_frame("AAPL", ["2024-01-01", "2024-01-02"])
+    summary = build_coverage_summary(
+        prices,
+        required_tickers=["AAPL"],
+        benchmark_ticker=None,
+        risk_free_series=pd.DataFrame(),
+        as_of="2024-01-02",
+        policy=policy,
+    )
+    assert summary["metric_status"]["twr"] == "sufficient"
+    assert summary["metric_status"]["sharpe"] == "insufficient"
+    assert "RF_MISSING" in summary["metric_reasons"]["sharpe"]

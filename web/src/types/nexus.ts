@@ -204,9 +204,16 @@ export interface CoverageAggregate {
     rf_score: number | null;
 }
 
+export type MetricCoverageStatus = "sufficient" | "insufficient" | "unknown";
+
+export interface CoverageSourceStatus {
+    status: MetricCoverageStatus;
+    reason_codes: string[];
+}
+
 export interface CoverageSummaryDetailed {
     as_of: string | null;
-    status: "sufficient" | "insufficient" | "unknown";
+    status: MetricCoverageStatus;
     score: number;
     policy: CoveragePolicy;
     required: {
@@ -215,8 +222,12 @@ export interface CoverageSummaryDetailed {
     };
     per_ticker: Record<string, CoveragePerTicker>;
     aggregate: CoverageAggregate;
+    coverage?: Record<string, CoverageSourceStatus>;
+    metric_status?: Record<string, MetricCoverageStatus>;
+    metric_reasons?: Record<string, string[]>;
     reason_codes: string[];
     contract_version?: string;
+    version?: string;
 }
 
 export interface PortfolioMeta {
