@@ -29,6 +29,7 @@ def compute_app_state(
     save_run: bool = True,
     source_override: str | None = None,
     uploads_active: bool = True,
+    run_type: str | None = None,
 ) -> AppState:
     """
     Central logic to compute the application state.
@@ -51,7 +52,7 @@ def compute_app_state(
     run_id = str(uuid.uuid4())
     if save_run:
         # We don't have hash yet, will update later
-        repo.create_run(run_id, portfolio_id, None, None)
+        repo.create_run(run_id, portfolio_id, None, None, run_type=run_type)
     
     # 4. Load User Data (Watchlist)
     watch_tickers = data_manager.load_watchlist() or []
@@ -105,7 +106,7 @@ def compute_app_state(
 
     # 9. Update Run in DB
     if save_run:
-        repo.update_run_complete(run_id, manifest.to_json())
+        repo.update_run_complete(run_id, manifest.to_json(), run_type=run_type)
     
     # 10. Assemble AppState
     app_state = AppState(

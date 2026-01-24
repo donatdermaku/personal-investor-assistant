@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from typing import Optional
 import logging
 import json
@@ -12,7 +12,7 @@ import numpy as np
 
 import os
 
-from storage.repo import Repo
+from storage.repo import Repo, use_supabase
 from storage import db
 from storage import models
 from storage.datamanager import data_manager
@@ -267,6 +267,7 @@ async def create_run(
                 save_run=True,
                 source_override="Demo",
                 uploads_active=False,
+                run_type="demo",
             )
             save_artifacts(app_state)
             manifest = app_state.run_manifest
@@ -360,6 +361,7 @@ async def create_run(
             save_run=True,
             source_override="Ledger",
             uploads_active=True,
+            run_type="uploaded",
         )
         save_artifacts(app_state)
         manifest = app_state.run_manifest
@@ -509,6 +511,15 @@ def export_artifact(run_id: str, artifact: str):
     filename = allowed.get(artifact)
     if not filename:
         raise HTTPException(status_code=404, detail="Unknown artifact")
+    if use_supabase():
+        try:
+            data, content_type = repo.get_artifact_bytes(run_id, filename)
+            return Response(content=data, media_type=content_type)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Artifact not found. Run compute to generate exports.")
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to load artifact: {exc}")
+
     artifact_path = EXPORTS_DIR / run_id / filename
     if not artifact_path.exists():
         raise HTTPException(status_code=404, detail="Artifact not found. Run compute to generate exports.")
