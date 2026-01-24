@@ -9,6 +9,7 @@ import numpy as np
 from src.app_state import AppState
 from src.manifest import create_manifest, RunManifest, compute_input_hash
 from src.coverage import build_coverage_summary
+from src.risk_free import compute_risk_free_series
 from src.utils_io import ROOT
 from src.portfolio import load_portfolio, PortfolioResult
 from src.streamlit_data import (
@@ -99,12 +100,15 @@ def compute_app_state(
         input_str += str(pd.util.hash_pandas_object(snapshot_df).sum())
     input_hash = compute_input_hash(input_str)
     
+    as_of = portfolio_result.daily_values.index.max().strftime("%Y-%m-%d") if not portfolio_result.daily_values.empty else None
+    risk_free = compute_risk_free_series(portfolio_result.daily_values.index if not portfolio_result.daily_values.empty else pd.DatetimeIndex([]))
     coverage_summary = build_coverage_summary(
         prices,
         required_tickers=watch_tickers,
         benchmark_ticker=bench_ticker,
         benchmark_prices=bench_prices,
-        as_of=portfolio_result.daily_values.index.max().strftime("%Y-%m-%d") if not portfolio_result.daily_values.empty else None,
+        as_of=as_of,
+        risk_free_series=risk_free.series,
     )
 
     manifest = create_manifest(
@@ -134,6 +138,7 @@ def compute_app_state(
         fundamentals_meta=fund_meta,
         scores_meta=scores_meta,
         benchmark_prices=bench_prices,
+        risk_free=risk_free,
         market_state=market_state
     )
     
@@ -176,6 +181,8 @@ def save_artifacts(app_state: AppState):
         export_rolling_metrics_csv,
         export_benchmark_comparison_json,
         export_benchmark_timeseries_csv,
+        export_risk_free_series_csv,
+        export_corporate_actions_csv,
     )
     from src.analytics.attribution import compute_attribution
     from src.analytics.risk import compute_risk_contributions
@@ -199,6 +206,18 @@ def save_artifacts(app_state: AppState):
     coverage_path = base_path / "coverage_summary.json"
     export_coverage_summary_json(coverage_path, manifest.coverage_summary)
     repo.add_artifact(run_id, "coverage_summary_json", str(coverage_path))
+
+    risk_free_path = base_path / "risk_free_series.csv"
+    export_risk_free_series_csv(risk_free_path, app_state.risk_free.series)
+    repo.add_artifact(run_id, "risk_free_series_csv", str(risk_free_path))
+
+    if not app_state.prices.empty and {"dividend", "split_ratio"}.issubset(app_state.prices.columns):
+        events = app_state.prices.copy()
+        events = events[(events["dividend"] > 0) | (events["split_ratio"] != 1.0)]
+        events = events[["date", "ticker", "dividend", "split_ratio"]].copy()
+        actions_path = base_path / "corporate_actions_events.csv"
+        export_corporate_actions_csv(actions_path, events)
+        repo.add_artifact(run_id, "corporate_actions_events_csv", str(actions_path))
     
     # HTML Report
     html_path = base_path / "report.html"
@@ -217,7 +236,7 @@ def save_artifacts(app_state: AppState):
 
         performance = pd.read_csv(perf_path)
 
-        rolling = compute_rolling_metrics(performance)
+        rolling = compute_rolling_metrics(performance, risk_free_series=app_state.risk_free.series)
         rolling_path = base_path / "rolling_metrics.csv"
         export_rolling_metrics_csv(rolling_path, rolling)
         repo.add_artifact(run_id, "rolling_metrics_csv", str(rolling_path))

@@ -58,13 +58,49 @@ class ContractSpec:
 def PriceSeriesContract() -> ContractSpec:
     return ContractSpec(
         name="PriceSeriesContract",
-        required_columns=["date", "close", "adj_close", "ticker"],
-        dtypes={"date": "date", "close": "float", "adj_close": "float", "ticker": "str"},
+        required_columns=["date", "close", "adj_close", "dividend", "split_ratio", "ticker", "source"],
+        dtypes={
+            "date": "date",
+            "close": "float",
+            "adj_close": "float",
+            "dividend": "float",
+            "split_ratio": "float",
+            "ticker": "str",
+            "source": "str",
+        },
         frequency="daily",
         timezone="UTC",
         keys=["ticker", "date"],
         allow_missing={"adj_close": False},
     )
+
+
+def validate_price_series_frame(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
+    if df is None or df.empty:
+        raise MarketDataError(
+            error_code="MARKET_DATA_EMPTY",
+            message=f"No market data available for {ticker}.",
+            details={"ticker": ticker},
+            hint="Ensure price data is available for this ticker.",
+        )
+    frame = df.copy()
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+    frame["close"] = pd.to_numeric(frame["close"], errors="coerce")
+    frame["adj_close"] = pd.to_numeric(frame["adj_close"], errors="coerce")
+    if "dividend" in frame.columns:
+        frame["dividend"] = pd.to_numeric(frame["dividend"], errors="coerce").fillna(0.0)
+    if "split_ratio" in frame.columns:
+        frame["split_ratio"] = pd.to_numeric(frame["split_ratio"], errors="coerce").fillna(1.0)
+    errors = PriceSeriesContract().validate_frame(frame)
+    if errors:
+        raise MarketDataError(
+            error_code="MARKET_DATA_CONTRACT",
+            message=f"Price series contract failed for {ticker}.",
+            details={"ticker": ticker, "errors": [e.__dict__ for e in errors]},
+            hint="Verify market data normalization and required columns.",
+        )
+    frame = frame.dropna(subset=["date"]).sort_values("date").drop_duplicates(subset=["date", "ticker"]).reset_index(drop=True)
+    return frame
 
 
 def RiskFreeSeriesContract() -> ContractSpec:

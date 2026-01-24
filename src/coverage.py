@@ -98,6 +98,7 @@ def build_coverage_summary(
     required_tickers: list[str],
     benchmark_ticker: str | None = None,
     benchmark_prices: pd.DataFrame | None = None,
+    risk_free_series: pd.DataFrame | None = None,
     as_of: str | date | None = None,
     policy: CoveragePolicy | None = None,
 ) -> dict:
@@ -197,12 +198,20 @@ def build_coverage_summary(
 
     if benchmark_ticker and benchmark_score is not None and benchmark_score < policy.min_score_for_kpis:
         reason_codes.append("BENCHMARK_INSUFFICIENT")
+    if risk_free_series is None or risk_free_series.empty:
+        reason_codes.append("RF_MISSING")
+
+    rf_score = None
+    if risk_free_series is not None and not risk_free_series.empty and "date" in risk_free_series.columns:
+        rf_dates = pd.to_datetime(risk_free_series["date"], errors="coerce").dt.date.dropna().tolist()
+        rf_result = _score_ticker(rf_dates, policy=policy, as_of=as_of_date)
+        rf_score = rf_result["score"]
 
     aggregate = {
         "coverage_ratio": float(sum(core_scores) / len(core_scores)) if core_scores else 0.0,
         "min_ticker_score": float(min(core_scores)) if core_scores else 0.0,
         "benchmark_score": benchmark_score,
-        "rf_score": None,
+        "rf_score": rf_score,
     }
 
     return {

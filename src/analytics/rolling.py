@@ -4,7 +4,11 @@ import numpy as np
 import pandas as pd
 
 
-def compute_rolling_metrics(performance: pd.DataFrame, window: int = 63) -> pd.DataFrame:
+def compute_rolling_metrics(
+    performance: pd.DataFrame,
+    window: int = 63,
+    risk_free_series: pd.DataFrame | None = None,
+) -> pd.DataFrame:
     if performance.empty or "daily_return" not in performance.columns:
         return pd.DataFrame()
 
@@ -14,6 +18,15 @@ def compute_rolling_metrics(performance: pd.DataFrame, window: int = 63) -> pd.D
     perf = perf.sort_values("date")
 
     returns = pd.to_numeric(perf["daily_return"], errors="coerce").fillna(0.0)
+    if risk_free_series is not None and not risk_free_series.empty and "date" in risk_free_series.columns:
+        rf = risk_free_series.copy()
+        rf["date"] = pd.to_datetime(rf["date"], errors="coerce")
+        rf = rf.dropna(subset=["date", "rf_daily_return"])
+        aligned = perf.set_index("date")[["daily_return"]].join(
+            rf.set_index("date")[["rf_daily_return"]],
+            how="left",
+        )
+        returns = (aligned["daily_return"] - aligned["rf_daily_return"].fillna(0.0)).reset_index(drop=True)
     rolling_vol = returns.rolling(window, min_periods=window).std(ddof=1) * np.sqrt(252)
     rolling_mean = returns.rolling(window, min_periods=window).mean()
     rolling_sharpe = rolling_mean / rolling_vol.replace({0.0: np.nan})

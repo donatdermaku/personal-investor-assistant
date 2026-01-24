@@ -53,6 +53,9 @@ The summary is exported as `coverage_summary.json` and returned by the API.
 - `insufficient`: score below `min_score_for_kpis` or core series missing.
 - `sufficient`: score meets or exceeds `min_score_for_kpis`.
 
+Risk-free rate coverage is tracked separately as `aggregate.rf_score` and may add
+`RF_MISSING` to `reason_codes` without changing the overall status.
+
 ## UI Semantics
 
 - `unknown`: KPI values are shown, no warning badge.

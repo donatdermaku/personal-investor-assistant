@@ -156,6 +156,19 @@ export interface BenchmarkTimeseriesPoint {
     relative_drawdown: number | null;
 }
 
+export interface RiskFreeSeriesPoint {
+    date: string;
+    rate: number | null;
+    rf_daily_return: number | null;
+}
+
+export interface CorporateActionEvent {
+    date: string;
+    ticker: string;
+    dividend?: number | null;
+    split_ratio?: number | null;
+}
+
 export interface CoverageSummary {
     total: number;
     covered: number;
@@ -233,6 +246,8 @@ export interface NexusState {
     macro?: MacroPayload | null;
     benchmark_comparison?: BenchmarkComparisonSummary | null;
     benchmark_timeseries?: BenchmarkTimeseriesPoint[];
+    risk_free_series?: RiskFreeSeriesPoint[];
+    corporate_actions?: CorporateActionEvent[];
     portfolio: PortfolioMeta | null;
     definitions?: DefinitionsRegistry;
 }
@@ -253,6 +268,8 @@ export interface RunMetricsResponse {
     macro?: MacroPayload | null;
     benchmark_comparison?: BenchmarkComparisonSummary | null;
     benchmark_timeseries?: BenchmarkTimeseriesPoint[];
+    risk_free_series?: RiskFreeSeriesPoint[];
+    corporate_actions?: CorporateActionEvent[];
 }
 
 export interface PortfolioResponse {
