@@ -18,6 +18,115 @@ class MarketDataError(Exception):
         return f"{self.error_code}: {self.message}"
 
 
+@dataclass
+class ContractError:
+    field: str
+    message: str
+
+
+@dataclass
+class ContractSpec:
+    name: str
+    required_columns: list[str]
+    dtypes: dict[str, str]
+    frequency: str
+    timezone: str
+    keys: list[str]
+    allow_missing: dict[str, bool]
+
+    def validate_frame(self, df: pd.DataFrame) -> list[ContractError]:
+        errors: list[ContractError] = []
+        if df is None or df.empty:
+            errors.append(ContractError("frame", "Dataframe is empty."))
+            return errors
+        missing = [col for col in self.required_columns if col not in df.columns]
+        if missing:
+            errors.append(ContractError("columns", f"Missing columns: {missing}"))
+        for col, dtype in self.dtypes.items():
+            if col not in df.columns:
+                continue
+            series = df[col]
+            if dtype == "date" and not pd.api.types.is_datetime64_any_dtype(series):
+                errors.append(ContractError(col, "Expected datetime dtype."))
+            if dtype == "float" and not pd.api.types.is_numeric_dtype(series):
+                errors.append(ContractError(col, "Expected numeric dtype."))
+            if dtype == "str" and not pd.api.types.is_string_dtype(series):
+                errors.append(ContractError(col, "Expected string dtype."))
+        return errors
+
+
+def PriceSeriesContract() -> ContractSpec:
+    return ContractSpec(
+        name="PriceSeriesContract",
+        required_columns=["date", "close", "adj_close", "ticker"],
+        dtypes={"date": "date", "close": "float", "adj_close": "float", "ticker": "str"},
+        frequency="daily",
+        timezone="UTC",
+        keys=["ticker", "date"],
+        allow_missing={"adj_close": False},
+    )
+
+
+def RiskFreeSeriesContract() -> ContractSpec:
+    return ContractSpec(
+        name="RiskFreeSeriesContract",
+        required_columns=["date", "rate", "rf_daily_return"],
+        dtypes={"date": "date", "rate": "float", "rf_daily_return": "float"},
+        frequency="daily",
+        timezone="UTC",
+        keys=["date"],
+        allow_missing={"rf_daily_return": False},
+    )
+
+
+def BenchmarkSeriesContract() -> ContractSpec:
+    return ContractSpec(
+        name="BenchmarkSeriesContract",
+        required_columns=["date", "adj_close", "ticker"],
+        dtypes={"date": "date", "adj_close": "float", "ticker": "str"},
+        frequency="daily",
+        timezone="UTC",
+        keys=["ticker", "date"],
+        allow_missing={"adj_close": False},
+    )
+
+
+def CoverageSummaryContract(payload: dict[str, Any]) -> list[ContractError]:
+    errors: list[ContractError] = []
+    for key in ["as_of", "status", "score", "policy", "required", "per_ticker", "aggregate", "reason_codes"]:
+        if key not in payload:
+            errors.append(ContractError(key, "Missing required field."))
+    policy = payload.get("policy", {})
+    for key in ["min_score_for_kpis", "min_history_days", "max_gap_days"]:
+        if key not in policy:
+            errors.append(ContractError(f"policy.{key}", "Missing policy field."))
+    required = payload.get("required", {})
+    for key in ["tickers", "history_days_needed"]:
+        if key not in required:
+            errors.append(ContractError(f"required.{key}", "Missing required field."))
+    aggregate = payload.get("aggregate", {})
+    for key in ["coverage_ratio", "min_ticker_score", "benchmark_score", "rf_score"]:
+        if key not in aggregate:
+            errors.append(ContractError(f"aggregate.{key}", "Missing aggregate field."))
+    return errors
+
+
+def MacroContextContract(payload: dict[str, Any]) -> list[ContractError]:
+    errors: list[ContractError] = []
+    for key in ["status", "missing_series", "as_of", "flags"]:
+        if key not in payload:
+            errors.append(ContractError(key, "Missing required field."))
+    return errors
+
+
+def EnrichmentContract(payload: dict[str, Any]) -> list[ContractError]:
+    errors: list[ContractError] = []
+    for key in ["status", "as_of", "provenance", "payload"]:
+        if key not in payload:
+            errors.append(ContractError(key, "Missing required field."))
+    return errors
+
+
 PRICE_REQUIRED = ["date", "close"]
 
 
@@ -72,4 +181,3 @@ def validate_price_frame(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
 
 def normalize_date_series(values: pd.Series) -> pd.Series:
     return pd.to_datetime(values, errors="coerce").dt.date
-

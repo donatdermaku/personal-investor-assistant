@@ -55,10 +55,10 @@ export default function RiskPage() {
         );
     }
 
-    const { risk, summary, performance, definitions, risk_contribution, rolling_metrics, manifest } = state;
+    const { risk, summary, performance, definitions, risk_contribution, rolling_metrics, manifest, coverage_summary } = state;
     const currentDrawdown = performance.length > 0 ? performance[performance.length - 1]?.drawdown ?? null : null;
     const topRisk = risk_contribution?.contributions?.slice(0, 6) ?? [];
-    const coverage = coverageStatus(manifest);
+    const coverage = coverageStatus(manifest, coverage_summary ?? null);
     const asOf = summary.last_date || manifest.timestamp;
 
     return (
@@ -107,6 +107,7 @@ export default function RiskPage() {
                     subtext="Daily"
                     coverageStatus={risk.var_95 !== null ? coverage : "insufficient"}
                     asOf={asOf}
+                    reasonCodes={coverage_summary?.reason_codes}
                 />
                 <MetricCard
                     label="CVaR (95%)"
@@ -115,6 +116,7 @@ export default function RiskPage() {
                     subtext="Daily"
                     coverageStatus={risk.cvar_95 !== null ? coverage : "insufficient"}
                     asOf={asOf}
+                    reasonCodes={coverage_summary?.reason_codes}
                 />
                 <MetricCard
                     label="Volatility"
@@ -122,6 +124,7 @@ export default function RiskPage() {
                     tooltip={definitionTooltip(definitions, "rolling_volatility")}
                     coverageStatus={risk.volatility !== null ? coverage : "insufficient"}
                     asOf={asOf}
+                    reasonCodes={coverage_summary?.reason_codes}
                 />
                 <MetricCard
                     label="Sharpe Ratio"
@@ -129,6 +132,7 @@ export default function RiskPage() {
                     tooltip={definitionTooltip(definitions, "sharpe_rolling")}
                     coverageStatus={risk.sharpe !== null ? coverage : "insufficient"}
                     asOf={asOf}
+                    reasonCodes={coverage_summary?.reason_codes}
                 />
             </div>
 

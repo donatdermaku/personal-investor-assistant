@@ -13,6 +13,10 @@ This document defines the market data contract, sources, and caching rules for N
 - Dividends: `date`, `amount`
 - Splits: `date`, `ratio`
 
+### Coverage Summary
+Coverage is exported as `coverage_summary.json` and returned by the API to explain
+data sufficiency for KPIs. See `docs/COVERAGE_SEMANTICS.md` for structure and rules.
+
 ## Sources
 
 Tier 1:
@@ -44,4 +48,3 @@ FRED:
 Trade dates are aligned to the nearest prior trading day if a trade falls on a non-trading day.
 If a trade date is missing in market data and no prior date exists, an error is raised:
 `MARKET_DATA_MISSING_DATES`
-

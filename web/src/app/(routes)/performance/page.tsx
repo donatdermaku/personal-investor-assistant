@@ -66,6 +66,7 @@ export default function PerformancePage() {
         macro,
         macro_regimes,
         manifest,
+        coverage_summary,
     } = state;
     const performanceSeries = performance as Array<{ date: string; value: number | null; benchmark?: number | null; drawdown?: number | null }>;
     const hasBenchmark = performanceSeries.some((point) => point.benchmark != null);
@@ -79,7 +80,7 @@ export default function PerformancePage() {
     const latestMacro = macroFlags.length > 0 ? macroFlags[macroFlags.length - 1] : null;
     const hasAttribution = attribution_summary && typeof attribution_summary.allocation === "number";
     const hasBenchmarkComparison = benchmark_comparison && typeof benchmark_comparison.tracking_error === "number";
-    const coverage = coverageStatus(manifest);
+    const coverage = coverageStatus(manifest, coverage_summary ?? null);
     const asOf = summary.last_date || manifest.timestamp;
 
     return (
@@ -127,6 +128,7 @@ export default function PerformancePage() {
                     tooltip={definitionTooltip(definitions, "twr")}
                     coverageStatus={summary.twr !== null ? coverage : "insufficient"}
                     asOf={asOf}
+                    reasonCodes={coverage_summary?.reason_codes}
                 />
                 <MetricCard
                     label="MWR (Personal)"
@@ -134,6 +136,7 @@ export default function PerformancePage() {
                     tooltip={definitionTooltip(definitions, "mwr")}
                     coverageStatus={summary.mwr !== null ? coverage : "insufficient"}
                     asOf={asOf}
+                    reasonCodes={coverage_summary?.reason_codes}
                 />
                 <MetricCard
                     label="Total Return"
@@ -141,6 +144,7 @@ export default function PerformancePage() {
                     subtext="From first valuation"
                     coverageStatus={totalReturn !== null ? coverage : "insufficient"}
                     asOf={asOf}
+                    reasonCodes={coverage_summary?.reason_codes}
                 />
             </div>
 
@@ -276,6 +280,7 @@ export default function PerformancePage() {
                                 tooltip={definitionTooltip(definitions, "allocation_effect")}
                                 coverageStatus={attribution_summary.allocation !== null ? coverage : "insufficient"}
                                 asOf={asOf}
+                                reasonCodes={coverage_summary?.reason_codes}
                             />
                             <MetricCard
                                 label="Selection Effect"
@@ -283,6 +288,7 @@ export default function PerformancePage() {
                                 tooltip={definitionTooltip(definitions, "selection_effect")}
                                 coverageStatus={attribution_summary.selection !== null ? coverage : "insufficient"}
                                 asOf={asOf}
+                                reasonCodes={coverage_summary?.reason_codes}
                             />
                             <MetricCard
                                 label="Interaction Effect"
@@ -290,6 +296,7 @@ export default function PerformancePage() {
                                 tooltip={definitionTooltip(definitions, "interaction_effect")}
                                 coverageStatus={attribution_summary.interaction !== null ? coverage : "insufficient"}
                                 asOf={asOf}
+                                reasonCodes={coverage_summary?.reason_codes}
                             />
                         </div>
                         {attribution_timeseries && attribution_timeseries.length > 0 ? (
@@ -395,6 +402,7 @@ export default function PerformancePage() {
                                 tooltip={definitionTooltip(definitions, "tracking_error")}
                                 coverageStatus={benchmark_comparison.tracking_error != null ? coverage : "insufficient"}
                                 asOf={asOf}
+                                reasonCodes={coverage_summary?.reason_codes}
                             />
                             <MetricCard
                                 label="Correlation"
@@ -406,6 +414,7 @@ export default function PerformancePage() {
                                 tooltip={definitionTooltip(definitions, "benchmark_correlation")}
                                 coverageStatus={benchmark_comparison.correlation != null ? coverage : "insufficient"}
                                 asOf={asOf}
+                                reasonCodes={coverage_summary?.reason_codes}
                             />
                             <MetricCard
                                 label="Benchmark Volatility"
@@ -417,6 +426,7 @@ export default function PerformancePage() {
                                 tooltip={definitionTooltip(definitions, "benchmark_volatility")}
                                 coverageStatus={benchmark_comparison.benchmark_volatility != null ? coverage : "insufficient"}
                                 asOf={asOf}
+                                reasonCodes={coverage_summary?.reason_codes}
                             />
                         </div>
                         {benchmark_timeseries && benchmark_timeseries.length > 0 ? (

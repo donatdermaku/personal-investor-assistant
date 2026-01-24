@@ -8,6 +8,7 @@ import numpy as np
 
 from src.app_state import AppState
 from src.manifest import create_manifest, RunManifest, compute_input_hash
+from src.coverage import build_coverage_summary
 from src.utils_io import ROOT
 from src.portfolio import load_portfolio, PortfolioResult
 from src.streamlit_data import (
@@ -98,12 +99,21 @@ def compute_app_state(
         input_str += str(pd.util.hash_pandas_object(snapshot_df).sum())
     input_hash = compute_input_hash(input_str)
     
+    coverage_summary = build_coverage_summary(
+        prices,
+        required_tickers=watch_tickers,
+        benchmark_ticker=bench_ticker,
+        benchmark_prices=bench_prices,
+        as_of=portfolio_result.daily_values.index.max().strftime("%Y-%m-%d") if not portfolio_result.daily_values.empty else None,
+    )
+
     manifest = create_manifest(
         run_id=run_id,
         input_hash=input_hash,
         config_hash="default", # Placeholder
         market_data_hash="duckdb_latest", # Placeholder
-        portfolio_result=portfolio_result
+        portfolio_result=portfolio_result,
+        coverage_summary=coverage_summary,
     )
 
     # 9. Persist latest holdings snapshot (if available)
@@ -156,6 +166,7 @@ def save_artifacts(app_state: AppState):
         export_performance_csv, 
         export_monthly_returns_csv, 
         save_html_report,
+        export_coverage_summary_json,
         export_attribution_summary_json,
         export_attribution_timeseries_csv,
         export_risk_contribution_csv,
@@ -184,6 +195,10 @@ def save_artifacts(app_state: AppState):
     json_path = base_path / "summary.json"
     export_summary_json(json_path, app_state.portfolio, manifest)
     repo.add_artifact(run_id, "summary_json", str(json_path))
+
+    coverage_path = base_path / "coverage_summary.json"
+    export_coverage_summary_json(coverage_path, manifest.coverage_summary)
+    repo.add_artifact(run_id, "coverage_summary_json", str(coverage_path))
     
     # HTML Report
     html_path = base_path / "report.html"
