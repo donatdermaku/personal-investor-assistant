@@ -120,6 +120,13 @@ class LocalRepoBackend:
                 run.completed_at = datetime.utcnow()
                 run.manifest_json = manifest_json
 
+    def update_run_failed(self, run_id: str, error_code: str | None = None, message: str | None = None):
+        with session_scope() as session:
+            run = session.query(Run).filter_by(id=run_id).first()
+            if run:
+                run.status = "failed"
+                run.completed_at = datetime.utcnow()
+
     def add_artifact(self, run_id: str, artifact_type: str, path: str):
         with session_scope() as session:
             artifact = Artifact(run_id=run_id, type=artifact_type, path=path)
@@ -214,6 +221,10 @@ def update_run_complete(run_id: str, manifest_json: str, run_type: str | None = 
     return _backend.update_run_complete(run_id, manifest_json, run_type)
 
 
+def update_run_failed(run_id: str, error_code: str | None = None, message: str | None = None):
+    return _backend.update_run_failed(run_id, error_code, message)
+
+
 def add_artifact(run_id: str, artifact_type: str, path: str):
     return _backend.add_artifact(run_id, artifact_type, path)
 
@@ -230,3 +241,6 @@ class Repo:
 
     def get_artifact_bytes(self, run_id: str, filename: str):
         return _backend.get_artifact_bytes(run_id, filename)
+
+    def update_run_failed(self, run_id: str, error_code: str | None = None, message: str | None = None):
+        return _backend.update_run_failed(run_id, error_code, message)

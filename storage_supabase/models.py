@@ -16,6 +16,7 @@ class Portfolio(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     runs = relationship("Run", back_populates="portfolio")
+    snapshots = relationship("HoldingsSnapshot", back_populates="portfolio")
 
 
 class Transaction(Base):
@@ -32,6 +33,19 @@ class Transaction(Base):
     fees = Column(Float, nullable=True)
     currency = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class HoldingsSnapshot(Base):
+    __tablename__ = "holdings_snapshots"
+
+    id = Column(Integer, primary_key=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), index=True, nullable=False)
+    as_of_date = Column(DateTime, nullable=False)
+    ticker = Column(String, nullable=False)
+    shares = Column(Float, nullable=False, default=0.0)
+    cost_basis = Column(Float, nullable=True)
+
+    portfolio = relationship("Portfolio", back_populates="snapshots")
 
 
 class Run(Base):
@@ -67,3 +81,4 @@ class RunArtifact(Base):
 Index("idx_runs_portfolio_created", Run.portfolio_id, Run.created_at.desc())
 Index("idx_transactions_portfolio_date", Transaction.portfolio_id, Transaction.date)
 Index("idx_run_artifacts_run_key", RunArtifact.run_id, RunArtifact.artifact_key)
+Index("idx_holdings_snapshots_portfolio_date", HoldingsSnapshot.portfolio_id, HoldingsSnapshot.as_of_date)

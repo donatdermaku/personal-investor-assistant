@@ -9,6 +9,7 @@ import math
 import io
 from pathlib import Path
 import numpy as np
+import uuid
 
 import os
 
@@ -128,15 +129,55 @@ def _load_summary(run_id: str) -> dict:
     if summary_path.exists():
         return _load_json(summary_path)
     summary_path = EXPORTS_DIR / run_id / "summary.json"
+    if summary_path.exists():
+        return _load_json(summary_path)
+    if use_supabase():
+        return _load_supabase_json(run_id, "summary.json")
     return _load_json(summary_path)
 
 def _load_performance(run_id: str) -> list[dict]:
     perf_path = EXPORTS_DIR / run_id / "performance.csv"
+    if perf_path.exists():
+        return _load_csv(perf_path)
+    if use_supabase():
+        return _load_supabase_csv(run_id, "performance.csv")
     return _load_csv(perf_path)
 
 def _load_monthly_returns(run_id: str) -> list[dict]:
     returns_path = EXPORTS_DIR / run_id / "monthly_returns.csv"
+    if returns_path.exists():
+        return _load_csv(returns_path)
+    if use_supabase():
+        return _load_supabase_csv(run_id, "monthly_returns.csv")
     return _load_csv(returns_path)
+
+def _load_supabase_json(run_id: str, filename: str) -> dict:
+    try:
+        data, _content_type = repo.get_artifact_bytes(run_id, filename)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    try:
+        return json.loads(data.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to load artifact: {exc}")
+
+def _load_supabase_csv(run_id: str, filename: str) -> list[dict]:
+    try:
+        data, _content_type = repo.get_artifact_bytes(run_id, filename)
+    except FileNotFoundError:
+        return []
+    text = data.decode("utf-8")
+    reader = csv.DictReader(io.StringIO(text))
+    rows: list[dict] = []
+    for row in reader:
+        cleaned = {}
+        for key, value in row.items():
+            if key == "date":
+                cleaned[key] = value
+            else:
+                cleaned[key] = _safe_float(value)
+        rows.append(cleaned)
+    return rows
 
 def _compute_risk_metrics(performance_rows: list[dict]) -> dict:
     returns = [row.get("daily_return") for row in performance_rows if row.get("daily_return") is not None]
@@ -158,6 +199,17 @@ def _compute_risk_metrics(performance_rows: list[dict]) -> dict:
         "cvar_95": cvar_95,
         "volatility": std * annualized,
         "sharpe": (mean / std) * annualized,
+    }
+
+def _empty_summary(message: str) -> dict:
+    return {
+        "source": "",
+        "twr": None,
+        "mwr": None,
+        "final_value": None,
+        "last_date": None,
+        "max_drawdown": None,
+        "errors": [message],
     }
 
 def _load_portfolio(portfolio_id: int) -> dict:
@@ -258,12 +310,14 @@ async def create_run(
     Create a new portfolio run from an uploaded trades CSV or demo data.
     """
     resolved_portfolio_id = _resolve_portfolio_id(portfolio_id)
+    run_id = str(uuid.uuid4())
     run_type_clean = (run_type or "").strip().lower()
 
     if run_type_clean == "demo":
         try:
             app_state = compute_app_state(
                 portfolio_id=resolved_portfolio_id,
+                run_id=run_id,
                 save_run=True,
                 source_override="Demo",
                 uploads_active=False,
@@ -277,6 +331,7 @@ async def create_run(
                 "timestamp": manifest.timestamp if manifest else None,
             }
         except Exception as exc:
+            repo.update_run_failed(run_id, "RUN_COMPUTE_FAILED", str(exc))
             raise HTTPException(
                 status_code=500,
                 detail={
@@ -358,6 +413,7 @@ async def create_run(
     try:
         app_state = compute_app_state(
             portfolio_id=resolved_portfolio_id,
+            run_id=run_id,
             save_run=True,
             source_override="Ledger",
             uploads_active=True,
@@ -371,6 +427,7 @@ async def create_run(
             "timestamp": manifest.timestamp if manifest else None,
         }
     except Exception as exc:
+        repo.update_run_failed(run_id, "RUN_COMPUTE_FAILED", str(exc))
         raise HTTPException(
             status_code=500,
             detail={
@@ -391,7 +448,7 @@ async def create_run_alias(
 
 @app.get("/runs")
 def list_runs():
-    runs = repo.list_runs()
+    runs = [run for run in repo.list_runs() if run.status == "completed"]
     return {
         "runs": [
             {
@@ -453,9 +510,18 @@ def get_run_summary(run_id: str):
 def get_run(run_id: str):
     _validate_run_id(run_id)
     manifest = _load_manifest(run_id)
-    summary = _load_summary(run_id)
-    performance = _load_performance(run_id)
-    monthly_returns = _load_monthly_returns(run_id)
+    try:
+        summary = _load_summary(run_id)
+    except HTTPException:
+        summary = _empty_summary("Summary artifact not available.")
+    try:
+        performance = _load_performance(run_id)
+    except HTTPException:
+        performance = []
+    try:
+        monthly_returns = _load_monthly_returns(run_id)
+    except HTTPException:
+        monthly_returns = []
     risk = _compute_risk_metrics(performance)
     equity_curve = [
         {"date": row.get("date"), "value": row.get("value")}

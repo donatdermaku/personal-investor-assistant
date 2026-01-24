@@ -26,6 +26,7 @@ EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 def compute_app_state(
     portfolio_id: int | None = None,
+    run_id: str | None = None,
     save_run: bool = True,
     source_override: str | None = None,
     uploads_active: bool = True,
@@ -49,7 +50,7 @@ def compute_app_state(
     status_str, market_state = market_status()
     
     # 3. Initialize Run (if saving)
-    run_id = str(uuid.uuid4())
+    run_id = run_id or str(uuid.uuid4())
     if save_run:
         # We don't have hash yet, will update later
         repo.create_run(run_id, portfolio_id, None, None, run_type=run_type)
@@ -104,11 +105,14 @@ def compute_app_state(
         portfolio_result=portfolio_result
     )
 
-    # 9. Update Run in DB
+    # 9. Persist latest holdings snapshot (if available)
+    _persist_snapshot_from_result(portfolio_id, portfolio_result)
+
+    # 10. Update Run in DB
     if save_run:
         repo.update_run_complete(run_id, manifest.to_json(), run_type=run_type)
     
-    # 10. Assemble AppState
+    # 11. Assemble AppState
     app_state = AppState(
         run_manifest=manifest,
         portfolio=portfolio_result,
@@ -123,6 +127,23 @@ def compute_app_state(
     )
     
     return app_state
+
+
+def _persist_snapshot_from_result(portfolio_id: int, result: PortfolioResult) -> None:
+    if result.holdings_daily.empty:
+        return
+    snapshot = result.holdings_daily.copy()
+    if "date" in snapshot.columns:
+        latest_date = snapshot["date"].max()
+        snapshot = snapshot[snapshot["date"] == latest_date]
+    if "quantity" not in snapshot.columns and "shares" in snapshot.columns:
+        snapshot = snapshot.rename(columns={"shares": "quantity"})
+    snapshot = snapshot[["ticker", "quantity"]].copy()
+    snapshot["quantity"] = pd.to_numeric(snapshot["quantity"], errors="coerce").fillna(0.0)
+    snapshot = snapshot[snapshot["quantity"] > 0]
+    if snapshot.empty:
+        return
+    data_manager.save_portfolio_inputs(portfolio_id, trades=None, snapshot=snapshot)
 
 def save_artifacts(app_state: AppState):
     """

@@ -76,11 +76,36 @@ class SupabaseRepo:
                 for t in trades
             ]
 
-    def replace_snapshot(self, _portfolio_id: int, _snapshot_dicts: list[dict]):
-        return None
+    def replace_snapshot(self, portfolio_id: int, snapshot_dicts: list[dict]):
+        with session_scope() as session:
+            session.query(models.HoldingsSnapshot).filter_by(portfolio_id=portfolio_id).delete()
+            for s_data in snapshot_dicts:
+                snap = models.HoldingsSnapshot(
+                    portfolio_id=portfolio_id,
+                    as_of_date=s_data.get("as_of_date"),
+                    ticker=s_data.get("ticker"),
+                    shares=s_data.get("shares") or 0.0,
+                    cost_basis=s_data.get("cost_basis"),
+                )
+                session.add(snap)
 
-    def get_latest_snapshot(self, _portfolio_id: int) -> list[dict]:
-        return []
+    def get_latest_snapshot(self, portfolio_id: int) -> list[dict]:
+        with session_scope() as session:
+            snaps = (
+                session.query(models.HoldingsSnapshot)
+                .filter_by(portfolio_id=portfolio_id)
+                .order_by(models.HoldingsSnapshot.as_of_date.desc())
+                .all()
+            )
+            return [
+                {
+                    "as_of_date": s.as_of_date,
+                    "ticker": s.ticker,
+                    "shares": s.shares,
+                    "cost_basis": s.cost_basis,
+                }
+                for s in snaps
+            ]
 
     # Runs
     def create_run(self, run_id: str, portfolio_id: int, input_hash: str | None, config_hash: str | None, run_type: str | None = None):
@@ -103,6 +128,15 @@ class SupabaseRepo:
                 run.manifest_json = manifest_json
                 if run_type:
                     run.run_type = run_type
+
+    def update_run_failed(self, run_id: str, error_code: str | None = None, message: str | None = None):
+        with session_scope() as session:
+            run = session.query(models.Run).filter_by(id=run_id).first()
+            if run:
+                run.status = "failed"
+                run.completed_at = datetime.utcnow()
+                run.error_code = error_code
+                run.message = message
 
     def get_latest_run(self):
         with session_scope() as session:
