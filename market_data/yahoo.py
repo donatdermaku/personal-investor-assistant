@@ -15,8 +15,14 @@ def _normalize_prices(raw: pd.DataFrame) -> pd.DataFrame:
     df = raw.copy()
     if "Date" not in df.columns:
         df = df.reset_index()
-    cols = {c: str(c).strip() for c in df.columns}
-    df = df.rename(columns=cols)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = [
+            " ".join(str(part) for part in col if part not in ("", None)).strip()
+            for col in df.columns
+        ]
+    else:
+        cols = {c: str(c).strip() for c in df.columns}
+        df = df.rename(columns=cols)
     if "Date" in df.columns:
         df = df.rename(columns={"Date": "date"})
     df.columns = [c.lower() for c in df.columns]
@@ -80,4 +86,3 @@ def fetch_dividends_and_splits(
     splits_df = splits_df[(splits_df["date"] >= date.fromisoformat(start)) & (splits_df["date"] <= date.fromisoformat(end))]
 
     return div_df, splits_df
-
