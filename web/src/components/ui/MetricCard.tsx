@@ -32,12 +32,13 @@ export function MetricCard({
     hideWhenInsufficient,
     reasonCodes,
 }: MetricCardProps) {
-    if (coverageStatus === "insufficient" && hideWhenInsufficient) {
+    const shouldHide = coverageStatus === "insufficient";
+    if (shouldHide && hideWhenInsufficient) {
         return null;
     }
 
     const safeValue = value === null || value === undefined ? "--" : value;
-    const showValue = coverageStatus === "insufficient" ? "--" : safeValue;
+    const showValue = shouldHide ? "--" : safeValue;
     const asOfLabel = formatAsOf(asOf);
     const badgeLabel = coverageStatus === "full"
         ? "Full coverage"
@@ -55,7 +56,7 @@ export function MetricCard({
                 : "border-[#E8F0FF] bg-[#E8F0FF] text-[#1E40AF]";
 
     const reasonLabel =
-        coverageStatus === "insufficient" && reasonCodes && reasonCodes.length > 0
+        shouldHide && reasonCodes && reasonCodes.length > 0
             ? `Reason: ${reasonCodes.join(", ")}`
             : null;
 
@@ -90,4 +91,10 @@ export function MetricCard({
             )}
         </div>
     );
+}
+
+export function shouldHideMetricValue(
+    coverageStatus?: "full" | "partial" | "insufficient" | "unknown"
+): boolean {
+    return coverageStatus === "insufficient";
 }

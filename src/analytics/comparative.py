@@ -18,7 +18,10 @@ def compute_benchmark_comparison(
     benchmark_prices: pd.DataFrame,
 ) -> BenchmarkComparisonOutput:
     if portfolio_returns.empty or benchmark_prices.empty:
-        return BenchmarkComparisonOutput(summary={}, timeseries=pd.DataFrame())
+        return BenchmarkComparisonOutput(
+            summary={"status": "unavailable", "reason": "MISSING_BENCHMARK"},
+            timeseries=pd.DataFrame(),
+        )
 
     bench = benchmark_prices.copy()
     bench["date"] = pd.to_datetime(bench["date"], errors="coerce")
@@ -37,7 +40,10 @@ def compute_benchmark_comparison(
         join="inner",
     )
     if aligned.empty:
-        return BenchmarkComparisonOutput(summary={}, timeseries=pd.DataFrame())
+        return BenchmarkComparisonOutput(
+            summary={"status": "unavailable", "reason": "NO_OVERLAP"},
+            timeseries=pd.DataFrame(),
+        )
 
     active = aligned["portfolio"] - aligned["benchmark"]
     tracking_error = float(active.std(ddof=1) * np.sqrt(252)) if active.size > 1 else None
@@ -70,6 +76,7 @@ def compute_benchmark_comparison(
         "benchmark_volatility": vol_b,
         "correlation": corr,
         "tracking_error_implied": implied_te,
+        "status": "ok",
     }
     return BenchmarkComparisonOutput(summary=summary, timeseries=timeseries)
 

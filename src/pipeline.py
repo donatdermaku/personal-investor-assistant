@@ -183,12 +183,14 @@ def save_artifacts(app_state: AppState):
         export_benchmark_timeseries_csv,
         export_risk_free_series_csv,
         export_corporate_actions_csv,
+        export_data_contracts_json,
     )
     from src.analytics.attribution import compute_attribution
     from src.analytics.risk import compute_risk_contributions
     from src.analytics.rolling import compute_rolling_metrics
     from src.analytics.comparative import compute_benchmark_comparison
     from src.analytics.macro import compute_macro_regime_payload, load_cached_fred_series
+    from market_data.contracts import contract_registry
     
     manifest = app_state.run_manifest
     if not manifest:
@@ -210,6 +212,10 @@ def save_artifacts(app_state: AppState):
     risk_free_path = base_path / "risk_free_series.csv"
     export_risk_free_series_csv(risk_free_path, app_state.risk_free.series)
     repo.add_artifact(run_id, "risk_free_series_csv", str(risk_free_path))
+
+    contracts_path = base_path / "data_contracts.json"
+    export_data_contracts_json(contracts_path, contract_registry())
+    repo.add_artifact(run_id, "data_contracts_json", str(contracts_path))
 
     if not app_state.prices.empty and {"dividend", "split_ratio"}.issubset(app_state.prices.columns):
         events = app_state.prices.copy()

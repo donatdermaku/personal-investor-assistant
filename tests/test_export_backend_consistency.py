@@ -169,6 +169,8 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
         }
     )
     corporate_actions.to_csv(export_dir / "corporate_actions_events.csv", index=False)
+    data_contracts = {"PriceSeriesContract": {"version": "1.0"}}
+    (export_dir / "data_contracts.json").write_text(json.dumps(data_contracts), encoding="utf-8")
 
     original_exports = api_server.EXPORTS_DIR
     api_server.EXPORTS_DIR = tmp_path
@@ -185,6 +187,7 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
         coverage_summary = api_server._load_coverage_summary(run_id)
         risk_free = api_server._load_risk_free_series(run_id)
         corporate_actions_loaded = api_server._load_corporate_actions(run_id)
+        data_contracts_loaded = api_server._load_data_contracts(run_id)
         bench_summary = api_server._load_benchmark_comparison(run_id)
         bench_timeseries = api_server._load_benchmark_timeseries(run_id)
     finally:
@@ -227,5 +230,6 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
     assert coverage_summary.get("status") == "sufficient"
     assert len(risk_free) == len(risk_free_series)
     assert len(corporate_actions_loaded) == len(corporate_actions)
+    assert data_contracts_loaded.get("PriceSeriesContract", {}).get("version") == "1.0"
     assert_close(bench_summary.get("tracking_error"), comparison.summary.get("tracking_error"), tol=1e-6)
     assert len(bench_timeseries) == len(comparison.timeseries)

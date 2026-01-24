@@ -163,6 +163,17 @@ def EnrichmentContract(payload: dict[str, Any]) -> list[ContractError]:
     return errors
 
 
+def contract_registry() -> dict[str, dict[str, str]]:
+    return {
+        "PriceSeriesContract": {"version": "1.0"},
+        "RiskFreeSeriesContract": {"version": "1.0"},
+        "BenchmarkSeriesContract": {"version": "1.0"},
+        "CoverageSummaryContract": {"version": "1.0"},
+        "MacroContextContract": {"version": "1.0"},
+        "EnrichmentContract": {"version": "1.0"},
+    }
+
+
 PRICE_REQUIRED = ["date", "close"]
 
 

@@ -169,6 +169,12 @@ export interface CorporateActionEvent {
     split_ratio?: number | null;
 }
 
+export interface DataContractsPayload {
+    [key: string]: {
+        version: string;
+    };
+}
+
 export interface CoverageSummary {
     total: number;
     covered: number;
@@ -248,6 +254,7 @@ export interface NexusState {
     benchmark_timeseries?: BenchmarkTimeseriesPoint[];
     risk_free_series?: RiskFreeSeriesPoint[];
     corporate_actions?: CorporateActionEvent[];
+    data_contracts?: DataContractsPayload | null;
     portfolio: PortfolioMeta | null;
     definitions?: DefinitionsRegistry;
 }
@@ -270,6 +277,7 @@ export interface RunMetricsResponse {
     benchmark_timeseries?: BenchmarkTimeseriesPoint[];
     risk_free_series?: RiskFreeSeriesPoint[];
     corporate_actions?: CorporateActionEvent[];
+    data_contracts?: DataContractsPayload | null;
 }
 
 export interface PortfolioResponse {

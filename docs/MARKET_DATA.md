@@ -49,6 +49,7 @@ FRED:
 - `coverage_summary.json` (coverage semantics)
 - `risk_free_series.csv` (DTB3 aligned to portfolio calendar)
 - `corporate_actions_events.csv` (dividends and splits)
+- `data_contracts.json` (contract versions for audit)
 
 ## Coverage Alignment
 
