@@ -204,6 +204,11 @@ def export_corporate_actions_csv(path: Path, events: pd.DataFrame) -> None:
     events.to_csv(path, index=False)
 
 
+def export_data_contracts_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, default=_json_default), encoding="utf-8")
+
+
 def generate_html_report(app_state) -> str:
     """
     Generate a standalone HTML report from the AppState.

@@ -220,6 +220,14 @@ def _load_corporate_actions(run_id: str) -> list[dict]:
         return _load_supabase_csv(run_id, "corporate_actions_events.csv")
     return []
 
+def _load_data_contracts(run_id: str) -> dict:
+    path = EXPORTS_DIR / run_id / "data_contracts.json"
+    if path.exists():
+        return _load_json(path)
+    if use_supabase():
+        return _load_supabase_json(run_id, "data_contracts.json")
+    return {}
+
 
 def _load_rolling_metrics(run_id: str) -> list[dict]:
     path = EXPORTS_DIR / run_id / "rolling_metrics.csv"
@@ -671,6 +679,7 @@ def get_run(run_id: str):
     coverage_summary = _load_coverage_summary(run_id)
     risk_free_series = _load_risk_free_series(run_id)
     corporate_actions = _load_corporate_actions(run_id)
+    data_contracts = _load_data_contracts(run_id)
     risk = _compute_risk_metrics(performance, risk_free_series)
     equity_curve = [
         {"date": row.get("date"), "value": row.get("value")}
@@ -683,6 +692,7 @@ def get_run(run_id: str):
         "coverage_summary": coverage_summary,
         "risk_free_series": risk_free_series,
         "corporate_actions": corporate_actions,
+        "data_contracts": data_contracts,
         "equity_curve": equity_curve,
         "performance": performance,
         "monthly_returns": monthly_returns,
@@ -739,6 +749,7 @@ def export_artifact(run_id: str, artifact: str):
         "coverage-summary": "coverage_summary.json",
         "risk-free-series": "risk_free_series.csv",
         "corporate-actions": "corporate_actions_events.csv",
+        "data-contracts": "data_contracts.json",
         "performance-csv": "performance.csv",
         "monthly-returns-csv": "monthly_returns.csv",
         "attribution-summary": "attribution_summary.json",
