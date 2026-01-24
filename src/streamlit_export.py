@@ -188,6 +188,22 @@ def export_coverage_summary_json(path: Path, summary: dict) -> None:
     path.write_text(json.dumps(summary, indent=2, default=_json_default), encoding="utf-8")
 
 
+def export_risk_free_series_csv(path: Path, series: pd.DataFrame) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if series.empty:
+        pd.DataFrame(columns=["date", "rate", "rf_daily_return"]).to_csv(path, index=False)
+        return
+    series.to_csv(path, index=False)
+
+
+def export_corporate_actions_csv(path: Path, events: pd.DataFrame) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if events.empty:
+        pd.DataFrame(columns=["date", "ticker", "dividend", "split_ratio"]).to_csv(path, index=False)
+        return
+    events.to_csv(path, index=False)
+
+
 def generate_html_report(app_state) -> str:
     """
     Generate a standalone HTML report from the AppState.

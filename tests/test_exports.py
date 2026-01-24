@@ -1,10 +1,12 @@
 import pytest
+import pandas as pd
 from unittest.mock import MagicMock
 from datetime import datetime
 from src.streamlit_data import CoverageMeta
 from src.app_state import AppState
 from src.manifest import RunManifest
 from src.streamlit_export import generate_html_report
+from src.risk_free import RiskFreeSeries
 
 @pytest.fixture
 def mock_app_state():
@@ -47,6 +49,7 @@ def mock_app_state():
         fundamentals_meta=meta,
         scores_meta=meta,
         benchmark_prices=MagicMock(),
+        risk_free=RiskFreeSeries(series=pd.DataFrame(), status="unavailable", reason_codes=["MISSING_DTB3"]),
         market_state="Open"
     )
 

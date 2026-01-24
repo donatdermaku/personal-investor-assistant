@@ -21,6 +21,7 @@ from src.streamlit_export import (
     export_macro_regime_summary_json,
     export_monthly_returns_csv,
     export_performance_csv,
+    export_risk_free_series_csv,
     export_risk_contribution_csv,
     export_risk_contribution_json,
     export_rolling_metrics_csv,
@@ -151,6 +152,23 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
     comparison = compute_benchmark_comparison(result.daily_returns, result.daily_values, benchmark_prices)
     export_benchmark_comparison_json(export_dir / "benchmark_comparison.json", comparison.summary)
     export_benchmark_timeseries_csv(export_dir / "benchmark_timeseries.csv", comparison.timeseries)
+    risk_free_series = pd.DataFrame(
+        {
+            "date": ["2024-01-31", "2024-02-01"],
+            "rate": [0.05, 0.05],
+            "rf_daily_return": [0.0002, 0.0002],
+        }
+    )
+    export_risk_free_series_csv(export_dir / "risk_free_series.csv", risk_free_series)
+    corporate_actions = pd.DataFrame(
+        {
+            "date": ["2024-02-01"],
+            "ticker": ["AAA"],
+            "dividend": [0.5],
+            "split_ratio": [1.0],
+        }
+    )
+    corporate_actions.to_csv(export_dir / "corporate_actions_events.csv", index=False)
 
     original_exports = api_server.EXPORTS_DIR
     api_server.EXPORTS_DIR = tmp_path
@@ -165,6 +183,8 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
         macro = api_server._load_macro_regimes(run_id)
         macro_summary = api_server._load_macro_summary(run_id)
         coverage_summary = api_server._load_coverage_summary(run_id)
+        risk_free = api_server._load_risk_free_series(run_id)
+        corporate_actions_loaded = api_server._load_corporate_actions(run_id)
         bench_summary = api_server._load_benchmark_comparison(run_id)
         bench_timeseries = api_server._load_benchmark_timeseries(run_id)
     finally:
@@ -205,5 +225,7 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
     assert len(macro) == len(macro_flags)
     assert macro_summary.get("status") == "ok"
     assert coverage_summary.get("status") == "sufficient"
+    assert len(risk_free) == len(risk_free_series)
+    assert len(corporate_actions_loaded) == len(corporate_actions)
     assert_close(bench_summary.get("tracking_error"), comparison.summary.get("tracking_error"), tol=1e-6)
     assert len(bench_timeseries) == len(comparison.timeseries)

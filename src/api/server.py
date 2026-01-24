@@ -204,6 +204,22 @@ def _load_coverage_summary(run_id: str) -> dict:
         return _load_supabase_json(run_id, "coverage_summary.json")
     return {}
 
+def _load_risk_free_series(run_id: str) -> list[dict]:
+    path = EXPORTS_DIR / run_id / "risk_free_series.csv"
+    if path.exists():
+        return _load_csv(path)
+    if use_supabase():
+        return _load_supabase_csv(run_id, "risk_free_series.csv")
+    return []
+
+def _load_corporate_actions(run_id: str) -> list[dict]:
+    path = EXPORTS_DIR / run_id / "corporate_actions_events.csv"
+    if path.exists():
+        return _load_csv(path)
+    if use_supabase():
+        return _load_supabase_csv(run_id, "corporate_actions_events.csv")
+    return []
+
 
 def _load_rolling_metrics(run_id: str) -> list[dict]:
     path = EXPORTS_DIR / run_id / "rolling_metrics.csv"
@@ -259,7 +275,7 @@ def _load_supabase_csv(run_id: str, filename: str) -> list[dict]:
         rows.append(cleaned)
     return rows
 
-def _compute_risk_metrics(performance_rows: list[dict]) -> dict:
+def _compute_risk_metrics(performance_rows: list[dict], risk_free_rows: list[dict] | None = None) -> dict:
     returns = [row.get("daily_return") for row in performance_rows if row.get("daily_return") is not None]
     if not returns:
         return {"var_95": None, "cvar_95": None, "volatility": None, "sharpe": None}
@@ -273,6 +289,22 @@ def _compute_risk_metrics(performance_rows: list[dict]) -> dict:
     if std == 0:
         return {"var_95": var_95, "cvar_95": cvar_95, "volatility": None, "sharpe": None}
     mean = float(np.mean(arr))
+    if risk_free_rows:
+        perf_df = pd.DataFrame(performance_rows)
+        rf_df = pd.DataFrame(risk_free_rows)
+        if "date" in perf_df.columns and "date" in rf_df.columns:
+            perf_df["date"] = pd.to_datetime(perf_df["date"], errors="coerce")
+            rf_df["date"] = pd.to_datetime(rf_df["date"], errors="coerce")
+            perf_df = perf_df.dropna(subset=["date", "daily_return"])
+            rf_df = rf_df.dropna(subset=["date", "rf_daily_return"])
+            aligned = perf_df.set_index("date")[["daily_return"]].join(
+                rf_df.set_index("date")[["rf_daily_return"]],
+                how="inner",
+            )
+            if not aligned.empty:
+                excess = aligned["daily_return"] - aligned["rf_daily_return"]
+                mean = float(excess.mean())
+                std = float(excess.std(ddof=1)) if excess.size > 1 else std
     annualized = math.sqrt(252)
     return {
         "var_95": var_95,
@@ -637,7 +669,9 @@ def get_run(run_id: str):
         benchmark_comparison = {}
     benchmark_timeseries = _load_benchmark_timeseries(run_id)
     coverage_summary = _load_coverage_summary(run_id)
-    risk = _compute_risk_metrics(performance)
+    risk_free_series = _load_risk_free_series(run_id)
+    corporate_actions = _load_corporate_actions(run_id)
+    risk = _compute_risk_metrics(performance, risk_free_series)
     equity_curve = [
         {"date": row.get("date"), "value": row.get("value")}
         for row in performance
@@ -647,6 +681,8 @@ def get_run(run_id: str):
         "manifest": manifest,
         "summary": summary,
         "coverage_summary": coverage_summary,
+        "risk_free_series": risk_free_series,
+        "corporate_actions": corporate_actions,
         "equity_curve": equity_curve,
         "performance": performance,
         "monthly_returns": monthly_returns,
@@ -701,6 +737,8 @@ def export_artifact(run_id: str, artifact: str):
         "report": "report.html",
         "summary-json": "summary.json",
         "coverage-summary": "coverage_summary.json",
+        "risk-free-series": "risk_free_series.csv",
+        "corporate-actions": "corporate_actions_events.csv",
         "performance-csv": "performance.csv",
         "monthly-returns-csv": "monthly_returns.csv",
         "attribution-summary": "attribution_summary.json",
