@@ -97,7 +97,11 @@ export async function createRun(params: {
         try {
             const payload = await res.json();
             if (payload?.detail) {
-                detail = payload.detail;
+                if (typeof payload.detail === "string") {
+                    detail = payload.detail;
+                } else {
+                    detail = payload.detail.message || detail;
+                }
             }
         } catch {
             // ignore parse errors

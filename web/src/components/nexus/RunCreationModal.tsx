@@ -27,6 +27,7 @@ export function RunCreationModal() {
     const [file, setFile] = useState<File | null>(null);
     const [fileError, setFileError] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const [submitHint, setSubmitHint] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
@@ -34,6 +35,7 @@ export function RunCreationModal() {
             setFile(null);
             setFileError(null);
             setSubmitError(null);
+            setSubmitHint(null);
             setIsSubmitting(false);
         }
     }, [runCreatorOpen]);
@@ -65,12 +67,14 @@ export function RunCreationModal() {
 
     const handleCreateDemo = async () => {
         setSubmitError(null);
+        setSubmitHint(null);
         setIsSubmitting(true);
         try {
             await createRun({ runType: "demo" });
             router.push("/overview");
         } catch (err) {
             setSubmitError(err instanceof Error ? err.message : "Failed to create demo run.");
+            setSubmitHint("Try Demo Mode or verify market data availability.");
         } finally {
             setIsSubmitting(false);
         }
@@ -83,12 +87,14 @@ export function RunCreationModal() {
         }
         if (fileError) return;
         setSubmitError(null);
+        setSubmitHint(null);
         setIsSubmitting(true);
         try {
             await createRun({ runType: "uploaded", file });
             router.push("/overview");
         } catch (err) {
             setSubmitError(err instanceof Error ? err.message : "Run creation failed.");
+            setSubmitHint("Check CSV columns and market data coverage.");
         } finally {
             setIsSubmitting(false);
         }
@@ -161,6 +167,7 @@ export function RunCreationModal() {
                 {submitError && (
                     <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                         {submitError}
+                        {submitHint && <div className="mt-1 text-xs text-red-600">{submitHint}</div>}
                     </div>
                 )}
             </div>
