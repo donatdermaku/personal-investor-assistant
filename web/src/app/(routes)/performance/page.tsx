@@ -76,10 +76,7 @@ export default function PerformancePage() {
         firstValue && lastValue ? (lastValue / firstValue) - 1 : null;
     const attributionRows = attribution_summary?.per_asset?.slice(0, 5) ?? [];
     const macroFlags = macro?.flags ?? macro_regimes ?? [];
-    const macroStatus =
-        macro?.status === "ok"
-            ? "sufficient"
-            : macro?.status ?? (macroFlags.length > 0 ? "sufficient" : "unavailable");
+    const macroStatus = macro?.status ?? (macroFlags.length > 0 ? "sufficient" : "unavailable");
     const latestMacro = macroFlags.length > 0 ? macroFlags[macroFlags.length - 1] : null;
     const hasAttribution = attribution_summary && typeof attribution_summary.allocation === "number";
     const hasBenchmarkComparison = benchmark_comparison && typeof benchmark_comparison.tracking_error === "number";
