@@ -184,12 +184,14 @@ def save_artifacts(app_state: AppState):
         export_risk_free_series_csv,
         export_corporate_actions_csv,
         export_data_contracts_json,
+        export_diagnostics_json,
     )
     from src.analytics.attribution import compute_attribution
     from src.analytics.risk import compute_risk_contributions
     from src.analytics.rolling import compute_rolling_metrics
     from src.analytics.comparative import compute_benchmark_comparison
     from src.analytics.macro import compute_macro_regime_payload, load_cached_fred_series
+    from src.diagnostics.engine import diagnostics_payload, generate_diagnostics
     from market_data.contracts import contract_registry
     
     manifest = app_state.run_manifest
@@ -230,6 +232,8 @@ def save_artifacts(app_state: AppState):
     save_html_report(html_path, app_state)
     repo.add_artifact(run_id, "html_report", str(html_path))
     
+    performance_records: list[dict] = []
+    rolling_records: list[dict] = []
     # CSVs
     if not app_state.portfolio.daily_values.empty:
         perf_path = base_path / "performance.csv"
@@ -241,11 +245,14 @@ def save_artifacts(app_state: AppState):
         repo.add_artifact(run_id, "monthly_returns_csv", str(ret_path))
 
         performance = pd.read_csv(perf_path)
+        performance_records = performance.to_dict(orient="records")
 
         rolling = compute_rolling_metrics(performance, risk_free_series=app_state.risk_free.series)
         rolling_path = base_path / "rolling_metrics.csv"
         export_rolling_metrics_csv(rolling_path, rolling)
         repo.add_artifact(run_id, "rolling_metrics_csv", str(rolling_path))
+        if not rolling.empty:
+            rolling_records = rolling.to_dict(orient="records")
 
     attribution = compute_attribution(
         app_state.prices,
@@ -323,3 +330,27 @@ def save_artifacts(app_state: AppState):
     bench_timeseries_path = base_path / "benchmark_timeseries.csv"
     export_benchmark_timeseries_csv(bench_timeseries_path, comparison.timeseries)
     repo.add_artifact(run_id, "benchmark_timeseries_csv", str(bench_timeseries_path))
+
+    last_date = None
+    if not app_state.portfolio.daily_values.empty:
+        last_date = app_state.portfolio.daily_values.index.max()
+        if hasattr(last_date, "strftime"):
+            last_date = last_date.strftime("%Y-%m-%d")
+
+    diagnostics = generate_diagnostics(
+        summary={"last_date": last_date} if last_date else None,
+        attribution_summary=attribution.summary,
+        risk_contribution={
+            "summary": risk_output.summary,
+            "contributions": risk_output.contributions.to_dict(orient="records"),
+        },
+        benchmark_comparison=comparison.summary,
+        benchmark_timeseries=comparison.timeseries.to_dict(orient="records") if not comparison.timeseries.empty else [],
+        performance=performance_records,
+        rolling_metrics=rolling_records,
+        coverage_summary=manifest.coverage_summary,
+        weights=weights,
+    )
+    diagnostics_path = base_path / "diagnostics.json"
+    export_diagnostics_json(diagnostics_path, diagnostics_payload(run_id, diagnostics))
+    repo.add_artifact(run_id, "diagnostics_json", str(diagnostics_path))

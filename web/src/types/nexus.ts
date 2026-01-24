@@ -175,6 +175,18 @@ export interface DataContractsPayload {
     };
 }
 
+export interface DiagnosticSignal {
+    key: string;
+    category: "risk" | "performance" | "data" | "structure";
+    severity: "low" | "medium" | "high";
+    summary: string;
+    evidence: string[];
+    metrics_used: string[];
+    as_of: string | null;
+    confidence: number;
+    suggested_action?: string;
+}
+
 export interface CoverageSummary {
     total: number;
     covered: number;
@@ -249,6 +261,7 @@ export type DefinitionsRegistry = Record<string, DefinitionItem>;
 export interface NexusState {
     manifest: RunManifest;
     coverage_summary?: CoverageSummaryDetailed | null;
+    diagnostics?: DiagnosticSignal[];
     summary: PortfolioSummary;
     equity_curve: TimeSeriesPoint[];
     performance: PerformancePoint[];
@@ -273,6 +286,7 @@ export interface NexusState {
 export interface RunMetricsResponse {
     manifest: RunManifest;
     coverage_summary?: CoverageSummaryDetailed | null;
+    diagnostics?: DiagnosticSignal[];
     summary: PortfolioSummary;
     equity_curve: TimeSeriesPoint[];
     performance: PerformancePoint[];

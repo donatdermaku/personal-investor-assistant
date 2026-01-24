@@ -188,6 +188,11 @@ def export_coverage_summary_json(path: Path, summary: dict) -> None:
     path.write_text(json.dumps(summary, indent=2, default=_json_default), encoding="utf-8")
 
 
+def export_diagnostics_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, default=_json_default), encoding="utf-8")
+
+
 def export_risk_free_series_csv(path: Path, series: pd.DataFrame) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if series.empty:
