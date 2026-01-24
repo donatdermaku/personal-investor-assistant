@@ -16,10 +16,10 @@ def _normalize_prices(raw: pd.DataFrame) -> pd.DataFrame:
     if "Date" not in df.columns:
         df = df.reset_index()
     if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [
-            " ".join(str(part) for part in col if part not in ("", None)).strip()
-            for col in df.columns
-        ]
+        # yfinance often returns (field, ticker); drop ticker level to keep field names.
+        if df.columns.nlevels >= 2:
+            df.columns = df.columns.get_level_values(0)
+        df.columns = [str(c).strip() for c in df.columns]
     else:
         cols = {c: str(c).strip() for c in df.columns}
         df = df.rename(columns=cols)
