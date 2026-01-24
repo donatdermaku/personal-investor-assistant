@@ -76,7 +76,7 @@ export default function PerformancePage() {
         firstValue && lastValue ? (lastValue / firstValue) - 1 : null;
     const attributionRows = attribution_summary?.per_asset?.slice(0, 5) ?? [];
     const macroFlags = macro?.flags ?? macro_regimes ?? [];
-    const macroStatus = macro?.status ?? (macroFlags.length > 0 ? "ok" : "unavailable");
+    const macroStatus = macro?.status ?? (macroFlags.length > 0 ? "sufficient" : "unavailable");
     const latestMacro = macroFlags.length > 0 ? macroFlags[macroFlags.length - 1] : null;
     const hasAttribution = attribution_summary && typeof attribution_summary.allocation === "number";
     const hasBenchmarkComparison = benchmark_comparison && typeof benchmark_comparison.tracking_error === "number";
@@ -350,14 +350,25 @@ export default function PerformancePage() {
 
             <details className="bg-white border border-gray-200 rounded-lg p-6">
                 <summary className="cursor-pointer text-lg font-semibold text-[#0F172A] mb-4">Macro Context</summary>
-                {macroStatus !== "ok" ? (
+                {macroStatus === "unavailable" ? (
                     <div className="text-sm text-gray-500">
-                        {macroStatus === "partial" ? "Macro context limited." : "Macro context unavailable."}
+                        Macro context unavailable.
+                        {macro?.warnings && macro.warnings.length > 0 && (
+                            <div className="mt-2 text-xs text-gray-400">
+                                {macro.warnings.join(" ")}
+                            </div>
+                        )}
                     </div>
                 ) : !latestMacro ? (
                     <div className="text-sm text-gray-500">No macro regime data available.</div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div className="space-y-3">
+                        {macroStatus === "partial" && (
+                            <div className="text-xs text-gray-400">
+                                Macro context limited. Some tags may be suppressed.
+                            </div>
+                        )}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div className="border border-gray-200 rounded-lg p-3">
                             <div className="text-gray-500">Inflation YoY</div>
                             <div className="text-lg font-semibold text-[#0F172A]">
@@ -384,6 +395,7 @@ export default function PerformancePage() {
                             <div className="text-xs text-gray-400 mt-1">
                                 {Boolean(latestMacro.risk_off) ? "Risk-off regime" : "Risk-on regime"}
                             </div>
+                        </div>
                         </div>
                     </div>
                 )}

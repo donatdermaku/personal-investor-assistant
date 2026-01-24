@@ -10,6 +10,7 @@ from pandas.tseries.offsets import BDay
 
 from market_data.contracts import MarketDataError, validate_price_frame, validate_price_series_frame
 from market_data.yahoo import fetch_prices, fetch_dividends_and_splits
+from market_data.persistent_cache import get_or_refresh_frame
 from src.utils_io import ROOT
 
 
@@ -62,9 +63,17 @@ class MarketDataStore:
             except Exception:
                 cached = pd.DataFrame()
         if cached.empty or not self._is_price_cache_fresh(cached):
-            fetched = fetch_prices(ticker, start, end)
-            fetched.to_parquet(cache_path, index=False)
-            cached = fetched
+            cache_result = get_or_refresh_frame(
+                source="yahoo",
+                key=ticker,
+                ttl_seconds=21600,
+                fetch_fn=lambda: fetch_prices(ticker, start, end),
+                asof_date=end,
+                allow_refresh=True,
+            )
+            cached = cache_result.frame
+            if not cached.empty:
+                cached.to_parquet(cache_path, index=False)
         cached = validate_price_frame(cached, ticker)
         cached = cached[(cached["date"] >= date.fromisoformat(start)) & (cached["date"] <= date.fromisoformat(end))]
         dividends = self.get_dividends(ticker, start, end)

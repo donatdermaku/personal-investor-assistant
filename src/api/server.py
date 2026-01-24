@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from typing import Optional
@@ -10,6 +10,7 @@ import io
 from pathlib import Path
 import numpy as np
 import uuid
+from datetime import datetime, timezone
 
 import os
 
@@ -24,6 +25,9 @@ from src.definitions import DEFINITIONS_REGISTRY
 from src.pipeline import compute_app_state, save_artifacts
 from src.portfolio import validate_ledger
 from market_data.store import MarketDataStore
+from market_data.yahoo import fetch_prices
+from market_data.fred import get_cached_series
+from market_data.persistent_cache import get_or_refresh_frame
 from market_data.contracts import MarketDataError
 import pandas as pd
 
@@ -196,6 +200,15 @@ def _load_macro_summary(run_id: str) -> dict:
     return {}
 
 
+def _load_macro_context(run_id: str) -> dict:
+    path = EXPORTS_DIR / run_id / "macro_context.json"
+    if path.exists():
+        return _load_json(path)
+    if use_supabase():
+        return _load_supabase_json(run_id, "macro_context.json")
+    return {}
+
+
 def _load_coverage_summary(run_id: str) -> dict:
     path = EXPORTS_DIR / run_id / "coverage_summary.json"
     if path.exists():
@@ -263,6 +276,15 @@ def _load_diagnostics(run_id: str) -> dict:
     if use_supabase():
         return _load_supabase_json(run_id, "diagnostics.json")
     return {"diagnostics": [], "run_id": run_id}
+
+
+def _load_correlation_matrix(run_id: str) -> dict:
+    path = EXPORTS_DIR / run_id / "correlation_matrix.json"
+    if path.exists():
+        return _load_json(path)
+    if use_supabase():
+        return _load_supabase_json(run_id, "correlation_matrix.json")
+    return {"status": "unavailable", "matrix": {}}
 
 def _load_supabase_json(run_id: str, filename: str) -> dict:
     try:
@@ -680,12 +702,14 @@ def get_run(run_id: str):
     rolling_metrics = _load_rolling_metrics(run_id)
     macro_regimes = _load_macro_regimes(run_id)
     macro_summary = _load_macro_summary(run_id)
+    macro_context = _load_macro_context(run_id)
     try:
         benchmark_comparison = _load_benchmark_comparison(run_id)
     except HTTPException:
         benchmark_comparison = {}
     benchmark_timeseries = _load_benchmark_timeseries(run_id)
     diagnostics_payload = _load_diagnostics(run_id)
+    correlation_matrix = _load_correlation_matrix(run_id)
     coverage_summary = _load_coverage_summary(run_id)
     risk_free_series = _load_risk_free_series(run_id)
     corporate_actions = _load_corporate_actions(run_id)
@@ -713,14 +737,23 @@ def get_run(run_id: str):
         "rolling_metrics": rolling_metrics,
         "macro_regimes": macro_regimes,
         "macro": {
-            "status": macro_summary.get("status", "unavailable"),
-            "missing_series": macro_summary.get("missing_series", []),
-            "as_of": macro_summary.get("as_of"),
+            "status": (
+                "sufficient"
+                if (macro_context.get("status") or macro_summary.get("status")) == "ok"
+                else macro_context.get("status") or macro_summary.get("status", "unavailable")
+            ),
+            "available_series": macro_context.get("available_series", []),
+            "missing_series": macro_context.get("missing_series", macro_summary.get("missing_series", [])),
+            "tags": macro_context.get("tags", []),
+            "warnings": macro_context.get("warnings", []),
+            "as_of": macro_context.get("as_of", macro_summary.get("as_of")),
+            "cache_status": macro_context.get("cache_status", {}),
             "flags": macro_regimes,
         },
         "benchmark_comparison": benchmark_comparison,
         "benchmark_timeseries": benchmark_timeseries,
         "diagnostics": diagnostics_payload.get("diagnostics", []),
+        "correlation_matrix": correlation_matrix,
     }
 
 @app.get("/run/{run_id}")
@@ -748,6 +781,72 @@ def get_definitions():
 def definitions_alias():
     return get_definitions()
 
+
+def _store_warmup_report(report: dict) -> None:
+    timestamp = report.get("generated_at") or datetime.now(timezone.utc).isoformat()
+    filename = f"warmup_{timestamp.replace(':', '').replace('-', '')}.json"
+    local_dir = ROOT / "data" / "cache" / "warmup_reports"
+    local_dir.mkdir(parents=True, exist_ok=True)
+    local_path = local_dir / filename
+    local_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    if use_supabase():
+        try:
+            from storage_supabase.storage import upload_bytes
+
+            bucket = os.getenv("SUPABASE_STORAGE_BUCKET", "nexus-artifacts")
+            storage_path = f"system/warmup/{filename}"
+            upload_bytes(bucket, storage_path, local_path.read_bytes(), "application/json")
+        except Exception:
+            logger.exception("Failed to upload warmup report to Supabase storage.")
+
+
+@app.post("/admin/warmup")
+def warmup(payload: dict | None = None, x_admin_key: str | None = Header(default=None)):
+    admin_key = os.getenv("ADMIN_WARMUP_KEY")
+    if not admin_key or x_admin_key != admin_key:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    payload = payload or {}
+    benchmarks = payload.get("benchmarks") or ["SPY"]
+    force_refresh = bool(payload.get("force"))
+
+    series_ids = ["CPIAUCSL", "DFF", "VIXCLS"]
+    series_status: dict[str, dict] = {}
+    for series_id in series_ids:
+        result = get_cached_series(series_id, allow_refresh=True, force_refresh=force_refresh)
+        series_status[series_id] = {
+            "status": result.status,
+            "rows": int(result.frame.shape[0]) if result.frame is not None else 0,
+        }
+
+    bench_status: dict[str, dict] = {}
+    for ticker in benchmarks:
+        try:
+            result = get_or_refresh_frame(
+                source="yahoo",
+                key=ticker,
+                ttl_seconds=21600,
+                fetch_fn=lambda t=ticker: fetch_prices(
+                    t, start="2015-01-01", end=datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                ),
+                asof_date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                allow_refresh=True,
+                force_refresh=force_refresh,
+            )
+            bench_status[ticker] = {
+                "status": result.status,
+                "rows": int(result.frame.shape[0]) if result.frame is not None else 0,
+            }
+        except Exception as exc:
+            bench_status[ticker] = {"status": "error", "error": str(exc)}
+
+    report = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "force_refresh": force_refresh,
+        "series": series_status,
+        "benchmarks": bench_status,
+    }
+    _store_warmup_report(report)
+    return report
 @app.get("/api/v1/run/{run_id}/export/{artifact}")
 def export_artifact(run_id: str, artifact: str):
     _validate_run_id(run_id)
@@ -769,10 +868,12 @@ def export_artifact(run_id: str, artifact: str):
         "risk-contribution-json": "risk_contribution.json",
         "macro-regimes": "macro_regime_flags.csv",
         "macro-regime-summary": "macro_regime_summary.json",
+        "macro-context": "macro_context.json",
         "rolling-metrics": "rolling_metrics.csv",
         "benchmark-comparison": "benchmark_comparison.json",
         "benchmark-timeseries": "benchmark_timeseries.csv",
         "diagnostics": "diagnostics.json",
+        "correlation-matrix": "correlation_matrix.json",
     }
     filename = allowed.get(artifact)
     if not filename:

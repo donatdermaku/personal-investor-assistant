@@ -101,6 +101,12 @@ DEFINITIONS_REGISTRY = {
         "assumptions": "Uses overlapping daily returns.",
         "warnings": "Unavailable with insufficient data.",
     },
+    "correlation_matrix": {
+        "title": "Correlation Matrix",
+        "definition_md": "Pairwise correlation of asset daily returns over the analysis window.",
+        "assumptions": "Requires minimum history and aligned return observations.",
+        "warnings": "Partial matrices exclude assets with insufficient data.",
+    },
     "rolling_drawdown": {
         "title": "Rolling Drawdown",
         "definition_md": "Rolling minimum of drawdown over the window.",

@@ -150,6 +150,11 @@ def export_macro_regime_summary_json(path: Path, summary: dict) -> None:
     path.write_text(json.dumps(summary, indent=2, default=_json_default), encoding="utf-8")
 
 
+def export_macro_context_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, default=_json_default), encoding="utf-8")
+
+
 def export_rolling_metrics_csv(path: Path, rolling: pd.DataFrame) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if rolling.empty:
@@ -189,6 +194,11 @@ def export_coverage_summary_json(path: Path, summary: dict) -> None:
 
 
 def export_diagnostics_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, default=_json_default), encoding="utf-8")
+
+
+def export_correlation_matrix_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, default=_json_default), encoding="utf-8")
 

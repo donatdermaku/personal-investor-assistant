@@ -134,10 +134,14 @@ export interface MacroRegimeFlag {
 }
 
 export interface MacroPayload {
-    status: "ok" | "partial" | "unavailable";
+    status: "sufficient" | "partial" | "unavailable";
     missing_series: string[];
     as_of: string | null;
     flags: MacroRegimeFlag[];
+    available_series?: string[];
+    tags?: string[];
+    warnings?: string[];
+    cache_status?: Record<string, string>;
 }
 
 export interface BenchmarkComparisonSummary {
@@ -160,6 +164,15 @@ export interface RiskFreeSeriesPoint {
     date: string;
     rate: number | null;
     rf_daily_return: number | null;
+}
+
+export interface CorrelationMatrixPayload {
+    status: "sufficient" | "partial" | "unavailable";
+    n_obs: number;
+    assets_included: string[];
+    assets_excluded: { ticker: string; reason: string }[];
+    matrix: Record<string, Record<string, number>>;
+    reasons?: string[];
 }
 
 export interface CorporateActionEvent {
@@ -262,6 +275,7 @@ export interface NexusState {
     manifest: RunManifest;
     coverage_summary?: CoverageSummaryDetailed | null;
     diagnostics?: DiagnosticSignal[];
+    correlation_matrix?: CorrelationMatrixPayload | null;
     summary: PortfolioSummary;
     equity_curve: TimeSeriesPoint[];
     performance: PerformancePoint[];
@@ -287,6 +301,7 @@ export interface RunMetricsResponse {
     manifest: RunManifest;
     coverage_summary?: CoverageSummaryDetailed | null;
     diagnostics?: DiagnosticSignal[];
+    correlation_matrix?: CorrelationMatrixPayload | null;
     summary: PortfolioSummary;
     equity_curve: TimeSeriesPoint[];
     performance: PerformancePoint[];

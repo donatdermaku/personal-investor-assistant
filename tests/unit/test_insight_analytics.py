@@ -75,7 +75,7 @@ def test_macro_regime_flags_thresholds() -> None:
     vix = pd.DataFrame({"date": monthly_dates, "value": [18.0] * 11 + [25.0] * 3})
 
     payload = compute_macro_regime_payload(pd.DatetimeIndex(daily_dates), cpi, fed, vix)
-    assert payload.status == "ok"
+    assert payload.status == "sufficient"
     assert not payload.flags.empty
     latest = payload.flags.iloc[-1]
     assert bool(latest["high_inflation"]) is True

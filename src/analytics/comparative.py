@@ -19,7 +19,7 @@ def compute_benchmark_comparison(
 ) -> BenchmarkComparisonOutput:
     if portfolio_returns.empty or benchmark_prices.empty:
         return BenchmarkComparisonOutput(
-            summary={"status": "unavailable", "reason": "MISSING_BENCHMARK"},
+            summary={"status": "unavailable", "reason": "MISSING_BENCHMARK", "reasons": ["MISSING_BENCHMARK"]},
             timeseries=pd.DataFrame(),
         )
 
@@ -41,7 +41,7 @@ def compute_benchmark_comparison(
     )
     if aligned.empty:
         return BenchmarkComparisonOutput(
-            summary={"status": "unavailable", "reason": "NO_OVERLAP"},
+            summary={"status": "unavailable", "reason": "NO_OVERLAP", "reasons": ["NO_OVERLAP"]},
             timeseries=pd.DataFrame(),
         )
 
@@ -77,6 +77,7 @@ def compute_benchmark_comparison(
         "correlation": corr,
         "tracking_error_implied": implied_te,
         "status": "ok",
+        "reasons": [],
     }
     return BenchmarkComparisonOutput(summary=summary, timeseries=timeseries)
 
