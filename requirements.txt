@@ -42,6 +42,10 @@ sqlalchemy
 fastapi
 uvicorn[standard]
 python-multipart
-yfinance
-requests
 httpx
+
+# Postgres driver for Supabase
+psycopg2-binary
+
+# Migrations
+alembic
