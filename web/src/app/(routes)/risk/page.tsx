@@ -6,7 +6,7 @@ import { useNexus } from "@/components/nexus/NexusProvider";
 import { EmptyState } from "@/components/nexus/EmptyState";
 import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
 import { SectionContext } from "@/components/nexus/SectionContext";
-import { coverageStatus } from "@/lib/coverage";
+import { getMetricReasons, getMetricStatus } from "@/lib/coverageLogic";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function RiskPage() {
@@ -58,7 +58,11 @@ export default function RiskPage() {
     const { risk, summary, performance, definitions, risk_contribution, rolling_metrics, manifest, coverage_summary } = state;
     const currentDrawdown = performance.length > 0 ? performance[performance.length - 1]?.drawdown ?? null : null;
     const topRisk = risk_contribution?.contributions?.slice(0, 6) ?? [];
-    const coverage = coverageStatus(manifest, coverage_summary ?? null);
+    const metricStatus = (kpiKey: string) => getMetricStatus(kpiKey, coverage_summary ?? null);
+    const metricReasons = (kpiKey: string) => getMetricReasons(kpiKey, coverage_summary ?? null);
+    const metricCoverage = (kpiKey: string) => (metricStatus(kpiKey) === "insufficient" ? "insufficient" : undefined);
+    const metricReasonCodes = (kpiKey: string) =>
+        metricStatus(kpiKey) === "insufficient" ? metricReasons(kpiKey) : undefined;
     const asOf = summary.last_date || manifest.timestamp;
 
     return (
@@ -105,34 +109,34 @@ export default function RiskPage() {
                     value={risk.var_95 !== null ? `${(risk.var_95 * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "var_daily")}
                     subtext="Daily"
-                    coverageStatus={risk.var_95 !== null ? coverage : "insufficient"}
+                    coverageStatus={metricCoverage("var_95")}
                     asOf={asOf}
-                    reasonCodes={coverage_summary?.reason_codes}
+                    reasonCodes={metricReasonCodes("var_95")}
                 />
                 <MetricCard
                     label="CVaR (95%)"
                     value={risk.cvar_95 !== null ? `${(risk.cvar_95 * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "cvar_daily")}
                     subtext="Daily"
-                    coverageStatus={risk.cvar_95 !== null ? coverage : "insufficient"}
+                    coverageStatus={metricCoverage("cvar_95")}
                     asOf={asOf}
-                    reasonCodes={coverage_summary?.reason_codes}
+                    reasonCodes={metricReasonCodes("cvar_95")}
                 />
                 <MetricCard
                     label="Volatility"
                     value={risk.volatility !== null ? `${(risk.volatility * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "rolling_volatility")}
-                    coverageStatus={risk.volatility !== null ? coverage : "insufficient"}
+                    coverageStatus={metricCoverage("volatility")}
                     asOf={asOf}
-                    reasonCodes={coverage_summary?.reason_codes}
+                    reasonCodes={metricReasonCodes("volatility")}
                 />
                 <MetricCard
                     label="Sharpe Ratio"
                     value={risk.sharpe !== null ? risk.sharpe.toFixed(2) : "--"}
                     tooltip={definitionTooltip(definitions, "sharpe_rolling")}
-                    coverageStatus={risk.sharpe !== null ? coverage : "insufficient"}
+                    coverageStatus={metricCoverage("sharpe")}
                     asOf={asOf}
-                    reasonCodes={coverage_summary?.reason_codes}
+                    reasonCodes={metricReasonCodes("sharpe")}
                 />
             </div>
 

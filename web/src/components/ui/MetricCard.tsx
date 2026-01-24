@@ -1,12 +1,14 @@
 "use client";
 
+import type { CoverageStatus } from "@/lib/coverage";
+
 interface MetricCardProps {
     label: string;
     value: string | number | null;
     subtext?: string;
     tooltip?: string;
     asOf?: string | null;
-    coverageStatus?: "full" | "partial" | "insufficient" | "unknown";
+    coverageStatus?: CoverageStatus;
     hideWhenInsufficient?: boolean;
     reasonCodes?: string[];
 }
@@ -91,10 +93,4 @@ export function MetricCard({
             )}
         </div>
     );
-}
-
-export function shouldHideMetricValue(
-    coverageStatus?: "full" | "partial" | "insufficient" | "unknown"
-): boolean {
-    return coverageStatus === "insufficient";
 }
