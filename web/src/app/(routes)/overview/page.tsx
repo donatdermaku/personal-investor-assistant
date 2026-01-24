@@ -55,10 +55,10 @@ export default function OverviewPage() {
         );
     }
 
-    const { summary, equity_curve, definitions, manifest } = state;
+    const { summary, equity_curve, definitions, manifest, coverage_summary } = state;
     const equitySeries = equity_curve as Array<{ date: string; value: number; benchmark?: number | null }>;
     const hasBenchmark = equitySeries.some((point) => point.benchmark != null);
-    const coverage = coverageStatus(manifest);
+    const coverage = coverageStatus(manifest, coverage_summary ?? null);
     const asOf = summary.last_date || manifest.timestamp;
 
     return (
@@ -115,6 +115,7 @@ export default function OverviewPage() {
                     tooltip={definitionTooltip(definitions, "twr")}
                     coverageStatus={summary.twr !== null ? coverage : "insufficient"}
                     asOf={asOf}
+                    reasonCodes={coverage_summary?.reason_codes}
                 />
                 <MetricCard
                     label="Personal Return (MWR)"
@@ -122,6 +123,7 @@ export default function OverviewPage() {
                     tooltip={definitionTooltip(definitions, "mwr")}
                     coverageStatus={summary.mwr !== null ? coverage : "insufficient"}
                     asOf={asOf}
+                    reasonCodes={coverage_summary?.reason_codes}
                 />
                 <MetricCard
                     label="Portfolio Value"
@@ -129,6 +131,7 @@ export default function OverviewPage() {
                     subtext={summary.last_date || undefined}
                     coverageStatus={summary.final_value !== null ? coverage : "insufficient"}
                     asOf={asOf}
+                    reasonCodes={coverage_summary?.reason_codes}
                 />
                 <MetricCard
                     label="Max Drawdown"
@@ -136,6 +139,7 @@ export default function OverviewPage() {
                     tooltip={definitionTooltip(definitions, "max_drawdown")}
                     coverageStatus={summary.max_drawdown !== null ? coverage : "insufficient"}
                     asOf={asOf}
+                    reasonCodes={coverage_summary?.reason_codes}
                 />
             </div>
 

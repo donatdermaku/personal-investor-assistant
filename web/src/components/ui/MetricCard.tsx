@@ -8,6 +8,7 @@ interface MetricCardProps {
     asOf?: string | null;
     coverageStatus?: "full" | "partial" | "insufficient" | "unknown";
     hideWhenInsufficient?: boolean;
+    reasonCodes?: string[];
 }
 
 function formatAsOf(value?: string | null) {
@@ -29,6 +30,7 @@ export function MetricCard({
     asOf,
     coverageStatus,
     hideWhenInsufficient,
+    reasonCodes,
 }: MetricCardProps) {
     if (coverageStatus === "insufficient" && hideWhenInsufficient) {
         return null;
@@ -52,6 +54,11 @@ export function MetricCard({
                 ? "border-gray-200 bg-gray-100 text-gray-500"
                 : "border-[#E8F0FF] bg-[#E8F0FF] text-[#1E40AF]";
 
+    const reasonLabel =
+        coverageStatus === "insufficient" && reasonCodes && reasonCodes.length > 0
+            ? `Reason: ${reasonCodes.join(", ")}`
+            : null;
+
     return (
         <div
             className={`nexus-card border-l-4 border-[#E8F0FF] transition-all ${
@@ -72,11 +79,13 @@ export function MetricCard({
             <div className="text-2xl font-bold text-[#0F172A]">
                 {showValue}
             </div>
-            {(subtext || asOfLabel) && (
+            {(subtext || asOfLabel || reasonLabel) && (
                 <div className="text-xs text-gray-400 mt-1">
                     {subtext}
                     {subtext && asOfLabel ? " · " : ""}
                     {asOfLabel ? `As of ${asOfLabel}` : ""}
+                    {(subtext || asOfLabel) && reasonLabel ? " · " : ""}
+                    {reasonLabel ?? ""}
                 </div>
             )}
         </div>

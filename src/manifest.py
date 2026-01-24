@@ -119,7 +119,8 @@ def create_manifest(
     config_hash: str | None = None, # Placeholder for compatibility
     market_data_hash: str | None = None, # Alias for data_hash
     portfolio_result: Any | None = None, # New arg in usage
-    coverage_map: dict[str, CoverageMeta] | None = None
+    coverage_map: dict[str, CoverageMeta] | None = None,
+    coverage_summary: dict[str, Any] | None = None,
 ) -> RunManifest:
     """
     Create a new RunManifest.
@@ -139,14 +140,16 @@ def create_manifest(
     version = get_git_revision()
     
     # Summarize coverage for the manifest (simplify complexity)
-    cov_summary = {}
-    if coverage_map:
+    cov_summary: dict[str, Any] = {}
+    if coverage_summary is not None:
+        cov_summary = coverage_summary
+    elif coverage_map:
         for key, meta in coverage_map.items():
             cov_summary[key] = {
                 "total": meta.total,
                 "covered": meta.covered,
                 "last_date": meta.last_date,
-                "missing_count": len(meta.missing_tickers)
+                "missing_count": len(meta.missing_tickers),
             }
             
     manifest = RunManifest(

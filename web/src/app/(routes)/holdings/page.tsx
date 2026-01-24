@@ -44,8 +44,8 @@ export default function HoldingsPage() {
         );
     }
 
-    const { holdings, summary, manifest } = state;
-    const coverage = coverageStatus(manifest);
+    const { holdings, summary, manifest, coverage_summary } = state;
+    const coverage = coverageStatus(manifest, coverage_summary ?? null);
     const coverageText = coverageLabel(coverage);
     const asOf = summary.last_date || manifest.timestamp;
     const nonCashHoldings = holdings.filter((holding) => holding.ticker !== "CASH");

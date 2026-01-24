@@ -20,7 +20,7 @@ function formatTimestamp(value?: string | null) {
 }
 
 function coveragePercentFromState(state: NexusState | null) {
-    return coveragePercent(state?.manifest || null);
+    return coveragePercent(state?.manifest || null, state?.coverage_summary || null);
 }
 
 export function ContextPanel() {

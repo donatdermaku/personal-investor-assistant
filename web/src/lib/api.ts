@@ -124,6 +124,7 @@ export async function getNexusState(
         return {
             state: {
                 manifest: MOCK_MANIFEST,
+                coverage_summary: null,
                 summary: MOCK_SUMMARY,
                 equity_curve: MOCK_METRICS.equity_curve,
                 performance: MOCK_METRICS.performance,
@@ -209,6 +210,7 @@ export async function getNexusState(
     return {
         state: {
             manifest: metrics.manifest || latest,
+            coverage_summary: metrics.coverage_summary ?? null,
             summary,
             equity_curve: metrics.equity_curve || [],
             performance: metrics.performance || [],

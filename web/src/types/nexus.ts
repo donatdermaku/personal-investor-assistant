@@ -5,7 +5,7 @@ export interface RunManifest {
     data_hash: string | null;
     status?: "running" | "completed" | "failed";
     code_version?: string | null;
-    coverage_summary?: Record<string, CoverageSummary>;
+    coverage_summary?: CoverageSummaryDetailed | Record<string, CoverageSummary>;
     meta?: Record<string, unknown>;
 }
 
@@ -163,6 +163,43 @@ export interface CoverageSummary {
     missing_count?: number;
 }
 
+export interface CoveragePolicy {
+    min_score_for_kpis: number;
+    min_history_days: number;
+    max_gap_days: number;
+}
+
+export interface CoveragePerTicker {
+    score: number;
+    history_days: number;
+    missing_days: number;
+    largest_gap_days: number;
+    status: string;
+    reason_codes: string[];
+}
+
+export interface CoverageAggregate {
+    coverage_ratio: number;
+    min_ticker_score: number;
+    benchmark_score: number | null;
+    rf_score: number | null;
+}
+
+export interface CoverageSummaryDetailed {
+    as_of: string | null;
+    status: "sufficient" | "insufficient" | "unknown";
+    score: number;
+    policy: CoveragePolicy;
+    required: {
+        tickers: string[];
+        history_days_needed: number;
+    };
+    per_ticker: Record<string, CoveragePerTicker>;
+    aggregate: CoverageAggregate;
+    reason_codes: string[];
+    contract_version?: string;
+}
+
 export interface PortfolioMeta {
     id: number;
     name: string;
@@ -181,6 +218,7 @@ export type DefinitionsRegistry = Record<string, DefinitionItem>;
 
 export interface NexusState {
     manifest: RunManifest;
+    coverage_summary?: CoverageSummaryDetailed | null;
     summary: PortfolioSummary;
     equity_curve: TimeSeriesPoint[];
     performance: PerformancePoint[];
@@ -201,6 +239,7 @@ export interface NexusState {
 
 export interface RunMetricsResponse {
     manifest: RunManifest;
+    coverage_summary?: CoverageSummaryDetailed | null;
     summary: PortfolioSummary;
     equity_curve: TimeSeriesPoint[];
     performance: PerformancePoint[];

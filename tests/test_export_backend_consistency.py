@@ -16,6 +16,7 @@ from src.streamlit_export import (
     export_attribution_timeseries_csv,
     export_benchmark_comparison_json,
     export_benchmark_timeseries_csv,
+    export_coverage_summary_json,
     export_macro_regime_flags_csv,
     export_macro_regime_summary_json,
     export_monthly_returns_csv,
@@ -119,6 +120,28 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
         ]
     )
     export_macro_regime_flags_csv(export_dir / "macro_regime_flags.csv", macro_flags)
+    export_coverage_summary_json(
+        export_dir / "coverage_summary.json",
+        {
+            "as_of": "2024-01-31",
+            "status": "sufficient",
+            "score": 1.0,
+            "policy": {
+                "min_score_for_kpis": 0.95,
+                "min_history_days": 252,
+                "max_gap_days": 5,
+            },
+            "required": {"tickers": ["AAA"], "history_days_needed": 252},
+            "per_ticker": {},
+            "aggregate": {
+                "coverage_ratio": 1.0,
+                "min_ticker_score": 1.0,
+                "benchmark_score": None,
+                "rf_score": None,
+            },
+            "reason_codes": ["OK"],
+        },
+    )
     export_macro_regime_summary_json(
         export_dir / "macro_regime_summary.json",
         {"status": "ok", "missing_series": [], "as_of": "2024-01-31"},
@@ -141,6 +164,7 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
         rolling_metrics = api_server._load_rolling_metrics(run_id)
         macro = api_server._load_macro_regimes(run_id)
         macro_summary = api_server._load_macro_summary(run_id)
+        coverage_summary = api_server._load_coverage_summary(run_id)
         bench_summary = api_server._load_benchmark_comparison(run_id)
         bench_timeseries = api_server._load_benchmark_timeseries(run_id)
     finally:
@@ -180,5 +204,6 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
     assert len(rolling_metrics) == len(rolling)
     assert len(macro) == len(macro_flags)
     assert macro_summary.get("status") == "ok"
+    assert coverage_summary.get("status") == "sufficient"
     assert_close(bench_summary.get("tracking_error"), comparison.summary.get("tracking_error"), tol=1e-6)
     assert len(bench_timeseries) == len(comparison.timeseries)

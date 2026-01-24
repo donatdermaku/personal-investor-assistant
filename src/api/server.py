@@ -196,6 +196,15 @@ def _load_macro_summary(run_id: str) -> dict:
     return {}
 
 
+def _load_coverage_summary(run_id: str) -> dict:
+    path = EXPORTS_DIR / run_id / "coverage_summary.json"
+    if path.exists():
+        return _load_json(path)
+    if use_supabase():
+        return _load_supabase_json(run_id, "coverage_summary.json")
+    return {}
+
+
 def _load_rolling_metrics(run_id: str) -> list[dict]:
     path = EXPORTS_DIR / run_id / "rolling_metrics.csv"
     if path.exists():
@@ -627,6 +636,7 @@ def get_run(run_id: str):
     except HTTPException:
         benchmark_comparison = {}
     benchmark_timeseries = _load_benchmark_timeseries(run_id)
+    coverage_summary = _load_coverage_summary(run_id)
     risk = _compute_risk_metrics(performance)
     equity_curve = [
         {"date": row.get("date"), "value": row.get("value")}
@@ -636,6 +646,7 @@ def get_run(run_id: str):
     return {
         "manifest": manifest,
         "summary": summary,
+        "coverage_summary": coverage_summary,
         "equity_curve": equity_curve,
         "performance": performance,
         "monthly_returns": monthly_returns,
@@ -689,6 +700,7 @@ def export_artifact(run_id: str, artifact: str):
         "monthly-returns": "monthly_returns.csv",
         "report": "report.html",
         "summary-json": "summary.json",
+        "coverage-summary": "coverage_summary.json",
         "performance-csv": "performance.csv",
         "monthly-returns-csv": "monthly_returns.csv",
         "attribution-summary": "attribution_summary.json",

@@ -183,6 +183,11 @@ def export_benchmark_timeseries_csv(path: Path, timeseries: pd.DataFrame) -> Non
     timeseries.to_csv(path, index=False)
 
 
+def export_coverage_summary_json(path: Path, summary: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(summary, indent=2, default=_json_default), encoding="utf-8")
+
+
 def generate_html_report(app_state) -> str:
     """
     Generate a standalone HTML report from the AppState.
