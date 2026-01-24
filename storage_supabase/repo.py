@@ -36,6 +36,12 @@ class SupabaseRepo:
                 session.flush()
             return portfolio.id
 
+    def list_watch_tickers(self, _user_id: int) -> list[str]:
+        return []
+
+    def replace_watchlist(self, _user_id: int, _tickers: list[str]):
+        return None
+
     # Trades
     def replace_trades(self, portfolio_id: int, trades_dicts: list[dict]):
         with session_scope() as session:
@@ -69,6 +75,12 @@ class SupabaseRepo:
                 }
                 for t in trades
             ]
+
+    def replace_snapshot(self, _portfolio_id: int, _snapshot_dicts: list[dict]):
+        return None
+
+    def get_latest_snapshot(self, _portfolio_id: int) -> list[dict]:
+        return []
 
     # Runs
     def create_run(self, run_id: str, portfolio_id: int, input_hash: str | None, config_hash: str | None, run_type: str | None = None):
