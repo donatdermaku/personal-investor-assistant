@@ -61,7 +61,7 @@ export function RunCreationModal() {
                 setFileError(`Missing columns: ${missing.join(", ")}`);
             }
         } catch (err) {
-            setFileError("Unable to read CSV file.");
+            setFileError(err instanceof Error ? err.message : "Unable to read CSV file.");
         }
     };
 

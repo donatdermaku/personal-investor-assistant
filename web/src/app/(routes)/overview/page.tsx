@@ -5,6 +5,8 @@ import { definitionTooltip } from "@/lib/definitions";
 import { useNexus } from "@/components/nexus/NexusProvider";
 import { EmptyState } from "@/components/nexus/EmptyState";
 import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
+import { SectionContext } from "@/components/nexus/SectionContext";
+import { coverageStatus } from "@/lib/coverage";
 import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function OverviewPage() {
@@ -53,9 +55,11 @@ export default function OverviewPage() {
         );
     }
 
-    const { summary, equity_curve, definitions } = state;
+    const { summary, equity_curve, definitions, manifest } = state;
     const equitySeries = equity_curve as Array<{ date: string; value: number; benchmark?: number | null }>;
     const hasBenchmark = equitySeries.some((point) => point.benchmark != null);
+    const coverage = coverageStatus(manifest);
+    const asOf = summary.last_date || manifest.timestamp;
 
     return (
         <div className="space-y-8">
@@ -81,27 +85,57 @@ export default function OverviewPage() {
                 </div>
             )}
 
+            <SectionContext
+                title="Overview Context"
+                items={[
+                    {
+                        label: "What it measures",
+                        text: "High-level portfolio results: total value, time-weighted and money-weighted returns, and max drawdown.",
+                    },
+                    {
+                        label: "Why it matters",
+                        text: "Sets the baseline for performance and risk conversations across the rest of the app.",
+                    },
+                    {
+                        label: "When it misleads",
+                        text: "Short histories or sparse pricing can understate drawdowns and distort return rates.",
+                    },
+                    {
+                        label: "Assumptions",
+                        text: "Returns assume end-of-day prices and rely on definitions for TWR, MWR, and drawdown.",
+                    },
+                ]}
+            />
+
             {/* KPI Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
                     label="Strategy Return (TWR)"
                     value={summary.twr !== null ? `${(summary.twr * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "twr")}
+                    coverageStatus={summary.twr !== null ? coverage : "insufficient"}
+                    asOf={asOf}
                 />
                 <MetricCard
                     label="Personal Return (MWR)"
                     value={summary.mwr !== null ? `${(summary.mwr * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "mwr")}
+                    coverageStatus={summary.mwr !== null ? coverage : "insufficient"}
+                    asOf={asOf}
                 />
                 <MetricCard
                     label="Portfolio Value"
                     value={summary.final_value !== null ? `$${summary.final_value.toLocaleString()}` : "--"}
                     subtext={summary.last_date || undefined}
+                    coverageStatus={summary.final_value !== null ? coverage : "insufficient"}
+                    asOf={asOf}
                 />
                 <MetricCard
                     label="Max Drawdown"
                     value={summary.max_drawdown !== null ? `${(summary.max_drawdown * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "max_drawdown")}
+                    coverageStatus={summary.max_drawdown !== null ? coverage : "insufficient"}
+                    asOf={asOf}
                 />
             </div>
 
@@ -167,7 +201,7 @@ export default function OverviewPage() {
             {/* Errors */}
             {summary.errors && summary.errors.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <h4 className="font-semibold text-red-900 mb-2">⚠️ Portfolio Errors</h4>
+                    <h4 className="font-semibold text-red-900 mb-2">Data issues detected</h4>
                     <ul className="list-disc list-inside text-red-700 text-sm space-y-1">
                         {summary.errors.map((err, idx) => (
                             <li key={idx}>{err}</li>

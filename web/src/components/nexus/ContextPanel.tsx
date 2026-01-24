@@ -5,6 +5,7 @@ import { downloadExport } from "@/lib/api";
 import { useNexus } from "@/components/nexus/NexusProvider";
 import type { NexusState } from "@/types/nexus";
 import { SkeletonBlock } from "@/components/nexus/Skeleton";
+import { coveragePercent } from "@/lib/coverage";
 
 function formatPercent(value: number | null) {
     if (value === null || Number.isNaN(value)) return "--";
@@ -18,28 +19,22 @@ function formatTimestamp(value?: string | null) {
     return date.toLocaleString();
 }
 
-function coveragePercent(state: NexusState | null) {
-    const summary = state?.manifest.coverage_summary;
-    if (!summary || Object.keys(summary).length === 0) return null;
-    let covered = 0;
-    let total = 0;
-    Object.values(summary).forEach((item) => {
-        covered += item.covered || 0;
-        total += item.total || 0;
-    });
-    if (total <= 0) return null;
-    return covered / total;
+function coveragePercentFromState(state: NexusState | null) {
+    return coveragePercent(state?.manifest || null);
 }
 
 export function ContextPanel() {
     const { state, status, mode, lastFetched, backendOk, benchmark, runs, runId, setRunId } = useNexus();
     const [toast, setToast] = useState<string | null>(null);
 
-    const coverage = useMemo(() => coveragePercent(state), [state]);
+    const coverage = useMemo(() => coveragePercentFromState(state), [state]);
     const manifestRunId = state?.manifest.run_id;
     const exportsEnabled = Boolean(manifestRunId) && mode === "live";
     const loading = status === "loading";
     const hasError = status === "error";
+    const runTimestamp = state?.manifest.timestamp ?? null;
+    const portfolioCurrency = state?.portfolio?.currency ?? "--";
+    const benchmarkLabel = state?.portfolio?.benchmark || benchmark || "--";
 
     const content = (
         <div className="space-y-4">
@@ -111,6 +106,9 @@ export function ContextPanel() {
                 <div className="inline-flex items-center rounded-full bg-[#F2F6FF] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#1E40AF]">
                     Export
                 </div>
+                <div className="text-xs text-gray-400">
+                    Exports match the numbers shown in the UI.
+                </div>
                 <div className="flex flex-col gap-2 text-sm">
                     <button
                         type="button"
@@ -163,6 +161,15 @@ export function ContextPanel() {
                         Exports are available after a live run completes.
                     </div>
                 )}
+                <div className="text-xs text-gray-500">
+                    Run ID: {manifestRunId || "--"} · {runTimestamp ? `As of ${formatTimestamp(runTimestamp)}` : "As of --"}
+                </div>
+                <div className="text-xs text-gray-500">
+                    Currency: {portfolioCurrency} · Benchmark: {benchmarkLabel}
+                </div>
+                <div className="text-xs text-gray-500">
+                    Sources: Yahoo Finance, FRED
+                </div>
             </div>
 
             <div className="text-xs text-gray-400">

@@ -5,6 +5,8 @@ import { definitionTooltip } from "@/lib/definitions";
 import { useNexus } from "@/components/nexus/NexusProvider";
 import { EmptyState } from "@/components/nexus/EmptyState";
 import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
+import { SectionContext } from "@/components/nexus/SectionContext";
+import { coverageStatus } from "@/lib/coverage";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function RiskPage() {
@@ -53,9 +55,11 @@ export default function RiskPage() {
         );
     }
 
-    const { risk, summary, performance, definitions, risk_contribution, rolling_metrics } = state;
+    const { risk, summary, performance, definitions, risk_contribution, rolling_metrics, manifest } = state;
     const currentDrawdown = performance.length > 0 ? performance[performance.length - 1]?.drawdown ?? null : null;
     const topRisk = risk_contribution?.contributions?.slice(0, 6) ?? [];
+    const coverage = coverageStatus(manifest);
+    const asOf = summary.last_date || manifest.timestamp;
 
     return (
         <div className="space-y-8">
@@ -66,6 +70,34 @@ export default function RiskPage() {
                 </p>
             </div>
 
+            <SectionContext
+                title="Risk Context"
+                items={[
+                    {
+                        label: "What it measures",
+                        text: "Downside risk, volatility, and drawdown behavior based on the portfolio return history.",
+                    },
+                    {
+                        label: "Why it matters",
+                        text: "Explains the variability and tail exposure behind the return profile.",
+                    },
+                    {
+                        label: "When it misleads",
+                        text: "Short histories and cash-only positions can make risk statistics appear muted.",
+                    },
+                    {
+                        label: "Assumptions",
+                        text: "Risk metrics use daily returns and require sufficient history for stability.",
+                    },
+                ]}
+            />
+
+            {summary.errors && summary.errors.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    Some inputs are missing or incomplete for this run. Risk metrics may be limited.
+                </div>
+            )}
+
             {/* Risk Metrics Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
@@ -73,22 +105,30 @@ export default function RiskPage() {
                     value={risk.var_95 !== null ? `${(risk.var_95 * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "var_daily")}
                     subtext="Daily"
+                    coverageStatus={risk.var_95 !== null ? coverage : "insufficient"}
+                    asOf={asOf}
                 />
                 <MetricCard
                     label="CVaR (95%)"
                     value={risk.cvar_95 !== null ? `${(risk.cvar_95 * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "cvar_daily")}
                     subtext="Daily"
+                    coverageStatus={risk.cvar_95 !== null ? coverage : "insufficient"}
+                    asOf={asOf}
                 />
                 <MetricCard
                     label="Volatility"
                     value={risk.volatility !== null ? `${(risk.volatility * 100).toFixed(2)}%` : "--"}
                     tooltip={definitionTooltip(definitions, "rolling_volatility")}
+                    coverageStatus={risk.volatility !== null ? coverage : "insufficient"}
+                    asOf={asOf}
                 />
                 <MetricCard
                     label="Sharpe Ratio"
                     value={risk.sharpe !== null ? risk.sharpe.toFixed(2) : "--"}
                     tooltip={definitionTooltip(definitions, "sharpe_rolling")}
+                    coverageStatus={risk.sharpe !== null ? coverage : "insufficient"}
+                    asOf={asOf}
                 />
             </div>
 
@@ -114,17 +154,15 @@ export default function RiskPage() {
                 </div>
             </div>
 
-            {/* Correlation Matrix Placeholder */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-[#0F172A] mb-4">Correlation Matrix</h3>
+            <details className="bg-white border border-gray-200 rounded-lg p-6">
+                <summary className="cursor-pointer text-lg font-semibold text-[#0F172A] mb-4">Correlation Matrix</summary>
                 <p className="text-gray-500 text-sm">
-                    Holdings correlation heatmap will be implemented when backend provides correlation data.
+                    Correlation data is unavailable in this release. This section appears once backend coverage includes correlation outputs.
                 </p>
-            </div>
+            </details>
 
-            {/* Risk Contribution */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-[#0F172A] mb-4">Risk Contribution</h3>
+            <details className="bg-white border border-gray-200 rounded-lg p-6">
+                <summary className="cursor-pointer text-lg font-semibold text-[#0F172A] mb-4">Risk Contribution</summary>
                 {topRisk.length === 0 ? (
                     <div className="text-sm text-gray-500">No risk contribution data available.</div>
                 ) : (
@@ -139,11 +177,10 @@ export default function RiskPage() {
                         ))}
                     </div>
                 )}
-            </div>
+            </details>
 
-            {/* Rolling Risk Metrics */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-[#0F172A] mb-4">Rolling Risk</h3>
+            <details className="bg-white border border-gray-200 rounded-lg p-6">
+                <summary className="cursor-pointer text-lg font-semibold text-[#0F172A] mb-4">Rolling Risk</summary>
                 {!rolling_metrics || rolling_metrics.length === 0 ? (
                     <div className="text-sm text-gray-500">No rolling risk metrics available.</div>
                 ) : (
@@ -207,7 +244,7 @@ export default function RiskPage() {
                         </LineChart>
                     </ResponsiveContainer>
                 )}
-            </div>
+            </details>
         </div>
     );
 }

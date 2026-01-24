@@ -14,7 +14,6 @@ export const MOCK_MANIFEST: RunManifest = {
     data_hash: "xyz",
     status: "completed",
     code_version: "dev",
-    coverage_summary: {},
 };
 
 export const MOCK_SUMMARY: PortfolioSummary = {
