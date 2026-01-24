@@ -22,6 +22,8 @@ from src.utils_io import ROOT
 from src.definitions import DEFINITIONS_REGISTRY
 from src.pipeline import compute_app_state, save_artifacts
 from src.portfolio import validate_ledger
+from market_data.store import MarketDataStore
+from market_data.contracts import MarketDataError
 import pandas as pd
 
 logger = logging.getLogger("nexus.api")
@@ -274,7 +276,15 @@ async def create_run(
                 "timestamp": manifest.timestamp if manifest else None,
             }
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Demo run failed: {exc}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error_code": "RUN_COMPUTE_FAILED",
+                    "message": "Demo run failed.",
+                    "details": {"error": str(exc)},
+                    "hint": "Retry later or check market data availability.",
+                },
+            )
 
     if not file:
         raise HTTPException(status_code=400, detail="Trades CSV file is required.")
@@ -295,7 +305,15 @@ async def create_run(
 
     validated, errors = validate_ledger(df)
     if errors:
-        raise HTTPException(status_code=400, detail="; ".join(errors))
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "LEDGER_VALIDATION_FAILED",
+                "message": "CSV validation failed.",
+                "details": {"errors": errors},
+                "hint": "Fix the highlighted CSV columns or values and retry.",
+            },
+        )
 
     if "quantity" in validated.columns:
         validated["quantity"] = validated["quantity"].fillna(0)
@@ -313,6 +331,29 @@ async def create_run(
 
     data_manager.save_portfolio_inputs(resolved_portfolio_id, validated, None)
 
+    tickers = sorted({t for t in validated["ticker"].astype(str).str.upper().tolist() if t != "CASH"})
+    if tickers:
+        store = MarketDataStore.default()
+        trade_dates = pd.to_datetime(validated["date"], errors="coerce").dt.date.dropna().unique().tolist()
+        for ticker in tickers:
+            try:
+                prices = store.get_prices(
+                    ticker,
+                    start=str(min(trade_dates)),
+                    end=str(max(trade_dates)),
+                )
+                store.ensure_coverage(prices, trade_dates, ticker)
+            except MarketDataError as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error_code": exc.error_code,
+                        "message": exc.message,
+                        "details": exc.details or {},
+                        "hint": exc.hint or "Check market data coverage for this ticker.",
+                    },
+                )
+
     try:
         app_state = compute_app_state(
             portfolio_id=resolved_portfolio_id,
@@ -328,7 +369,15 @@ async def create_run(
             "timestamp": manifest.timestamp if manifest else None,
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Run compute failed: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_code": "RUN_COMPUTE_FAILED",
+                "message": "Run compute failed.",
+                "details": {"error": str(exc)},
+                "hint": "Retry later or check market data availability.",
+            },
+        )
 
 @app.post("/api/v1/run")
 async def create_run_alias(

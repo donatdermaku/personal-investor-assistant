@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -11,6 +11,8 @@ import streamlit as st
 from src.portfolio import load_portfolio
 from src.utils_io import ROOT
 from storage.datamanager import data_manager
+from market_data.store import MarketDataStore
+from market_data.contracts import MarketDataError
 
 
 DATA_DIR = ROOT / "data"
@@ -240,10 +242,30 @@ def get_universe() -> tuple[pd.DataFrame, CoverageMeta]:
 
 @st.cache_data(ttl=21600)
 def get_prices(market_state: str, tickers: list[str] | None = None) -> tuple[pd.DataFrame, CoverageMeta]:
-    path = _latest_parquet("prices_daily")
-    if not path:
+    if not tickers:
+        return pd.DataFrame(), _meta_empty("missing_tickers", "Missing tickers for price fetch", total=0)
+    store = MarketDataStore.default()
+    frames: list[pd.DataFrame] = []
+    missing: list[str] = []
+    for ticker in tickers:
+        if ticker.upper() == "CASH":
+            continue
+        try:
+            data = store.get_prices(
+                ticker,
+                start="2015-01-01",
+                end=datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"),
+            )
+            frames.append(data)
+        except MarketDataError:
+            missing.append(ticker)
+    if not frames:
         return pd.DataFrame(), _meta_empty("missing_file", "Missing prices_daily parquet", total=len(tickers or []))
-    return _read_parquet_with_meta(path, required_cols=["ticker", "adj_close"], tickers=tickers)
+    df = pd.concat(frames, ignore_index=True)
+    meta = _coverage_from_df(df, tickers=tickers, ticker_col="ticker")
+    if missing:
+        meta.missing_tickers = missing
+    return df, meta
 
 
 @st.cache_data(ttl=21600)

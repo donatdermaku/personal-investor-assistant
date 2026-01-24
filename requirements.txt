@@ -42,4 +42,6 @@ sqlalchemy
 fastapi
 uvicorn[standard]
 python-multipart
+yfinance
+requests
 httpx
