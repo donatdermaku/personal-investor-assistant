@@ -5,19 +5,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.utils_io import ROOT
+from market_data.fred import load_cached_series
 
 
 def load_cached_fred_series(series_id: str) -> pd.DataFrame:
-    cache_dir = ROOT / "data" / "market_cache" / "fred"
-    path = cache_dir / f"{series_id}.parquet"
-    if not path.exists():
-        return pd.DataFrame()
-    try:
-        df = pd.read_parquet(path)
-    except Exception:
-        return pd.DataFrame()
-    if "date" not in df.columns or "value" not in df.columns:
+    df = load_cached_series(series_id)
+    if df.empty or "date" not in df.columns or "value" not in df.columns:
         return pd.DataFrame()
     df = df.copy()
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
@@ -28,8 +21,12 @@ def load_cached_fred_series(series_id: str) -> pd.DataFrame:
 @dataclass
 class MacroPayload:
     status: str
+    available_series: list[str]
     missing_series: list[str]
+    tags: list[str]
+    warnings: list[str]
     as_of: str | None
+    cache_status: dict[str, str]
     flags: pd.DataFrame
 
 
@@ -38,32 +35,47 @@ def compute_macro_regime_payload(
     cpi: pd.DataFrame,
     fed_funds: pd.DataFrame,
     vix: pd.DataFrame,
+    *,
+    cache_status: dict[str, str] | None = None,
 ) -> MacroPayload:
     if dates.empty:
-        return MacroPayload(status="unavailable", missing_series=["CPIAUCSL", "DFF", "VIXCLS"], as_of=None, flags=pd.DataFrame())
+        return MacroPayload(
+            status="unavailable",
+            available_series=[],
+            missing_series=["CPIAUCSL", "DFF", "VIXCLS"],
+            tags=[],
+            warnings=["No dates available for macro context."],
+            as_of=None,
+            cache_status=cache_status or {},
+            flags=pd.DataFrame(),
+        )
 
     base = pd.DataFrame({"date": pd.to_datetime(dates)}).dropna().drop_duplicates().sort_values("date")
 
     out = base.copy()
-    missing = []
+    missing: list[str] = []
+    available: list[str] = []
     yoy = _compute_yoy(cpi)
     if yoy.empty:
         missing.append("CPIAUCSL")
         out["inflation_yoy"] = None
     else:
         out["inflation_yoy"] = _align_series(yoy, out["date"])
+        available.append("CPIAUCSL")
 
     if fed_funds.empty:
         missing.append("DFF")
         out["fed_funds"] = None
     else:
         out["fed_funds"] = _align_series(fed_funds, out["date"])
+        available.append("DFF")
 
     if vix.empty:
         missing.append("VIXCLS")
         out["vix"] = None
     else:
         out["vix"] = _align_series(vix, out["date"])
+        available.append("VIXCLS")
 
     if "fed_funds" in out.columns and out["fed_funds"].notna().sum() >= 127:
         out["rates_change_6m"] = out["fed_funds"] - out["fed_funds"].shift(126)
@@ -80,11 +92,56 @@ def compute_macro_regime_payload(
     flags = out
     as_of = flags["date"].iloc[-1] if not flags.empty else None
 
+    tags = []
+    warnings: list[str] = []
+    if not flags.empty:
+        latest = flags.iloc[-1]
+        if latest.get("high_inflation") is True:
+            tags.append("high inflation")
+        if latest.get("rising_rates") is True:
+            tags.append("rising rates")
+        if latest.get("risk_off") is True:
+            tags.append("risk-off")
+
+    if "VIXCLS" in missing:
+        warnings.append("VIX unavailable; risk-off tag suppressed.")
+    if "CPIAUCSL" in missing:
+        warnings.append("CPI unavailable; inflation tag suppressed.")
+    if "DFF" in missing:
+        warnings.append("Fed Funds unavailable; rate tags suppressed.")
+
     if missing and flags[["high_inflation", "rising_rates", "risk_off"]].isna().all(axis=None):
-        return MacroPayload(status="unavailable", missing_series=sorted(set(missing)), as_of=as_of, flags=pd.DataFrame())
+        return MacroPayload(
+            status="unavailable",
+            available_series=sorted(set(available)),
+            missing_series=sorted(set(missing)),
+            tags=[],
+            warnings=warnings,
+            as_of=as_of,
+            cache_status=cache_status or {},
+            flags=pd.DataFrame(),
+        )
     if missing:
-        return MacroPayload(status="partial", missing_series=sorted(set(missing)), as_of=as_of, flags=flags)
-    return MacroPayload(status="ok", missing_series=[], as_of=as_of, flags=flags)
+        return MacroPayload(
+            status="partial",
+            available_series=sorted(set(available)),
+            missing_series=sorted(set(missing)),
+            tags=tags,
+            warnings=warnings,
+            as_of=as_of,
+            cache_status=cache_status or {},
+            flags=flags,
+        )
+    return MacroPayload(
+        status="sufficient",
+        available_series=sorted(set(available)),
+        missing_series=[],
+        tags=tags,
+        warnings=[],
+        as_of=as_of,
+        cache_status=cache_status or {},
+        flags=flags,
+    )
 
 
 def _align_series(df: pd.DataFrame, dates: pd.Series) -> pd.Series:

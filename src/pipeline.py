@@ -178,6 +178,7 @@ def save_artifacts(app_state: AppState):
         export_risk_contribution_json,
         export_macro_regime_flags_csv,
         export_macro_regime_summary_json,
+        export_macro_context_json,
         export_rolling_metrics_csv,
         export_benchmark_comparison_json,
         export_benchmark_timeseries_csv,
@@ -185,12 +186,15 @@ def save_artifacts(app_state: AppState):
         export_corporate_actions_csv,
         export_data_contracts_json,
         export_diagnostics_json,
+        export_correlation_matrix_json,
     )
     from src.analytics.attribution import compute_attribution
     from src.analytics.risk import compute_risk_contributions
     from src.analytics.rolling import compute_rolling_metrics
+    from src.analytics.correlation import compute_correlation_matrix
     from src.analytics.comparative import compute_benchmark_comparison
-    from src.analytics.macro import compute_macro_regime_payload, load_cached_fred_series
+    from src.analytics.macro import compute_macro_regime_payload
+    from market_data.fred import get_cached_series
     from src.diagnostics.engine import diagnostics_payload, generate_diagnostics
     from market_data.contracts import contract_registry
     
@@ -300,23 +304,63 @@ def save_artifacts(app_state: AppState):
     export_risk_contribution_json(risk_json_path, risk_output.summary, risk_output.contributions)
     repo.add_artifact(run_id, "risk_contribution_json", str(risk_json_path))
 
-    if not app_state.portfolio.daily_values.empty:
-        dates = pd.to_datetime(app_state.portfolio.daily_values.index, errors="coerce")
-        cpi = load_cached_fred_series("CPIAUCSL")
-        fed_funds = load_cached_fred_series("DFF")
-        vix = load_cached_fred_series("VIXCLS")
-        macro_payload = compute_macro_regime_payload(dates, cpi, fed_funds, vix)
-        macro_path = base_path / "macro_regime_flags.csv"
-        export_macro_regime_flags_csv(macro_path, macro_payload.flags)
-        repo.add_artifact(run_id, "macro_regime_flags_csv", str(macro_path))
+    correlation_payload = compute_correlation_matrix(returns)
+    correlation_path = base_path / "correlation_matrix.json"
+    export_correlation_matrix_json(correlation_path, correlation_payload)
+    repo.add_artifact(run_id, "correlation_matrix_json", str(correlation_path))
 
-        macro_summary_path = base_path / "macro_regime_summary.json"
-        export_macro_regime_summary_json(macro_summary_path, {
+    if manifest.coverage_summary and "metric_status" in manifest.coverage_summary:
+        status = correlation_payload.get("status", "unavailable")
+        manifest.coverage_summary["metric_status"]["correlation_matrix"] = (
+            "sufficient" if status in ("sufficient", "partial") else "insufficient"
+        )
+        reasons = correlation_payload.get("reasons", [])
+        manifest.coverage_summary["metric_reasons"]["correlation_matrix"] = reasons
+        export_coverage_summary_json(coverage_path, manifest.coverage_summary)
+        repo.add_artifact(run_id, "coverage_summary_json", str(coverage_path))
+
+    dates = pd.to_datetime(app_state.portfolio.daily_values.index, errors="coerce")
+    cpi_result = get_cached_series("CPIAUCSL", allow_refresh=False)
+    fed_result = get_cached_series("DFF", allow_refresh=False)
+    vix_result = get_cached_series("VIXCLS", allow_refresh=False)
+    cache_status = {
+        "CPIAUCSL": cpi_result.status,
+        "DFF": fed_result.status,
+        "VIXCLS": vix_result.status,
+    }
+    macro_payload = compute_macro_regime_payload(
+        dates,
+        cpi_result.frame,
+        fed_result.frame,
+        vix_result.frame,
+        cache_status=cache_status,
+    )
+    macro_path = base_path / "macro_regime_flags.csv"
+    export_macro_regime_flags_csv(macro_path, macro_payload.flags)
+    repo.add_artifact(run_id, "macro_regime_flags_csv", str(macro_path))
+
+    macro_context_path = base_path / "macro_context.json"
+    export_macro_context_json(
+        macro_context_path,
+        {
             "status": macro_payload.status,
+            "available_series": macro_payload.available_series,
             "missing_series": macro_payload.missing_series,
+            "tags": macro_payload.tags,
+            "warnings": macro_payload.warnings,
             "as_of": macro_payload.as_of,
-        })
-        repo.add_artifact(run_id, "macro_regime_summary_json", str(macro_summary_path))
+            "cache_status": macro_payload.cache_status,
+        },
+    )
+    repo.add_artifact(run_id, "macro_context_json", str(macro_context_path))
+
+    macro_summary_path = base_path / "macro_regime_summary.json"
+    export_macro_regime_summary_json(macro_summary_path, {
+        "status": macro_payload.status,
+        "missing_series": macro_payload.missing_series,
+        "as_of": macro_payload.as_of,
+    })
+    repo.add_artifact(run_id, "macro_regime_summary_json", str(macro_summary_path))
 
     comparison = compute_benchmark_comparison(
         app_state.portfolio.daily_returns,

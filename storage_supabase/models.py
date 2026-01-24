@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Index
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Index, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -82,3 +82,21 @@ Index("idx_runs_portfolio_created", Run.portfolio_id, Run.created_at.desc())
 Index("idx_transactions_portfolio_date", Transaction.portfolio_id, Transaction.date)
 Index("idx_run_artifacts_run_key", RunArtifact.run_id, RunArtifact.artifact_key)
 Index("idx_holdings_snapshots_portfolio_date", HoldingsSnapshot.portfolio_id, HoldingsSnapshot.as_of_date)
+
+
+class DataCacheIndex(Base):
+    __tablename__ = "data_cache_index"
+
+    id = Column(Integer, primary_key=True)
+    source = Column(String, nullable=False, index=True)
+    key = Column(String, nullable=False, index=True)
+    asof_date = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    ttl_seconds = Column(Integer, nullable=False, default=0)
+    status = Column(String, nullable=False, default="fresh")
+    coverage_pct = Column(Float, nullable=True)
+    storage_path = Column(String, nullable=False)
+    error_code = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    __table_args__ = (UniqueConstraint("source", "key", name="uq_cache_source_key"),)

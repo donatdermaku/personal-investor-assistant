@@ -1,5 +1,6 @@
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, UniqueConstraint, Text
+from sqlalchemy.sql import func
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.types import JSON
 
@@ -95,3 +96,20 @@ class Artifact(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     run = relationship("Run", back_populates="artifacts")
+
+
+class DataCacheIndex(Base):
+    __tablename__ = "data_cache_index"
+    id = Column(Integer, primary_key=True, index=True)
+    source = Column(String, nullable=False, index=True)
+    key = Column(String, nullable=False, index=True)
+    asof_date = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    ttl_seconds = Column(Integer, nullable=False, default=0)
+    status = Column(String, nullable=False, default="fresh")
+    coverage_pct = Column(Float, nullable=True)
+    storage_path = Column(String, nullable=False)
+    error_code = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    __table_args__ = (UniqueConstraint("source", "key", name="uq_cache_source_key"),)

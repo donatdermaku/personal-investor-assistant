@@ -16,9 +16,11 @@ from src.streamlit_export import (
     export_attribution_timeseries_csv,
     export_benchmark_comparison_json,
     export_benchmark_timeseries_csv,
+    export_correlation_matrix_json,
     export_coverage_summary_json,
     export_diagnostics_json,
     export_macro_regime_flags_csv,
+    export_macro_context_json,
     export_macro_regime_summary_json,
     export_monthly_returns_csv,
     export_performance_csv,
@@ -158,6 +160,18 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
         export_dir / "macro_regime_summary.json",
         {"status": "ok", "missing_series": [], "as_of": "2024-01-31"},
     )
+    export_macro_context_json(
+        export_dir / "macro_context.json",
+        {
+            "status": "sufficient",
+            "available_series": ["CPIAUCSL", "DFF", "VIXCLS"],
+            "missing_series": [],
+            "tags": [],
+            "warnings": [],
+            "as_of": "2024-01-31",
+            "cache_status": {"CPIAUCSL": "fresh", "DFF": "fresh", "VIXCLS": "fresh"},
+        },
+    )
 
     benchmark_prices = _prices_growth("2024-01-31", 6, "SPY", 100.0, 0.005)
     comparison = compute_benchmark_comparison(result.daily_returns, result.daily_values, benchmark_prices)
@@ -200,6 +214,17 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
         ],
     }
     export_diagnostics_json(export_dir / "diagnostics.json", diagnostics_payload)
+    export_correlation_matrix_json(
+        export_dir / "correlation_matrix.json",
+        {
+            "status": "sufficient",
+            "n_obs": 120,
+            "assets_included": ["AAA", "BBB"],
+            "assets_excluded": [],
+            "matrix": {"AAA": {"AAA": 1.0, "BBB": 0.5}, "BBB": {"AAA": 0.5, "BBB": 1.0}},
+            "reasons": [],
+        },
+    )
 
     original_exports = api_server.EXPORTS_DIR
     api_server.EXPORTS_DIR = tmp_path
@@ -218,6 +243,7 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
         corporate_actions_loaded = api_server._load_corporate_actions(run_id)
         data_contracts_loaded = api_server._load_data_contracts(run_id)
         diagnostics_loaded = api_server._load_diagnostics(run_id)
+        correlation_loaded = api_server._load_correlation_matrix(run_id)
         bench_summary = api_server._load_benchmark_comparison(run_id)
         bench_timeseries = api_server._load_benchmark_timeseries(run_id)
     finally:
@@ -262,5 +288,6 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
     assert len(corporate_actions_loaded) == len(corporate_actions)
     assert data_contracts_loaded.get("PriceSeriesContract", {}).get("version") == "1.0"
     assert diagnostics_loaded.get("diagnostics", [])[0].get("key") == "SHORT_HISTORY_WARNING"
+    assert correlation_loaded.get("status") == "sufficient"
     assert_close(bench_summary.get("tracking_error"), comparison.summary.get("tracking_error"), tol=1e-6)
     assert len(bench_timeseries) == len(comparison.timeseries)

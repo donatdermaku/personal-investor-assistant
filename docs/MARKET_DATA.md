@@ -34,6 +34,7 @@ Tier 3:
 Prices:
 - Cached per ticker in `data/market_cache/prices/{TICKER}.parquet`
 - Refresh if latest date is older than `today - 1 business day`
+- Cached persistently in Supabase Storage under `cache/yahoo/{TICKER}.parquet` with index in `data_cache_index`
 
 Dividends/Splits:
 - Cached per ticker in `data/market_cache/dividends` and `data/market_cache/splits`
@@ -43,6 +44,10 @@ Fundamentals:
 
 FRED:
 - Cached in `data/market_cache/fred`
+- Persisted in Supabase Storage under `cache/fred/{SERIES}.parquet` with index in `data_cache_index`
+
+Warmup:
+- Use `/admin/warmup` with `X-ADMIN-KEY` to refresh macro + benchmark caches proactively.
 
 ## Exports
 
@@ -50,6 +55,8 @@ FRED:
 - `risk_free_series.csv` (DTB3 aligned to portfolio calendar)
 - `corporate_actions_events.csv` (dividends and splits)
 - `data_contracts.json` (contract versions for audit)
+- `macro_context.json` (macro availability + cache status)
+- `correlation_matrix.json` (correlation artifact)
 
 ## Coverage Alignment
 

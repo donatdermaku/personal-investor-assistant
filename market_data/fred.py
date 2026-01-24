@@ -7,6 +7,7 @@ import requests
 import pandas as pd
 
 from src.utils_io import ROOT
+from market_data.persistent_cache import CacheResult, get_or_refresh_frame, load_cached_frame
 
 FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
 
@@ -40,3 +41,25 @@ def cache_series(series_id: str, df: pd.DataFrame) -> Path:
     df.to_parquet(path, index=False)
     return path
 
+
+def load_cached_series(series_id: str) -> pd.DataFrame:
+    result = load_cached_frame("fred", series_id)
+    return result.frame
+
+
+def get_cached_series(
+    series_id: str,
+    *,
+    ttl_seconds: int = 86400,
+    allow_refresh: bool = False,
+    force_refresh: bool = False,
+) -> CacheResult:
+    return get_or_refresh_frame(
+        source="fred",
+        key=series_id,
+        ttl_seconds=ttl_seconds,
+        fetch_fn=lambda: fetch_series(series_id, "1900-01-01", date.today().isoformat()),
+        asof_date=date.today().isoformat(),
+        allow_refresh=allow_refresh,
+        force_refresh=force_refresh,
+    )

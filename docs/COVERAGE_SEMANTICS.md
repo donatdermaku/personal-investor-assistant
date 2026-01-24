@@ -85,6 +85,9 @@ Coverage applies per metric using `metric_status` and `metric_reasons`:
 - Missing or unknown coverage keeps KPI values visible without warnings.
 - Reason codes are attached to each metric and shown only when insufficient.
 
+Correlation readiness is surfaced as `metric_status.correlation_matrix` with reasons
+such as `CORR_INSUFFICIENT_HISTORY` or `CORR_TOO_FEW_ASSETS`.
+
 ## Changelog
 
 - `coverage_summary_v2`: Added `coverage`, `metric_status`, and `metric_reasons` so KPI gating is tied to required dependencies.

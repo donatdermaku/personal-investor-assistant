@@ -55,7 +55,17 @@ export default function RiskPage() {
         );
     }
 
-    const { risk, summary, performance, definitions, risk_contribution, rolling_metrics, manifest, coverage_summary } = state;
+    const {
+        risk,
+        summary,
+        performance,
+        definitions,
+        risk_contribution,
+        rolling_metrics,
+        manifest,
+        coverage_summary,
+        correlation_matrix,
+    } = state;
     const currentDrawdown = performance.length > 0 ? performance[performance.length - 1]?.drawdown ?? null : null;
     const topRisk = risk_contribution?.contributions?.slice(0, 6) ?? [];
     const metricStatus = (kpiKey: string) => getMetricStatus(kpiKey, coverage_summary ?? null);
@@ -164,9 +174,48 @@ export default function RiskPage() {
 
             <details className="bg-white border border-gray-200 rounded-lg p-6">
                 <summary className="cursor-pointer text-lg font-semibold text-[#0F172A] mb-4">Correlation Matrix</summary>
-                <p className="text-gray-500 text-sm">
-                    Correlation data is unavailable in this release. This section appears once backend coverage includes correlation outputs.
-                </p>
+                {!correlation_matrix || correlation_matrix.status === "unavailable" ? (
+                    <div className="text-sm text-gray-500">
+                        Correlation matrix unavailable. {correlation_matrix?.reasons?.join(", ") || "Insufficient history."}
+                    </div>
+                ) : (
+                    <div className="space-y-3 text-sm">
+                        {correlation_matrix.reasons && correlation_matrix.reasons.length > 0 && (
+                            <div className="text-xs text-gray-500">Notes: {correlation_matrix.reasons.join(", ")}</div>
+                        )}
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full border border-gray-200 text-xs">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="p-2 text-left font-semibold text-gray-500">Asset</th>
+                                        {correlation_matrix.assets_included.map((ticker) => (
+                                            <th key={ticker} className="p-2 text-left font-semibold text-gray-500">
+                                                {ticker}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {correlation_matrix.assets_included.map((row) => (
+                                        <tr key={row} className="border-t border-gray-200">
+                                            <td className="p-2 font-semibold text-gray-600">{row}</td>
+                                            {correlation_matrix.assets_included.map((col) => (
+                                                <td key={`${row}-${col}`} className="p-2 text-gray-600">
+                                                    {correlation_matrix.matrix?.[row]?.[col]?.toFixed(2) ?? "--"}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        {correlation_matrix.assets_excluded.length > 0 && (
+                            <div className="text-xs text-gray-500">
+                                Excluded: {correlation_matrix.assets_excluded.map((row) => `${row.ticker} (${row.reason})`).join(", ")}
+                            </div>
+                        )}
+                    </div>
+                )}
             </details>
 
             <details className="bg-white border border-gray-200 rounded-lg p-6">
