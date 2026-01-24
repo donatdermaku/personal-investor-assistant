@@ -5,9 +5,26 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.analytics.attribution import compute_attribution
+from src.analytics.comparative import compute_benchmark_comparison
+from src.analytics.rolling import compute_rolling_metrics
+from src.analytics.risk import compute_risk_contributions
 from src.api import server as api_server
 from src.portfolio import compute_drawdown, compute_monthly_returns, compute_portfolio_from_ledger
-from src.streamlit_export import export_monthly_returns_csv, export_performance_csv, export_summary_json
+from src.streamlit_export import (
+    export_attribution_summary_json,
+    export_attribution_timeseries_csv,
+    export_benchmark_comparison_json,
+    export_benchmark_timeseries_csv,
+    export_macro_regime_flags_csv,
+    export_macro_regime_summary_json,
+    export_monthly_returns_csv,
+    export_performance_csv,
+    export_risk_contribution_csv,
+    export_risk_contribution_json,
+    export_rolling_metrics_csv,
+    export_summary_json,
+)
 from tests.utils import assert_close
 
 
@@ -61,12 +78,71 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
     export_performance_csv(export_dir / "performance.csv", result)
     export_monthly_returns_csv(export_dir / "monthly_returns.csv", result)
 
+    attribution = compute_attribution(prices, result.holdings_daily, result.daily_values, result.daily_returns)
+    export_attribution_summary_json(export_dir / "attribution_summary.json", attribution.summary)
+    export_attribution_timeseries_csv(export_dir / "attribution_timeseries.csv", attribution.timeseries)
+
+    returns = (
+        prices.pivot_table(index="date", columns="ticker", values="adj_close")
+        .sort_index()
+        .pct_change()
+        .fillna(0.0)
+    )
+    latest = result.holdings_daily.copy()
+    latest_date = pd.to_datetime(latest["date"]).max()
+    latest = latest[pd.to_datetime(latest["date"]) == latest_date]
+    prices_at_date = prices.copy()
+    prices_at_date["date"] = pd.to_datetime(prices_at_date["date"])
+    prices_at_date = prices_at_date[prices_at_date["date"] == latest_date]
+    weights = latest.set_index("ticker")["quantity"] * prices_at_date.set_index("ticker")["adj_close"]
+    weights = weights / float(result.daily_values["value"].iloc[-1])
+    risk_output = compute_risk_contributions(returns, weights)
+    export_risk_contribution_csv(export_dir / "risk_contribution.csv", risk_output.contributions)
+    export_risk_contribution_json(export_dir / "risk_contribution.json", risk_output.summary, risk_output.contributions)
+
+    perf = pd.read_csv(export_dir / "performance.csv")
+    rolling = compute_rolling_metrics(perf)
+    export_rolling_metrics_csv(export_dir / "rolling_metrics.csv", rolling)
+
+    macro_flags = pd.DataFrame(
+        [
+            {
+                "date": "2024-01-31",
+                "inflation_yoy": 0.02,
+                "fed_funds": 5.25,
+                "vix": 18.0,
+                "rates_change_6m": 0.0,
+                "high_inflation": False,
+                "rising_rates": False,
+                "risk_off": False,
+            }
+        ]
+    )
+    export_macro_regime_flags_csv(export_dir / "macro_regime_flags.csv", macro_flags)
+    export_macro_regime_summary_json(
+        export_dir / "macro_regime_summary.json",
+        {"status": "ok", "missing_series": [], "as_of": "2024-01-31"},
+    )
+
+    benchmark_prices = _prices_growth("2024-01-31", 6, "SPY", 100.0, 0.005)
+    comparison = compute_benchmark_comparison(result.daily_returns, result.daily_values, benchmark_prices)
+    export_benchmark_comparison_json(export_dir / "benchmark_comparison.json", comparison.summary)
+    export_benchmark_timeseries_csv(export_dir / "benchmark_timeseries.csv", comparison.timeseries)
+
     original_exports = api_server.EXPORTS_DIR
     api_server.EXPORTS_DIR = tmp_path
     try:
         summary = api_server._load_summary(run_id)
         performance = api_server._load_performance(run_id)
         monthly_returns = api_server._load_monthly_returns(run_id)
+        attribution_summary = api_server._load_attribution_summary(run_id)
+        attribution_timeseries = api_server._load_attribution_timeseries(run_id)
+        risk_payload = api_server._load_risk_contribution(run_id)
+        rolling_metrics = api_server._load_rolling_metrics(run_id)
+        macro = api_server._load_macro_regimes(run_id)
+        macro_summary = api_server._load_macro_summary(run_id)
+        bench_summary = api_server._load_benchmark_comparison(run_id)
+        bench_timeseries = api_server._load_benchmark_timeseries(run_id)
     finally:
         api_server.EXPORTS_DIR = original_exports
 
@@ -95,3 +171,14 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
     assert list(monthly_df["date"]) == list(expected_monthly["date"])
     for actual, expected in zip(monthly_df["return"].values, expected_monthly["return"].values, strict=True):
         assert_close(float(actual), float(expected), tol=1e-6)
+
+    assert_close(attribution_summary["allocation"], attribution.summary["allocation"], tol=1e-6)
+    assert_close(attribution_summary["selection"], attribution.summary["selection"], tol=1e-6)
+    assert_close(attribution_summary["interaction"], attribution.summary["interaction"], tol=1e-6)
+    assert len(attribution_timeseries) == len(attribution.timeseries)
+    assert len(risk_payload["contributions"]) == len(risk_output.contributions)
+    assert len(rolling_metrics) == len(rolling)
+    assert len(macro) == len(macro_flags)
+    assert macro_summary.get("status") == "ok"
+    assert_close(bench_summary.get("tracking_error"), comparison.summary.get("tracking_error"), tol=1e-6)
+    assert len(bench_timeseries) == len(comparison.timeseries)

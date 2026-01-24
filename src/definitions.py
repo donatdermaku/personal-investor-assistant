@@ -65,6 +65,48 @@ DEFINITIONS_REGISTRY = {
         "assumptions": "Uses covariance of daily returns.",
         "warnings": "Empty when weights sum to zero or variance is zero.",
     },
+    "allocation_effect": {
+        "title": "Allocation Effect",
+        "definition_md": "Portion of return explained by portfolio weights versus equal-weight benchmark.",
+        "assumptions": "Uses equal-weight benchmark and daily returns.",
+        "warnings": "Can be near total return for single-asset portfolios.",
+    },
+    "selection_effect": {
+        "title": "Selection Effect",
+        "definition_md": "Portion of return explained by asset performance vs benchmark return.",
+        "assumptions": "Uses equal-weight benchmark return per period.",
+        "warnings": "Zero when asset returns match benchmark return.",
+    },
+    "interaction_effect": {
+        "title": "Interaction Effect",
+        "definition_md": "Residual effect of weights and relative asset performance.",
+        "assumptions": "Equal-weight benchmark weights.",
+        "warnings": "Can be small in short windows.",
+    },
+    "tracking_error": {
+        "title": "Tracking Error",
+        "definition_md": "Std dev of active returns (portfolio - benchmark), annualized by sqrt(252).",
+        "assumptions": "Aligned portfolio and benchmark return series.",
+        "warnings": "Unavailable when active returns are insufficient.",
+    },
+    "benchmark_volatility": {
+        "title": "Benchmark Volatility",
+        "definition_md": "Annualized std dev of benchmark daily returns.",
+        "assumptions": "Uses daily benchmark returns.",
+        "warnings": "Unavailable with insufficient data.",
+    },
+    "benchmark_correlation": {
+        "title": "Benchmark Correlation",
+        "definition_md": "Correlation of portfolio and benchmark daily returns.",
+        "assumptions": "Uses overlapping daily returns.",
+        "warnings": "Unavailable with insufficient data.",
+    },
+    "rolling_drawdown": {
+        "title": "Rolling Drawdown",
+        "definition_md": "Rolling minimum of drawdown over the window.",
+        "assumptions": "Uses portfolio drawdown series.",
+        "warnings": "Empty when window insufficient.",
+    },
     "attribution_30d": {
         "title": "Attribution (30d)",
         "definition_md": "Contribution proxy = mean(returns_30d) * weight.",

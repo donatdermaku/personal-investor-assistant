@@ -13,6 +13,13 @@ def test_metric_registry_required_keys() -> None:
         "cvar_daily",
         "attribution_totals",
         "factor_tilts",
+        "allocation_effect",
+        "selection_effect",
+        "interaction_effect",
+        "tracking_error",
+        "benchmark_volatility",
+        "benchmark_correlation",
+        "rolling_drawdown",
     }
     missing = required - set(METRICS_REGISTRY.keys())
     assert not missing

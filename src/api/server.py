@@ -151,6 +151,77 @@ def _load_monthly_returns(run_id: str) -> list[dict]:
         return _load_supabase_csv(run_id, "monthly_returns.csv")
     return _load_csv(returns_path)
 
+def _load_attribution_summary(run_id: str) -> dict:
+    path = EXPORTS_DIR / run_id / "attribution_summary.json"
+    if path.exists():
+        return _load_json(path)
+    if use_supabase():
+        return _load_supabase_json(run_id, "attribution_summary.json")
+    raise HTTPException(status_code=404, detail="Attribution summary not found")
+
+
+def _load_attribution_timeseries(run_id: str) -> list[dict]:
+    path = EXPORTS_DIR / run_id / "attribution_timeseries.csv"
+    if path.exists():
+        return _load_csv(path)
+    if use_supabase():
+        return _load_supabase_csv(run_id, "attribution_timeseries.csv")
+    return []
+
+
+def _load_risk_contribution(run_id: str) -> dict:
+    path = EXPORTS_DIR / run_id / "risk_contribution.json"
+    if path.exists():
+        return _load_json(path)
+    if use_supabase():
+        return _load_supabase_json(run_id, "risk_contribution.json")
+    raise HTTPException(status_code=404, detail="Risk contribution not found")
+
+
+def _load_macro_regimes(run_id: str) -> list[dict]:
+    path = EXPORTS_DIR / run_id / "macro_regime_flags.csv"
+    if path.exists():
+        return _load_csv(path)
+    if use_supabase():
+        return _load_supabase_csv(run_id, "macro_regime_flags.csv")
+    return []
+
+
+def _load_macro_summary(run_id: str) -> dict:
+    path = EXPORTS_DIR / run_id / "macro_regime_summary.json"
+    if path.exists():
+        return _load_json(path)
+    if use_supabase():
+        return _load_supabase_json(run_id, "macro_regime_summary.json")
+    return {}
+
+
+def _load_rolling_metrics(run_id: str) -> list[dict]:
+    path = EXPORTS_DIR / run_id / "rolling_metrics.csv"
+    if path.exists():
+        return _load_csv(path)
+    if use_supabase():
+        return _load_supabase_csv(run_id, "rolling_metrics.csv")
+    return []
+
+
+def _load_benchmark_comparison(run_id: str) -> dict:
+    path = EXPORTS_DIR / run_id / "benchmark_comparison.json"
+    if path.exists():
+        return _load_json(path)
+    if use_supabase():
+        return _load_supabase_json(run_id, "benchmark_comparison.json")
+    raise HTTPException(status_code=404, detail="Benchmark comparison not found")
+
+
+def _load_benchmark_timeseries(run_id: str) -> list[dict]:
+    path = EXPORTS_DIR / run_id / "benchmark_timeseries.csv"
+    if path.exists():
+        return _load_csv(path)
+    if use_supabase():
+        return _load_supabase_csv(run_id, "benchmark_timeseries.csv")
+    return []
+
 def _load_supabase_json(run_id: str, filename: str) -> dict:
     try:
         data, _content_type = repo.get_artifact_bytes(run_id, filename)
@@ -539,6 +610,23 @@ def get_run(run_id: str):
         monthly_returns = _load_monthly_returns(run_id)
     except HTTPException:
         monthly_returns = []
+    try:
+        attribution_summary = _load_attribution_summary(run_id)
+    except HTTPException:
+        attribution_summary = {}
+    attribution_timeseries = _load_attribution_timeseries(run_id)
+    try:
+        risk_contribution = _load_risk_contribution(run_id)
+    except HTTPException:
+        risk_contribution = {"summary": {}, "contributions": []}
+    rolling_metrics = _load_rolling_metrics(run_id)
+    macro_regimes = _load_macro_regimes(run_id)
+    macro_summary = _load_macro_summary(run_id)
+    try:
+        benchmark_comparison = _load_benchmark_comparison(run_id)
+    except HTTPException:
+        benchmark_comparison = {}
+    benchmark_timeseries = _load_benchmark_timeseries(run_id)
     risk = _compute_risk_metrics(performance)
     equity_curve = [
         {"date": row.get("date"), "value": row.get("value")}
@@ -552,6 +640,19 @@ def get_run(run_id: str):
         "performance": performance,
         "monthly_returns": monthly_returns,
         "risk": risk,
+        "attribution_summary": attribution_summary,
+        "attribution_timeseries": attribution_timeseries,
+        "risk_contribution": risk_contribution,
+        "rolling_metrics": rolling_metrics,
+        "macro_regimes": macro_regimes,
+        "macro": {
+            "status": macro_summary.get("status", "unavailable"),
+            "missing_series": macro_summary.get("missing_series", []),
+            "as_of": macro_summary.get("as_of"),
+            "flags": macro_regimes,
+        },
+        "benchmark_comparison": benchmark_comparison,
+        "benchmark_timeseries": benchmark_timeseries,
     }
 
 @app.get("/run/{run_id}")
@@ -590,6 +691,15 @@ def export_artifact(run_id: str, artifact: str):
         "summary-json": "summary.json",
         "performance-csv": "performance.csv",
         "monthly-returns-csv": "monthly_returns.csv",
+        "attribution-summary": "attribution_summary.json",
+        "attribution-timeseries": "attribution_timeseries.csv",
+        "risk-contribution": "risk_contribution.csv",
+        "risk-contribution-json": "risk_contribution.json",
+        "macro-regimes": "macro_regime_flags.csv",
+        "macro-regime-summary": "macro_regime_summary.json",
+        "rolling-metrics": "rolling_metrics.csv",
+        "benchmark-comparison": "benchmark_comparison.json",
+        "benchmark-timeseries": "benchmark_timeseries.csv",
     }
     filename = allowed.get(artifact)
     if not filename:
