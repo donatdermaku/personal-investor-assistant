@@ -1,0 +1,3 @@
+date,ticker,action,quantity,price,fees
+2024-01-31,CASH,DEPOSIT,0,10000.0,0.0
+2024-03-31,AAA,DIVIDEND,0,100.0,0.0
