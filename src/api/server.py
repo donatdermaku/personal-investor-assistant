@@ -398,7 +398,7 @@ def list_runs():
                 "run_id": run.id,
                 "status": run.status,
                 "timestamp": run.completed_at.isoformat() if run.completed_at else None,
-                "input_hash": run.input_hash,
+                "input_hash": getattr(run, "input_hash", None),
                 "data_hash": getattr(run, "data_hash", None),
             }
             for run in runs
