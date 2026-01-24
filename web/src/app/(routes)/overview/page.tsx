@@ -55,7 +55,7 @@ export default function OverviewPage() {
         );
     }
 
-    const { summary, equity_curve, definitions, manifest, coverage_summary } = state;
+    const { summary, equity_curve, definitions, manifest, coverage_summary, diagnostics } = state;
     const equitySeries = equity_curve as Array<{ date: string; value: number; benchmark?: number | null }>;
     const hasBenchmark = equitySeries.some((point) => point.benchmark != null);
     const metricStatus = (kpiKey: string) => getMetricStatus(kpiKey, coverage_summary ?? null);
@@ -64,6 +64,7 @@ export default function OverviewPage() {
     const metricReasonCodes = (kpiKey: string) =>
         metricStatus(kpiKey) === "insufficient" ? metricReasons(kpiKey) : undefined;
     const asOf = summary.last_date || manifest.timestamp;
+    const diagnosticsList = diagnostics ?? [];
 
     return (
         <div className="space-y-8">
@@ -146,6 +147,53 @@ export default function OverviewPage() {
                     reasonCodes={metricReasonCodes("max_drawdown")}
                 />
             </div>
+
+            {diagnosticsList.length > 0 && (
+                <section className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-[#0F172A]">Diagnostics</h3>
+                        <span className="text-xs text-gray-400 uppercase tracking-wide">Deterministic signals</span>
+                    </div>
+                    <div className="space-y-3">
+                        {diagnosticsList.map((signal) => {
+                            const badgeClass =
+                                signal.severity === "high"
+                                    ? "border-rose-200 bg-rose-50 text-rose-700"
+                                    : signal.severity === "medium"
+                                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                                        : "border-slate-200 bg-slate-50 text-slate-600";
+                            return (
+                                <details key={signal.key} className="rounded-lg border border-gray-200 px-4 py-3">
+                                    <summary className="flex cursor-pointer items-center justify-between">
+                                        <div className="text-sm font-semibold text-[#0F172A]">{signal.summary}</div>
+                                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${badgeClass}`}>
+                                            {signal.severity}
+                                        </span>
+                                    </summary>
+                                    <div className="mt-3 text-xs text-gray-500 space-y-2">
+                                        {signal.evidence.length > 0 && (
+                                            <div>
+                                                <div className="font-semibold text-gray-600 mb-1">Why</div>
+                                                <ul className="list-disc list-inside space-y-1">
+                                                    {signal.evidence.map((item) => (
+                                                        <li key={item}>{item}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                        {signal.metrics_used.length > 0 && (
+                                            <div>Metrics used: {signal.metrics_used.join(", ")}</div>
+                                        )}
+                                        {signal.suggested_action && (
+                                            <div>Suggested action: {signal.suggested_action}</div>
+                                        )}
+                                    </div>
+                                </details>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
 
             {/* Equity Curve */}
             <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">

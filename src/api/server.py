@@ -255,6 +255,15 @@ def _load_benchmark_timeseries(run_id: str) -> list[dict]:
         return _load_supabase_csv(run_id, "benchmark_timeseries.csv")
     return []
 
+
+def _load_diagnostics(run_id: str) -> dict:
+    path = EXPORTS_DIR / run_id / "diagnostics.json"
+    if path.exists():
+        return _load_json(path)
+    if use_supabase():
+        return _load_supabase_json(run_id, "diagnostics.json")
+    return {"diagnostics": [], "run_id": run_id}
+
 def _load_supabase_json(run_id: str, filename: str) -> dict:
     try:
         data, _content_type = repo.get_artifact_bytes(run_id, filename)
@@ -676,6 +685,7 @@ def get_run(run_id: str):
     except HTTPException:
         benchmark_comparison = {}
     benchmark_timeseries = _load_benchmark_timeseries(run_id)
+    diagnostics_payload = _load_diagnostics(run_id)
     coverage_summary = _load_coverage_summary(run_id)
     risk_free_series = _load_risk_free_series(run_id)
     corporate_actions = _load_corporate_actions(run_id)
@@ -710,6 +720,7 @@ def get_run(run_id: str):
         },
         "benchmark_comparison": benchmark_comparison,
         "benchmark_timeseries": benchmark_timeseries,
+        "diagnostics": diagnostics_payload.get("diagnostics", []),
     }
 
 @app.get("/run/{run_id}")
@@ -761,6 +772,7 @@ def export_artifact(run_id: str, artifact: str):
         "rolling-metrics": "rolling_metrics.csv",
         "benchmark-comparison": "benchmark_comparison.json",
         "benchmark-timeseries": "benchmark_timeseries.csv",
+        "diagnostics": "diagnostics.json",
     }
     filename = allowed.get(artifact)
     if not filename:
