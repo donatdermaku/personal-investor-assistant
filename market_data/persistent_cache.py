@@ -129,7 +129,10 @@ def get_or_refresh_frame(
     now = datetime.now(timezone.utc)
     stale = False
     if entry and entry.updated_at and entry.ttl_seconds:
-        age = (now - entry.updated_at).total_seconds()
+        updated_at = entry.updated_at
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        age = (now - updated_at).total_seconds()
         stale = age > entry.ttl_seconds
         if not force_refresh and age <= entry.ttl_seconds and not result.frame.empty:
             return CacheResult(result.frame, "fresh", entry)
