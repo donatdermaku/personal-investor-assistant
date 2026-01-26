@@ -148,7 +148,15 @@ def _align_series(df: pd.DataFrame, dates: pd.Series) -> pd.Series:
     if df.empty:
         return pd.Series([None] * len(dates), index=dates.index)
     series = df.set_index("date")["value"].sort_index()
-    series = series.reindex(pd.to_datetime(dates), method="ffill")
+    # Ensure series index is timezone-naive DatetimeIndex
+    if hasattr(series.index, 'tz') and series.index.tz is not None:
+        series.index = series.index.tz_localize(None)
+    series.index = pd.to_datetime(series.index, errors="coerce")
+    # Convert target dates to timezone-naive DatetimeIndex
+    target_dates = pd.to_datetime(dates, errors="coerce")
+    if hasattr(target_dates, 'tz') and target_dates.tz is not None:
+        target_dates = target_dates.tz_localize(None)
+    series = series.reindex(target_dates, method="ffill")
     return series.values
 
 
