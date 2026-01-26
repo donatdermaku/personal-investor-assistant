@@ -13,6 +13,9 @@ from market_data.yahoo import fetch_prices, fetch_dividends_and_splits
 from market_data.persistent_cache import get_or_refresh_frame
 from src.utils_io import ROOT
 
+# Fixed earliest date for max-history fetching - ensures cache always has full history
+FIXED_EARLIEST_DATE = "2010-01-01"
+
 
 @dataclass
 class MarketDataStore:
@@ -38,14 +41,39 @@ class MarketDataStore:
         (self.cache_dir / "dividends").mkdir(parents=True, exist_ok=True)
         (self.cache_dir / "splits").mkdir(parents=True, exist_ok=True)
 
-    def _is_price_cache_fresh(self, df: pd.DataFrame) -> bool:
+    def _is_price_cache_fresh(
+        self, df: pd.DataFrame, required_start: str | None = None
+    ) -> bool:
+        """Check if cached price data is fresh and covers the required date range.
+        
+        Args:
+            df: Cached price DataFrame
+            required_start: Required start date (defaults to FIXED_EARLIEST_DATE)
+            
+        Returns:
+            True if cache covers from required_start to yesterday, False otherwise
+        """
         if df.empty or "date" not in df.columns:
             return False
-        last_date = pd.to_datetime(df["date"], errors="coerce").max()
-        if pd.isna(last_date):
+        
+        dates = pd.to_datetime(df["date"], errors="coerce")
+        first_date = dates.min()
+        last_date = dates.max()
+        
+        if pd.isna(first_date) or pd.isna(last_date):
             return False
-        target = (datetime.utcnow().date() - BDay(1)).date()
-        return last_date.date() >= target
+        
+        # Check end date: must cover at least yesterday
+        target_end = (datetime.utcnow().date() - BDay(1)).date()
+        if last_date.date() < target_end:
+            return False
+        
+        # Check start date: must cover from required_start (or FIXED_EARLIEST_DATE)
+        target_start = pd.to_datetime(required_start or FIXED_EARLIEST_DATE).date()
+        if first_date.date() > target_start:
+            return False
+        
+        return True
 
     def get_prices(self, ticker: str, start: str, end: str) -> pd.DataFrame:
         if ticker.upper() == "CASH":
@@ -62,18 +90,36 @@ class MarketDataStore:
                 cached = pd.read_parquet(cache_path)
             except Exception:
                 cached = pd.DataFrame()
-        if cached.empty or not self._is_price_cache_fresh(cached):
+        
+        # Use FIXED_EARLIEST_DATE for fetching to ensure full history coverage
+        # Pass the requested start to freshness check for validation
+        if cached.empty or not self._is_price_cache_fresh(cached, required_start=start):
             cache_result = get_or_refresh_frame(
                 source="yahoo",
                 key=ticker,
                 ttl_seconds=21600,
-                fetch_fn=lambda: fetch_prices(ticker, start, end),
+                fetch_fn=lambda: fetch_prices(ticker, FIXED_EARLIEST_DATE, end),
                 asof_date=end,
                 allow_refresh=True,
             )
             cached = cache_result.frame
+            
+            # Validate before caching to prevent poisoned cache
             if not cached.empty:
-                cached.to_parquet(cache_path, index=False)
+                from market_data.rate_limiter import validate_price_cache
+                is_valid, reasons = validate_price_cache(
+                    cached, 
+                    required_start=FIXED_EARLIEST_DATE,
+                    required_end=end,
+                    min_rows=500,  # Lower for newer tickers, ~500 rows for 2 years of data
+                )
+                if is_valid:
+                    cached.to_parquet(cache_path, index=False)
+                else:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        f"Cache validation failed for {ticker}, not caching: {reasons}"
+                    )
         if not cached.empty and "date" in cached.columns:
             cached = cached.copy()
             cached["date"] = pd.to_datetime(cached["date"], errors="coerce").dt.date

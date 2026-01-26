@@ -7,6 +7,7 @@ import pandas as pd
 import yfinance as yf
 
 from market_data.contracts import MarketDataError, validate_price_frame
+from market_data.rate_limiter import throttled_fetch
 
 
 def _normalize_prices(raw: pd.DataFrame) -> pd.DataFrame:
@@ -39,7 +40,12 @@ def fetch_prices(
     end: str,
     interval: str = "1d",
 ) -> pd.DataFrame:
-    try:
+    """Fetch price data from Yahoo Finance with rate limiting and retry.
+    
+    Uses global rate limiter to prevent 429 errors and implements
+    exponential backoff with Retry-After header support.
+    """
+    def _do_fetch() -> pd.DataFrame:
         raw = yf.download(
             tickers=ticker,
             start=start,
@@ -47,6 +53,13 @@ def fetch_prices(
             interval=interval,
             auto_adjust=False,
             progress=False,
+        )
+        return raw
+    
+    try:
+        raw = throttled_fetch(
+            _do_fetch,
+            operation_name=f"fetch_prices({ticker})",
         )
     except Exception as exc:
         raise MarketDataError(
@@ -65,10 +78,16 @@ def fetch_dividends_and_splits(
     start: str,
     end: str,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    try:
+    """Fetch dividend and split data from Yahoo Finance with rate limiting."""
+    def _do_fetch():
         yf_ticker = yf.Ticker(ticker)
-        dividends = yf_ticker.dividends
-        splits = yf_ticker.splits
+        return yf_ticker.dividends, yf_ticker.splits
+    
+    try:
+        dividends, splits = throttled_fetch(
+            _do_fetch,
+            operation_name=f"fetch_dividends_and_splits({ticker})",
+        )
     except Exception as exc:
         raise MarketDataError(
             error_code="MARKET_DATA_FETCH_FAILED",
