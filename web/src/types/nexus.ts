@@ -229,7 +229,7 @@ export interface CoverageAggregate {
     rf_score: number | null;
 }
 
-export type MetricCoverageStatus = "sufficient" | "insufficient" | "unknown";
+export type MetricCoverageStatus = "sufficient" | "insufficient" | "unknown" | "available_low_coverage" | "unavailable";
 
 export interface CoverageSourceStatus {
     status: MetricCoverageStatus;
