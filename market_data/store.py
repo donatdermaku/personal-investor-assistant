@@ -78,7 +78,11 @@ class MarketDataStore:
             cached = cached.copy()
             cached["date"] = pd.to_datetime(cached["date"], errors="coerce").dt.date
         cached = validate_price_frame(cached, ticker)
-        cached = cached[(cached["date"] >= date.fromisoformat(start)) & (cached["date"] <= date.fromisoformat(end))]
+        if not cached.empty and "date" in cached.columns:
+            date_index = pd.to_datetime(cached["date"], errors="coerce")
+            start_date = pd.to_datetime(start, errors="coerce")
+            end_date = pd.to_datetime(end, errors="coerce")
+            cached = cached[(date_index >= start_date) & (date_index <= end_date)]
         dividends = self.get_dividends(ticker, start, end)
         splits = self.get_splits(ticker, start, end)
         normalized = normalize_price_frame(cached, dividends, splits, source="yahoo")
