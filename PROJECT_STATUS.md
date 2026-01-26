@@ -117,6 +117,19 @@ make verify
 ## 4. Recent Changes (Last 30 Days)
 
 ### [2026-01-26] - Bugfix
+**Fix Timestamp vs String comparison error in macro analytics**
+- Agent: Claude Sonnet 4
+- Files modified:
+  - `src/analytics/macro.py` (modified)
+- Changes:
+  - Fixed `_align_series` function to handle timezone-aware vs timezone-naive datetime comparisons
+  - Ensured both series index and target dates are converted to timezone-naive DatetimeIndex before reindexing
+  - Prevented "Timestamp vs str" comparison error when processing FRED data
+- Testing performed:
+  - ✅ Unit tests: `tests/unit/test_macro_partial.py`, `tests/unit/test_macro_unavailable.py` passed
+- Status: ✅ Success
+
+### [2026-01-26] - Bugfix
 **Fix Timestamp vs String comparison error in coverage module**
 - Agent: Claude Sonnet 4
 - Files modified:
@@ -236,6 +249,17 @@ cd web && npm test  # Frontend tests
 | Issue | Severity | Description | Workaround |
 |-------|----------|-------------|------------|
 | None reported | - | - | - |
+
+### Platform Stability & Data Coverage Findings (Render Free Tier)
+- **Data Coverage Status**: Live runs showing ~92.2% coverage (Verified with `sample_trades_full_metrics.csv`).
+  - **Issue**: Metrics show "Insufficient" because `CoveragePolicy` default threshold is 95%.
+  - **Cause**: Market holidays/gaps in fresh Yahoo Finance fetches.
+  - **Workaround**: Lower threshold to 90% or implement persistent cache.
+- **Render Ephemeral Filesystem**:
+  - Cache is wiped on every deploy/restart.
+  - Triggers massive Yahoo/FRED fetching on startup/first run.
+  - Leads to rate limiting (429s) and missing data (e.g., Risk-Free rate failure).
+- **Recommendation**: Implement `admin/warmup` hook on deploy or use external storage (Supabase) for cache.
 
 ---
 
