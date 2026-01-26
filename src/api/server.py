@@ -499,6 +499,7 @@ async def create_run(
                 "timestamp": manifest.timestamp if manifest else None,
             }
         except Exception as exc:
+            logger.exception("RUN_COMPUTE_FAILED: Full traceback for demo run_id=%s", run_id)
             repo.update_run_failed(run_id, "RUN_COMPUTE_FAILED", str(exc))
             raise HTTPException(
                 status_code=500,
@@ -595,6 +596,7 @@ async def create_run(
             "timestamp": manifest.timestamp if manifest else None,
         }
     except Exception as exc:
+        logger.exception("RUN_COMPUTE_FAILED: Full traceback for run_id=%s", run_id)
         repo.update_run_failed(run_id, "RUN_COMPUTE_FAILED", str(exc))
         raise HTTPException(
             status_code=500,
@@ -847,6 +849,44 @@ def warmup(payload: dict | None = None, x_admin_key: str | None = Header(default
     }
     _store_warmup_report(report)
     return report
+
+@app.get("/admin/cache-status")
+def cache_status(x_admin_key: str | None = Header(default=None)):
+    """Debug endpoint to inspect market data cache without Shell access."""
+    admin_key = os.getenv("ADMIN_WARMUP_KEY")
+    if not admin_key or x_admin_key != admin_key:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    cache_dir = Path(os.getenv("NEXUS_MARKET_CACHE", ROOT / "data" / "market_cache"))
+    result = {
+        "cache_dir": str(cache_dir),
+        "cache_exists": cache_dir.exists(),
+        "prices": [],
+        "sample_dtypes": {},
+    }
+    
+    prices_dir = cache_dir / "prices"
+    if prices_dir.exists():
+        files = list(prices_dir.glob("*.parquet"))
+        result["prices"] = [
+            {"name": f.name, "size_kb": round(f.stat().st_size / 1024, 1)}
+            for f in sorted(files)[:20]  # Limit to 20 files
+        ]
+        result["total_price_files"] = len(files)
+        
+        # Sample one file to check dtypes
+        if files:
+            try:
+                sample = pd.read_parquet(files[0])
+                result["sample_file"] = files[0].name
+                result["sample_dtypes"] = {col: str(sample[col].dtype) for col in sample.columns}
+                if "date" in sample.columns:
+                    result["sample_date_values"] = [str(v) for v in sample["date"].head(3).tolist()]
+            except Exception as exc:
+                result["sample_error"] = str(exc)
+    
+    return result
+
 @app.get("/api/v1/run/{run_id}/export/{artifact}")
 def export_artifact(run_id: str, artifact: str):
     _validate_run_id(run_id)
