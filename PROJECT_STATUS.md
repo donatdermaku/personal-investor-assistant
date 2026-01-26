@@ -145,6 +145,17 @@ make verify
   - Fixed NameError in `metric_status_from_coverage`
 - Status: ✅ Success
 
+### [2026-01-26] - Investigation
+**Out of Memory (OOM) / 502 Error on Large Portfolios**
+- Issue: CSVs with ~30+ tickers cause OOM crash (Error 502) on Render Starter (512MB RAM).
+- Root Cause: `src/pipeline.py` loads 15+ years of daily data for *all* tickers simultaneously.
+- Findings:
+  - Small CSVs work ✅
+  - Cache warmup works ✅
+  - OOM occurs during `compute_app_state` (Pandas DataFrame construction).
+- Status: ⚠️ Critical bottleneck
+- Next Steps: **Phase 20.3 - Memory-Bounded Analytics** (See prompt for next agent)
+
 ### [2026-01-26] - Feature (#44)
 **Refined Coverage Semantics & Cache Health (Phase 20.1)**
 - Agent: Antigravity
