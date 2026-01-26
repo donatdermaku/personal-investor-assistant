@@ -100,16 +100,46 @@ class MarketDataStore:
         available = set(prices_df["date"].dropna().unique())
         missing: list[str] = []
         aligned: dict[date, date] = {}
-        for td in trade_dates:
+
+        # Helper to ensure date type
+        def _to_date(d: Any) -> date | None:
+            if isinstance(d, str):
+                try:
+                    ts = pd.to_datetime(d)
+                    return ts.date() if pd.notna(ts) else None
+                except Exception:
+                    return None
+            if isinstance(d, pd.Timestamp):
+                return d.date()
+            if isinstance(d, datetime):
+                return d.date()
+            if isinstance(d, date):
+                return d
+            return None
+
+        # Sort available dates for efficient searching
+        sorted_available = sorted(list(available))
+
+        for raw_td in trade_dates:
+            td = _to_date(raw_td)
+            if td is None:
+                # Should we error or skip? Skipping invalid dates seems safest for now
+                continue
+
             if td in available:
                 aligned[td] = td
                 continue
+
             # Use previous trading day
-            prev_days = [d for d in available if d < td]
+            # Find candidate dates strictly less than td
+            # Since we sorted_available, we can find the last one < td
+            # But simple list comp is fine for usually small list
+            prev_days = [d for d in sorted_available if d < td]
             if prev_days:
-                aligned[td] = max(prev_days)
+                aligned[td] = prev_days[-1] # Max of prev_days
             else:
                 missing.append(td.isoformat())
+
         if missing:
             raise MarketDataError(
                 error_code="MARKET_DATA_MISSING_DATES",
