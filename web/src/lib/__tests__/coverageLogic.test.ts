@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { shouldHideKpiValue } from "@/lib/coverageLogic";
+import { shouldHideKpiValue, getKpiBadge } from "@/lib/coverageLogic";
 
 describe("shouldHideKpiValue", () => {
     it("shows KPI when coverage summary is missing", () => {
@@ -41,5 +41,22 @@ describe("shouldHideKpiValue", () => {
 
         expect(shouldHideKpiValue("twr", coverageSummary as any)).toBe(true);
         expect(shouldHideKpiValue("portfolio_value", coverageSummary as any)).toBe(true);
+    });
+});
+
+describe('getKpiBadge', () => {
+    it('returns INSUFFICIENT when hidden', () => {
+        const summary: any = { metric_status: { sharpe: "insufficient" } };
+        expect(getKpiBadge('sharpe', summary)).toBe('INSUFFICIENT');
+    });
+
+    it('returns WARNING when available_low_coverage', () => {
+        const summary: any = { metric_status: { sharpe: "available_low_coverage" } };
+        expect(getKpiBadge('sharpe', summary)).toBe('WARNING');
+    });
+
+    it('returns null when sufficient', () => {
+        const summary: any = { metric_status: { sharpe: "sufficient" } };
+        expect(getKpiBadge('sharpe', summary)).toBe(null);
     });
 });

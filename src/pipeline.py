@@ -102,6 +102,9 @@ def compute_app_state(
     
     as_of = portfolio_result.daily_values.index.max().strftime("%Y-%m-%d") if not portfolio_result.daily_values.empty else None
     risk_free = compute_risk_free_series(portfolio_result.daily_values.index if not portfolio_result.daily_values.empty else pd.DatetimeIndex([]))
+    from src.analytics.required_start import compute_required_start_per_ticker
+    req_starts = compute_required_start_per_ticker(portfolio_result.holdings_daily)
+    
     coverage_summary = build_coverage_summary(
         prices,
         required_tickers=watch_tickers,
@@ -109,6 +112,7 @@ def compute_app_state(
         benchmark_prices=bench_prices,
         as_of=as_of,
         risk_free_series=risk_free.series,
+        required_start_per_ticker=req_starts,
     )
 
     manifest = create_manifest(

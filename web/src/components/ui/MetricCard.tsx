@@ -40,6 +40,7 @@ export function MetricCard({
     }
 
     const safeValue = value === null || value === undefined ? "--" : value;
+    // Don't hide if coverage is "available_low_coverage", only if "insufficient"
     const showValue = shouldHide ? "--" : safeValue;
     const asOfLabel = formatAsOf(asOf);
     const badgeLabel = coverageStatus === "full"
@@ -48,14 +49,18 @@ export function MetricCard({
             ? "Partial coverage"
             : coverageStatus === "insufficient"
                 ? "Insufficient"
-                : null;
+                : coverageStatus === "available_low_coverage"
+                    ? "Warning"
+                    : null;
     const badgeClass = coverageStatus === "full"
         ? "border-emerald-200 bg-emerald-50 text-emerald-700"
         : coverageStatus === "partial"
             ? "border-amber-200 bg-amber-50 text-amber-700"
             : coverageStatus === "insufficient"
                 ? "border-gray-200 bg-gray-100 text-gray-500"
-                : "border-[#E8F0FF] bg-[#E8F0FF] text-[#1E40AF]";
+                : coverageStatus === "available_low_coverage"
+                    ? "border-yellow-200 bg-yellow-50 text-yellow-700"
+                    : "border-[#E8F0FF] bg-[#E8F0FF] text-[#1E40AF]";
 
     const reasonLabel =
         shouldHide && reasonCodes && reasonCodes.length > 0
@@ -64,9 +69,8 @@ export function MetricCard({
 
     return (
         <div
-            className={`nexus-card border-l-4 border-[#E8F0FF] transition-all ${
-                coverageStatus === "insufficient" ? "opacity-70" : "hover:border-[#2563EB] hover:shadow-md"
-            }`}
+            className={`nexus-card border-l-4 border-[#E8F0FF] transition-all ${coverageStatus === "insufficient" ? "opacity-70" : "hover:border-[#2563EB] hover:shadow-md"
+                }`}
             title={tooltip}
         >
             <div className="flex items-center justify-between">

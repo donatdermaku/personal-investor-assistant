@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 
 import pandas as pd
 
 from src.analytics.contracts import KPI_DEPENDENCIES, evaluate_metric_status
+from market_data.calendar import canonical_market_calendar
 
 
 @dataclass(frozen=True)
@@ -26,11 +27,6 @@ def _as_date(value: str | date | None) -> date | None:
     return parsed.date()
 
 
-def _expected_window(as_of: date, required_days: int) -> list[date]:
-    expected = pd.bdate_range(end=pd.Timestamp(as_of), periods=required_days)
-    return [d.date() for d in expected]
-
-
 def _largest_gap_days(expected_dates: list[date], actual_dates: set[date]) -> int:
     largest = 0
     current = 0
@@ -46,9 +42,9 @@ def _largest_gap_days(expected_dates: list[date], actual_dates: set[date]) -> in
 
 def _score_ticker(
     dates: list[date],
+    expected_dates: list[date],
     *,
     policy: CoveragePolicy,
-    as_of: date,
 ) -> dict:
     if not dates:
         return {
@@ -60,30 +56,35 @@ def _score_ticker(
             "reason_codes": ["NO_DATA"],
         }
 
-    expected_dates = _expected_window(as_of, policy.min_history_days)
     expected_set = set(expected_dates)
     actual_set = {d for d in dates if d in expected_set}
     history_days = len(actual_set)
-    missing_days = max(0, policy.min_history_days - history_days)
+    missing_days = max(0, len(expected_set) - history_days)
     largest_gap = _largest_gap_days(expected_dates, actual_set)
 
-    history_score = min(history_days / policy.min_history_days, 1.0)
-    missing_penalty = 1.0 - (missing_days / policy.min_history_days) if policy.min_history_days else 0.0
+    # Coverage Completeness (Quality)
+    # 0.0 if nothing expected (shouldn't happen if we call it right, but safe fallback)
+    completeness = history_days / len(expected_dates) if expected_dates else 1.0
+    
     if largest_gap <= policy.max_gap_days:
         gap_penalty = 1.0
     else:
         gap_penalty = max(0.0, 1.0 - ((largest_gap - policy.max_gap_days) / policy.max_gap_days))
 
-    score = max(0.0, history_score * missing_penalty * gap_penalty)
+    score = max(0.0, completeness * gap_penalty)
+    
     reasons: list[str] = []
-    if history_days < policy.min_history_days:
+    is_short = history_days < policy.min_history_days
+    if is_short:
         reasons.append("HISTORY_SHORT")
     if missing_days > 0:
         reasons.append("MISSING_DAYS")
     if largest_gap > policy.max_gap_days:
         reasons.append("GAPS_LARGE")
 
-    status = "ok" if score >= policy.min_score_for_kpis else "low"
+    # Status relies on both Quality (score) and Quantity (history_days)
+    status = "ok" if (score >= policy.min_score_for_kpis and not is_short) else "low"
+    
     return {
         "score": float(score),
         "history_days": int(history_days),
@@ -103,17 +104,47 @@ def build_coverage_summary(
     risk_free_series: pd.DataFrame | None = None,
     as_of: str | date | None = None,
     policy: CoveragePolicy | None = None,
+    required_start_per_ticker: dict[str, date] | None = None,
 ) -> dict:
     policy = policy or CoveragePolicy()
+    required_start_per_ticker = required_start_per_ticker or {}
 
-    def metric_status_from_coverage(coverage: dict[str, dict[str, object]]) -> tuple[dict[str, str], dict[str, list[str]]]:
+    def metric_status_from_coverage(coverage: dict[str, dict[str, object]]) -> tuple[dict[str, str], dict[str, list[str]], dict[str, float]]:
         metric_status: dict[str, str] = {}
         metric_reasons: dict[str, list[str]] = {}
+        metric_coverage: dict[str, float] = {}
+        
+        # Helper to get score for dependency
+        def get_score(dep: str) -> float:
+            # We don't have raw score in coverage map passed here easily as it has {status, reason_codes}
+            # Actually, we need to pass aggregate dict or similar? 
+            # The 'coverage' dict passed to this inner function matches the 'coverage' key in final export.
+            # But that dict doesn't have scores! 
+            # The scores are in 'aggregate' or 'per_ticker'.
+            # We must access 'aggregate' from outer scope.
+            if dep == "prices":
+                 return aggregate.get("min_ticker_score", 0.0)
+            if dep == "benchmark":
+                 return aggregate.get("benchmark_score") or 0.0
+            if dep == "risk_free":
+                 return aggregate.get("rf_score") or 0.0
+            return 0.0
+
         for key, deps in KPI_DEPENDENCIES.items():
             status, reasons = evaluate_metric_status(coverage, deps)
+            
+            # Map "available_low_coverage" to "active" status if needed, or just use as is.
+            # The prompt says: "Metrics that previously computed but were insufficient now become available_low_coverage".
+            # So status is "available_low_coverage".
+            
             metric_status[key] = status
             metric_reasons[key] = reasons
-        return metric_status, metric_reasons
+            
+            # Use score of first dependency for now
+            primary_dep = deps[0] if deps else "prices"
+            metric_coverage[key] = get_score(primary_dep)
+            
+        return metric_status, metric_reasons, metric_coverage
 
     if prices is None or prices.empty or "date" not in prices.columns or "ticker" not in prices.columns:
         coverage = {
@@ -122,7 +153,7 @@ def build_coverage_summary(
             "risk_free": {"status": "unknown", "reason_codes": []},
             "macro": {"status": "unknown", "reason_codes": []},
         }
-        metric_status, metric_reasons = metric_status_from_coverage(coverage)
+        metric_status, metric_reasons, metric_coverage = metric_status_from_coverage(coverage)
         return {
             "as_of": _as_date(as_of).isoformat() if _as_date(as_of) else None,
             "status": "insufficient",
@@ -146,6 +177,7 @@ def build_coverage_summary(
             "coverage": coverage,
             "metric_status": metric_status,
             "metric_reasons": metric_reasons,
+            "metric_coverage": metric_coverage,
             "reason_codes": ["NO_PRICES"],
             "contract_version": "coverage_summary_v2",
             "version": "2.0",
@@ -169,7 +201,7 @@ def build_coverage_summary(
             "risk_free": {"status": "unknown", "reason_codes": []},
             "macro": {"status": "unknown", "reason_codes": []},
         }
-        metric_status, metric_reasons = metric_status_from_coverage(coverage)
+        metric_status, metric_reasons, metric_coverage = metric_status_from_coverage(coverage)
         return {
             "as_of": None,
             "status": "unknown",
@@ -193,6 +225,7 @@ def build_coverage_summary(
             "coverage": coverage,
             "metric_status": metric_status,
             "metric_reasons": metric_reasons,
+            "metric_coverage": metric_coverage,
             "reason_codes": ["NO_DATES"],
             "contract_version": "coverage_summary_v2",
             "version": "2.0",
@@ -200,10 +233,44 @@ def build_coverage_summary(
 
     per_ticker: dict[str, dict] = {}
     core_scores: list[float] = []
+
+    # Calculate Canonical Calendar
+    # Start date = max(as_of - min_history_days, earliest_date_needed)
+    # Ideally we just look back min_history_days business days from as_of
+    start_date = (pd.Timestamp(as_of_date) - pd.Timedelta(days=policy.min_history_days * 2)).date() # Approximation for start, calendar will filter
+    
+    # Better approach: Use naive window to establish RANGE, then refine with canonical
+    naive_expected = pd.bdate_range(end=pd.Timestamp(as_of_date), periods=policy.min_history_days)
+    start_date = naive_expected.min().date()
+
+    expected_index, calendar_source = canonical_market_calendar(
+        start=start_date,
+        end=as_of_date,
+        benchmark_prices=benchmark_prices,
+        ticker_prices=prices,
+    )
+    expected_dates_list = [d.date() for d in expected_index]
+
+    per_ticker: dict[str, dict] = {}
+    core_scores: list[float] = []
+
     for ticker in required_tickers:
-        ticker_dates = prices.loc[prices["ticker"] == ticker, "date"].dropna().tolist()
-        result = _score_ticker(ticker_dates, policy=policy, as_of=as_of_date)
+        ticker_dates = prices.loc[prices["ticker"] == ticker, "date"].dropna().unique().tolist()
+        
+        # Apply required start date constraint
+        ticker_expected = expected_dates_list
+        req_start = required_start_per_ticker.get(ticker)
+        if req_start:
+             ticker_expected = [d for d in expected_dates_list if d >= req_start]
+        
+        # If the required window is empty (e.g. required start > as_of), use empty list to avoid errors, 
+        # or maybe we should default to at least one day? 
+        # For now, if ticker_expected is empty, _score_ticker handles it (returns missing or 0 score).
+        
+        result = _score_ticker(ticker_dates, ticker_expected, policy=policy)
         per_ticker[ticker] = result
+        per_ticker[ticker]["required_start"] = req_start.isoformat() if req_start else None
+        
         core_scores.append(result["score"])
 
     benchmark_score = None
@@ -211,8 +278,10 @@ def build_coverage_summary(
         bench_df = benchmark_prices if benchmark_prices is not None else pd.DataFrame()
         bench_dates = []
         if not bench_df.empty and "date" in bench_df.columns:
-            bench_dates = pd.to_datetime(bench_df["date"], errors="coerce").dt.date.dropna().tolist()
-        bench_result = _score_ticker(bench_dates, policy=policy, as_of=as_of_date)
+            bench_dates = pd.to_datetime(bench_df["date"], errors="coerce").dt.date.dropna().unique().tolist()
+        
+        # Benchmark must also cover the canonical calendar
+        bench_result = _score_ticker(bench_dates, expected_dates_list, policy=policy)
         per_ticker[benchmark_ticker] = bench_result
         benchmark_score = bench_result["score"]
 
@@ -261,8 +330,9 @@ def build_coverage_summary(
 
     rf_score = None
     if risk_free_series is not None and not risk_free_series.empty and "date" in risk_free_series.columns:
-        rf_dates = pd.to_datetime(risk_free_series["date"], errors="coerce").dt.date.dropna().tolist()
-        rf_result = _score_ticker(rf_dates, policy=policy, as_of=as_of_date)
+        rf_dates = pd.to_datetime(risk_free_series["date"], errors="coerce").dt.date.dropna().unique().tolist()
+        # Risk free must also cover the canonical calendar
+        rf_result = _score_ticker(rf_dates, expected_dates_list, policy=policy)
         rf_score = rf_result["score"]
         if rf_score >= policy.min_score_for_kpis:
             risk_free_status = "sufficient"
@@ -275,6 +345,11 @@ def build_coverage_summary(
         "min_ticker_score": float(min(core_scores)) if core_scores else 0.0,
         "benchmark_score": benchmark_score,
         "rf_score": rf_score,
+        "calendar_source": calendar_source,
+        "calendar_start": start_date.isoformat(),
+        "calendar_end": as_of_date.isoformat(),
+        "calendar_count": len(expected_dates_list),
+        "required_start_per_ticker": {t: d.isoformat() for t, d in required_start_per_ticker.items()},
     }
     coverage = {
         "prices": {"status": prices_status, "reason_codes": prices_reasons},
@@ -282,7 +357,7 @@ def build_coverage_summary(
         "risk_free": {"status": risk_free_status, "reason_codes": risk_free_reasons},
         "macro": {"status": "unknown", "reason_codes": []},
     }
-    metric_status, metric_reasons = metric_status_from_coverage(coverage)
+    metric_status, metric_reasons, metric_coverage = metric_status_from_coverage(coverage)
 
     return {
         "as_of": as_of_date.isoformat(),
@@ -302,6 +377,7 @@ def build_coverage_summary(
         "coverage": coverage,
         "metric_status": metric_status,
         "metric_reasons": metric_reasons,
+        "metric_coverage": metric_coverage,
         "reason_codes": reason_codes,
         "contract_version": "coverage_summary_v2",
         "version": "2.0",

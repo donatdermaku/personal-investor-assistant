@@ -608,6 +608,58 @@ async def create_run(
             },
         )
 
+@app.get("/admin/cache-status")
+def get_cache_status(x_admin_key: str | None = Header(default=None)):
+    """
+    Diagnostic endpoint to check cache index health and local storage size.
+    """
+    admin_key = os.getenv("ADMIN_WARMUP_KEY")
+    if not admin_key or x_admin_key != admin_key:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    # 1. Check Supabase / DB Connection and Index Count
+    db_status = "unknown"
+    index_count = 0
+    try:
+        if use_supabase():
+            from storage_supabase.db import session_scope
+            from storage_supabase import models
+        else:
+            from storage.db import session_scope
+            from storage import models
+
+        with session_scope() as session:
+            index_count = session.query(models.DataCacheIndex).count()
+        db_status = "connected"
+    except Exception:
+        db_status = "disconnected"
+
+    # 2. Check Local Cache Size
+    cache_dir = ROOT / "data" / "market_cache" / "persistent"
+    total_size_mb = 0.0
+    file_count = 0
+    if cache_dir.exists():
+        for p in cache_dir.rglob("*"):
+            if p.is_file():
+                total_size_mb += p.stat().st_size
+                file_count += 1
+    total_size_mb /= (1024 * 1024)
+
+    # 3. Overall Status
+    status = "ok"
+    if db_status != "connected":
+        status = "degraded"
+    
+    return {
+        "status": status,
+        "database": db_status,
+        "driver": "supabase" if use_supabase() else "sqlite",
+        "cache_index_entries": index_count,
+        "local_cache_size_mb": round(total_size_mb, 2),
+        "local_cache_files": file_count,
+        "local_cache_path": str(cache_dir)
+    }
+
 @app.post("/api/v1/run")
 async def create_run_alias(
     run_type: str = Form("uploaded"),
@@ -850,42 +902,7 @@ def warmup(payload: dict | None = None, x_admin_key: str | None = Header(default
     _store_warmup_report(report)
     return report
 
-@app.get("/admin/cache-status")
-def cache_status(x_admin_key: str | None = Header(default=None)):
-    """Debug endpoint to inspect market data cache without Shell access."""
-    admin_key = os.getenv("ADMIN_WARMUP_KEY")
-    if not admin_key or x_admin_key != admin_key:
-        raise HTTPException(status_code=403, detail="Unauthorized")
-    
-    cache_dir = Path(os.getenv("NEXUS_MARKET_CACHE", ROOT / "data" / "market_cache"))
-    result = {
-        "cache_dir": str(cache_dir),
-        "cache_exists": cache_dir.exists(),
-        "prices": [],
-        "sample_dtypes": {},
-    }
-    
-    prices_dir = cache_dir / "prices"
-    if prices_dir.exists():
-        files = list(prices_dir.glob("*.parquet"))
-        result["prices"] = [
-            {"name": f.name, "size_kb": round(f.stat().st_size / 1024, 1)}
-            for f in sorted(files)[:20]  # Limit to 20 files
-        ]
-        result["total_price_files"] = len(files)
-        
-        # Sample one file to check dtypes
-        if files:
-            try:
-                sample = pd.read_parquet(files[0])
-                result["sample_file"] = files[0].name
-                result["sample_dtypes"] = {col: str(sample[col].dtype) for col in sample.columns}
-                if "date" in sample.columns:
-                    result["sample_date_values"] = [str(v) for v in sample["date"].head(3).tolist()]
-            except Exception as exc:
-                result["sample_error"] = str(exc)
-    
-    return result
+
 
 @app.get("/api/v1/run/{run_id}/export/{artifact}")
 def export_artifact(run_id: str, artifact: str):

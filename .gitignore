@@ -220,4 +220,5 @@ __marimo__/
 # Local generated artifacts
 .DS_Store
 /data/
+sample_trades_full_metrics.csv
 /reports/

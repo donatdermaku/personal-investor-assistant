@@ -29,26 +29,43 @@ def evaluate_metric_status(
 ) -> tuple[str, list[str]]:
     has_unknown = False
     reasons: list[str] = []
+    
+    BLOCKING_REASONS = {
+        "NO_PRICES", "NO_DATES", "NO_DATA", "RF_MISSING", "BENCHMARK_MISSING", 
+        "MACRO_MISSING", "NO_CORE_TICKERS"
+    }
+    
     for dep in dependencies:
         entry = coverage.get(dep, {})
         status = entry.get("status")
         if status is None:
             has_unknown = True
             continue
-        if status == "insufficient":
+        
+        # We consider 'insufficient' or 'low' or 'missing' as potential issues
+        if status in ("insufficient", "low", "missing"):
             entry_reasons = entry.get("reason_codes")
             if isinstance(entry_reasons, list) and entry_reasons:
                 reasons.extend([str(reason) for reason in entry_reasons])
-            elif dep == "prices":
-                reasons.append("PRICE_INSUFFICIENT")
-            elif dep == "benchmark":
-                reasons.append("BENCHMARK_INSUFFICIENT")
-            elif dep == "risk_free":
-                reasons.append("RF_MISSING")
-            elif dep == "macro":
-                reasons.append("MACRO_MISSING")
+            else:
+                # Fallback reasons if code missing
+                if dep == "prices":
+                    reasons.append("PRICE_INSUFFICIENT")
+                elif dep == "benchmark":
+                    reasons.append("BENCHMARK_INSUFFICIENT")
+                elif dep == "risk_free":
+                    reasons.append("RF_MISSING")
+                elif dep == "macro":
+                    reasons.append("MACRO_MISSING")
+
     if reasons:
-        return "insufficient", reasons
+        # Check if any reason is blocking
+        is_blocking = any(r in BLOCKING_REASONS for r in reasons)
+        if is_blocking:
+             return "unavailable", reasons
+        return "available_low_coverage", reasons
+
     if has_unknown:
         return "unknown", []
+        
     return "sufficient", []

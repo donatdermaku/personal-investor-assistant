@@ -116,6 +116,20 @@ make verify
 
 ## 4. Recent Changes (Last 30 Days)
 
+### [2026-01-26] - Feature (#44)
+**Refined Coverage Semantics & Cache Health (Phase 20.1)**
+- Agent: Antigravity
+- Files modified: `market_data/calendar.py`, `src/coverage.py`, `src/api/server.py`, `web/src/lib/coverageLogic.ts`
+- **Canonical Calendar**: Strict market calendar implementation (Benchmark > Union > Fallback)
+- **Required Start Dates**: Per-ticker history tracking to fix false "insufficient" signals for late starters
+- **Available Low Coverage**: Metrics with short history now show as "Warning" instead of being hidden
+- **Cache Status**: New `GET /admin/cache-status` endpoint for health monitoring
+- Testing:
+  - ✅ Backend: Unit tests for calendar, coverage, and API
+  - ✅ Frontend: Vitest validation for coverage logic
+  - ✅ Manual: End-to-end verification script `verify_e2e.py`
+- Status: ✅ Complete
+
 ### [2026-01-26] - Bugfix
 **Fix Timestamp vs String comparison error in macro analytics**
 - Agent: Claude Sonnet 4

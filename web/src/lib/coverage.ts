@@ -1,6 +1,6 @@
 import type { CoverageSummary, CoverageSummaryDetailed, RunManifest } from "@/types/nexus";
 
-export type CoverageStatus = "full" | "partial" | "insufficient" | "unknown";
+export type CoverageStatus = "full" | "partial" | "insufficient" | "unknown" | "available_low_coverage";
 
 function isDetailedSummary(summary: unknown): summary is CoverageSummaryDetailed {
     return Boolean(summary && typeof summary === "object" && "status" in summary && "score" in summary);
