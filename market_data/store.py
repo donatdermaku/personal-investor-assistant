@@ -74,6 +74,9 @@ class MarketDataStore:
             cached = cache_result.frame
             if not cached.empty:
                 cached.to_parquet(cache_path, index=False)
+        if not cached.empty and "date" in cached.columns:
+            cached = cached.copy()
+            cached["date"] = pd.to_datetime(cached["date"], errors="coerce").dt.date
         cached = validate_price_frame(cached, ticker)
         cached = cached[(cached["date"] >= date.fromisoformat(start)) & (cached["date"] <= date.fromisoformat(end))]
         dividends = self.get_dividends(ticker, start, end)
