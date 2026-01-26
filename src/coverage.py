@@ -155,7 +155,7 @@ def build_coverage_summary(
     prices["date"] = pd.to_datetime(prices["date"], errors="coerce").dt.date
     prices["ticker"] = prices["ticker"].astype(str)
 
-    inferred_as_of = prices["date"].max()
+    inferred_as_of = _as_date(prices["date"].max())
     if benchmark_prices is not None and not benchmark_prices.empty and "date" in benchmark_prices.columns:
         bench_max = pd.to_datetime(benchmark_prices["date"], errors="coerce").dt.date.max()
         if bench_max and (not inferred_as_of or bench_max > inferred_as_of):

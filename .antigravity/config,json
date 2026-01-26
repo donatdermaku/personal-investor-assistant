@@ -1,0 +1,23 @@
+{
+    "project_name": "Personal Investor Assistant",
+    "documentation": {
+        "required_files": [
+            "PROJECT_STATUS.md",
+            ".antigravity/rules.md"
+        ],
+        "update_policy": "mandatory",
+        "read_on_start": [
+            ".antigravity/rules.md",
+            "PROJECT_STATUS.md"
+        ]
+    },
+    "agent_behavior": {
+        "preserve_context": true,
+        "enforce_documentation": true,
+        "verification_required": true
+    },
+    "testing": {
+        "pre_commit_command": "make verify",
+        "required": true
+    }
+}

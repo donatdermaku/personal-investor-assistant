@@ -1,5 +1,23 @@
 # Personal Investor Assistant
 
+> 🤖 **Multi-Agent Project Notice**: This project uses **Antigravity** with multiple AI agents (Claude, Gemini, GPT-4, etc.)
+
+## 🚨 FOR ALL AI AGENTS - READ FIRST
+
+**MANDATORY PROTOCOL:**
+
+1. ✅ **Read `.antigravity/rules.md` completely** before starting any work
+2. ✅ **Read `PROJECT_STATUS.md`** to understand current project state
+3. ✅ **Update `PROJECT_STATUS.md`** after EVERY change you make
+4. ✅ **Run `make verify`** before considering work complete
+
+**This ensures perfect continuity across different agents and sessions.**
+
+**Human developers:** `PROJECT_STATUS.md` is our single source of truth for what's working, what's broken, and what needs to be done next. Always check it first.
+
+---
+# Personal Investor Assistant
+
 A privacy-focused, local-first dashboard for tracking your investment portfolio against the market. Compare your performance (TWR/MWR) against S&P 500, Nasdaq 100, or any custom benchmark.
 
 ## 🚀 Quick Start (5 Minutes)
