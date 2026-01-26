@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-> **Last Updated:** 2026-01-26 18:14 CET  
+> **Last Updated:** 2026-01-26 21:55 CET  
 > **Updated By:** Claude Sonnet 4  
 > **Version:** 2.0  
 
@@ -115,6 +115,35 @@ make verify
 ---
 
 ## 4. Recent Changes (Last 30 Days)
+
+### [2026-01-26] - Feature
+**Rate Limiting and Cache Validation for Yahoo Finance**
+- Agent: Claude Sonnet 4
+- Files modified:
+  - `market_data/rate_limiter.py` (new) - throttling, retry, validation module
+  - `market_data/yahoo.py` (modified) - use throttled_fetch for all API calls
+  - `market_data/store.py` (modified) - add cache validation before writing
+- Changes:
+  - Global rate limiter: 1 request per 1.5s, thread-safe, process-wide
+  - Retry logic: respects Retry-After header, exponential backoff for 5xx/timeouts
+  - Cache validation: prevents poisoned cache by validating date range, row count, columns
+- Testing performed:
+  - ✅ Rate limiter tests: throttling works (1.58s for 2 calls)
+  - ✅ Validation tests: empty df, full df, small df all handled correctly
+  - ✅ Full test suite: 94 passed, 1 skipped
+- Next agent should: Add warmup as one-off job (don't block boot)
+- Status: ✅ Success
+
+### [2026-01-26] - Bugfix
+**Fix MARKET_DATA_MISSING_DATES error for historical portfolios**
+- Agent: Claude Sonnet 4
+- Files modified:
+  - `market_data/store.py`, `src/coverage.py`, `tests/unit/test_coverage_summary.py`
+- Changes:
+  - Added `FIXED_EARLIEST_DATE = "2010-01-01"` for max-history fetching
+  - Cache now validates both start AND end dates
+  - Fixed NameError in `metric_status_from_coverage`
+- Status: ✅ Success
 
 ### [2026-01-26] - Feature (#44)
 **Refined Coverage Semantics & Cache Health (Phase 20.1)**

@@ -109,25 +109,25 @@ def build_coverage_summary(
     policy = policy or CoveragePolicy()
     required_start_per_ticker = required_start_per_ticker or {}
 
-    def metric_status_from_coverage(coverage: dict[str, dict[str, object]]) -> tuple[dict[str, str], dict[str, list[str]], dict[str, float]]:
+    def metric_status_from_coverage(
+        coverage: dict[str, dict[str, object]], 
+        aggregate: dict[str, object] | None = None
+    ) -> tuple[dict[str, str], dict[str, list[str]], dict[str, float]]:
         metric_status: dict[str, str] = {}
         metric_reasons: dict[str, list[str]] = {}
         metric_coverage: dict[str, float] = {}
         
+        # Use provided aggregate or empty dict for early-return paths
+        agg = aggregate or {}
+        
         # Helper to get score for dependency
         def get_score(dep: str) -> float:
-            # We don't have raw score in coverage map passed here easily as it has {status, reason_codes}
-            # Actually, we need to pass aggregate dict or similar? 
-            # The 'coverage' dict passed to this inner function matches the 'coverage' key in final export.
-            # But that dict doesn't have scores! 
-            # The scores are in 'aggregate' or 'per_ticker'.
-            # We must access 'aggregate' from outer scope.
             if dep == "prices":
-                 return aggregate.get("min_ticker_score", 0.0)
+                 return agg.get("min_ticker_score", 0.0)
             if dep == "benchmark":
-                 return aggregate.get("benchmark_score") or 0.0
+                 return agg.get("benchmark_score") or 0.0
             if dep == "risk_free":
-                 return aggregate.get("rf_score") or 0.0
+                 return agg.get("rf_score") or 0.0
             return 0.0
 
         for key, deps in KPI_DEPENDENCIES.items():
@@ -357,7 +357,7 @@ def build_coverage_summary(
         "risk_free": {"status": risk_free_status, "reason_codes": risk_free_reasons},
         "macro": {"status": "unknown", "reason_codes": []},
     }
-    metric_status, metric_reasons, metric_coverage = metric_status_from_coverage(coverage)
+    metric_status, metric_reasons, metric_coverage = metric_status_from_coverage(coverage, aggregate)
 
     return {
         "as_of": as_of_date.isoformat(),
