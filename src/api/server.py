@@ -680,28 +680,64 @@ def clear_cache(x_admin_key: str | None = Header(default=None)):
     """
     Admin endpoint to clear stale market data cache.
     Use when Yahoo Finance data is returning old/stale dates.
+    Clears both local filesystem and Supabase storage.
     """
     admin_key = os.getenv("ADMIN_WARMUP_KEY")
     if not admin_key or x_admin_key != admin_key:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
+    result = {
+        "status": "cleared",
+        "local_files_deleted": 0,
+        "local_bytes_freed": 0,
+        "supabase_files_deleted": 0,
+        "cache_index_cleared": 0,
+    }
+
+    # 1. Clear local filesystem cache
     cache_dir = ROOT / "data" / "market_cache" / "persistent" / "yahoo"
-    cleared_count = 0
-    cleared_bytes = 0
     if cache_dir.exists():
         for p in cache_dir.glob("*.parquet"):
             if p.is_file():
-                cleared_bytes += p.stat().st_size
+                result["local_bytes_freed"] += p.stat().st_size
                 p.unlink()
-                cleared_count += 1
+                result["local_files_deleted"] += 1
     
-    logger.info("CACHE_CLEARED count=%s bytes=%s", cleared_count, cleared_bytes)
-    return {
-        "status": "cleared",
-        "files_deleted": cleared_count,
-        "bytes_freed": cleared_bytes,
-        "bytes_freed_mb": round(cleared_bytes / (1024 * 1024), 2),
-    }
+    # 2. Clear Supabase storage and cache index if using Supabase
+    if use_supabase():
+        try:
+            from storage_supabase.storage import list_files, delete_file
+            from storage_supabase.db import session_scope
+            from storage_supabase import models
+            
+            bucket = os.getenv("SUPABASE_STORAGE_BUCKET", "nexus-artifacts")
+            
+            # Delete files from Supabase storage bucket
+            try:
+                files = list_files(bucket, "cache/yahoo/")
+                for file_info in files:
+                    try:
+                        delete_file(bucket, f"cache/yahoo/{file_info['name']}")
+                        result["supabase_files_deleted"] += 1
+                    except Exception as e:
+                        logger.warning("SUPABASE_DELETE_FAILED file=%s error=%s", file_info.get('name'), e)
+            except Exception as e:
+                logger.warning("SUPABASE_LIST_FAILED error=%s", e)
+            
+            # Clear cache index entries for yahoo source
+            with session_scope() as session:
+                deleted = session.query(models.DataCacheIndex).filter(
+                    models.DataCacheIndex.source == "yahoo"
+                ).delete()
+                session.commit()
+                result["cache_index_cleared"] = deleted
+                
+        except Exception as e:
+            logger.error("SUPABASE_CLEAR_FAILED error=%s", e)
+            result["supabase_error"] = str(e)
+    
+    logger.info("CACHE_CLEARED result=%s", result)
+    return result
 
 @app.post("/api/v1/run")
 async def create_run_alias(

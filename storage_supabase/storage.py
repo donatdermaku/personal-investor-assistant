@@ -39,3 +39,24 @@ def download_bytes(bucket: str, path: str) -> bytes:
     resp = requests.get(url, headers=headers, timeout=30)
     resp.raise_for_status()
     return resp.content
+
+
+def list_files(bucket: str, prefix: str) -> list[dict]:
+    """List files in a Supabase storage bucket with a given prefix."""
+    url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    if not url:
+        raise RuntimeError("SUPABASE_URL is not set.")
+    list_url = f"{url}/storage/v1/object/list/{bucket}"
+    headers = _auth_headers("application/json")
+    payload = {"prefix": prefix, "limit": 1000}
+    resp = requests.post(list_url, headers=headers, json=payload, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def delete_file(bucket: str, path: str) -> None:
+    """Delete a file from Supabase storage bucket."""
+    url = f"{_storage_base()}/{bucket}/{path}"
+    headers = _auth_headers()
+    resp = requests.delete(url, headers=headers, timeout=30)
+    resp.raise_for_status()
