@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-> **Last Updated:** 2026-01-27 16:35 CET  
+> **Last Updated:** 2026-01-27 18:28 CET  
 > **Updated By:** Claude Sonnet 4  
 > **Version:** 2.0  
 
@@ -115,6 +115,22 @@ make verify
 ---
 
 ## 4. Recent Changes (Last 30 Days)
+
+### [2026-01-27] - Infrastructure/Bugfix
+**Render Production Hardening (OOM & Timeouts)**
+- Agent: Claude Sonnet 4
+- Files modified:
+  - `render.yaml` - switched to gunicorn + 120s timeout
+  - `requirements.txt` - added gunicorn
+  - `src/api/server.py` - incremental gc.collect(), memory logging, /admin/clear-cache endpoint
+  - `storage_supabase/storage.py` - added list_files/delete_file
+  - `market_data/store.py` - fail fast on stale data
+- Changes:
+  - Switched from Uvicorn to Gunicorn to support timeouts >30s (fixed 502 Bad Gateway)
+  - Implemented incremental garbage collection during large portfolio processing
+  - Added admin endpoint to clear stale cache from Supabase & local
+  - Fixed issue where stale Yahoo data (2018) caused silent failures
+- Status: ✅ Deployed & Verified
 
 ### [2026-01-27] - Bugfix
 **Fix Large Portfolio File Upload Crash**

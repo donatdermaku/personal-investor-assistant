@@ -43,6 +43,7 @@ fastapi
 uvicorn[standard]
 python-multipart
 httpx
+gunicorn
 
 # Postgres driver for Supabase
 psycopg2-binary
