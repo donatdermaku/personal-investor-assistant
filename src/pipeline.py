@@ -66,6 +66,11 @@ def compute_app_state(
     prices, price_meta = get_prices(market_state, watch_tickers)
     scores, scores_meta = get_scores(watch_tickers)
     fund, fund_meta = get_fundamentals(watch_tickers)
+    try:
+        from src.utils_memory import log_rss
+        log_rss("after_market_data")
+    except Exception:
+        pass
     
     # 6. Load Portfolio
     # Here we use the underlying 'load_portfolio' which now uses DataManager
@@ -76,6 +81,11 @@ def compute_app_state(
         source_override=source_override,
         uploads_active=uploads_active,
     )
+    try:
+        from src.utils_memory import log_rss
+        log_rss("after_portfolio")
+    except Exception:
+        pass
     
     # 7. Benchmark
     bench_ticker = "SPY" # Default, should come from settings
@@ -114,6 +124,11 @@ def compute_app_state(
         risk_free_series=risk_free.series,
         required_start_per_ticker=req_starts,
     )
+    try:
+        from src.utils_memory import log_rss
+        log_rss("after_coverage")
+    except Exception:
+        pass
 
     manifest = create_manifest(
         run_id=run_id,
@@ -193,9 +208,10 @@ def save_artifacts(app_state: AppState):
         export_correlation_matrix_json,
     )
     from src.analytics.attribution import compute_attribution
-    from src.analytics.risk import compute_risk_contributions
+    from src.analytics.risk import compute_risk_contributions_from_cov
     from src.analytics.rolling import compute_rolling_metrics
-    from src.analytics.correlation import compute_correlation_matrix
+    from src.analytics.correlation import compute_correlation_matrix_from_cov
+    from src.analytics.streaming import build_canonical_calendar, iter_price_state, OnlineCovariance
     from src.analytics.comparative import compute_benchmark_comparison
     from src.analytics.macro import compute_macro_regime_payload
     from market_data.fred import get_cached_series
@@ -262,12 +278,24 @@ def save_artifacts(app_state: AppState):
         if not rolling.empty:
             rolling_records = rolling.to_dict(orient="records")
 
+    calendar = build_canonical_calendar(
+        app_state.prices,
+        benchmark_prices=app_state.benchmark_prices,
+        total_values=app_state.portfolio.daily_values,
+    )
+
     attribution = compute_attribution(
         app_state.prices,
         app_state.portfolio.holdings_daily,
         app_state.portfolio.daily_values,
         app_state.portfolio.daily_returns,
+        calendar=calendar,
     )
+    try:
+        from src.utils_memory import log_rss
+        log_rss("after_attribution")
+    except Exception:
+        pass
     attribution_summary_path = base_path / "attribution_summary.json"
     export_attribution_summary_json(attribution_summary_path, attribution.summary)
     repo.add_artifact(run_id, "attribution_summary_json", str(attribution_summary_path))
@@ -276,30 +304,63 @@ def save_artifacts(app_state: AppState):
     export_attribution_timeseries_csv(attribution_ts_path, attribution.timeseries)
     repo.add_artifact(run_id, "attribution_timeseries_csv", str(attribution_ts_path))
 
-    risk_prices = app_state.prices.copy()
-    returns = pd.DataFrame()
     weights = pd.Series(dtype=float)
     cash_weight = 0.0
-    if not risk_prices.empty and {"date", "ticker", "adj_close"}.issubset(risk_prices.columns):
-        risk_prices["date"] = pd.to_datetime(risk_prices["date"], errors="coerce")
-        returns = (
-            risk_prices.pivot_table(index="date", columns="ticker", values="adj_close")
-            .sort_index()
-            .pct_change()
-            .replace([np.inf, -np.inf], np.nan)
-            .fillna(0.0)
-        )
+    tickers = (
+        sorted(app_state.prices["ticker"].dropna().unique().tolist())
+        if not app_state.prices.empty and "ticker" in app_state.prices.columns
+        else []
+    )
+
+    if tickers and not app_state.portfolio.holdings_daily.empty and not app_state.portfolio.daily_values.empty:
         latest_holdings = app_state.portfolio.holdings_daily
-        if not latest_holdings.empty and not app_state.portfolio.daily_values.empty:
-            latest_date = pd.to_datetime(latest_holdings["date"], errors="coerce").max()
-            latest = latest_holdings[latest_holdings["date"] == latest_date]
-            prices = risk_prices[risk_prices["date"] == latest_date].set_index("ticker")["adj_close"]
-            values = latest.set_index("ticker")["quantity"].mul(prices, fill_value=0.0)
+        latest_dates = pd.to_datetime(latest_holdings["date"], errors="coerce").dt.normalize()
+        latest_date = latest_dates.max()
+        latest = latest_holdings[latest_dates == latest_date]
+
+        price_dates = pd.to_datetime(app_state.prices["date"], errors="coerce").dt.normalize()
+        prices_latest = app_state.prices[price_dates == latest_date]
+        if not prices_latest.empty:
+            price_series = prices_latest.set_index("ticker")["adj_close"]
+            values = latest.set_index("ticker")["quantity"].mul(price_series, fill_value=0.0)
             total_value = app_state.portfolio.daily_values["value"].iloc[-1]
             weights = values / total_value if total_value else values * 0.0
             cash_weight = float(max(0.0, 1.0 - weights.sum()))
 
-    risk_output = compute_risk_contributions(returns, weights, cash_weight=cash_weight)
+    weights = weights.reindex(tickers).fillna(0.0) if tickers else weights
+
+    cov = None
+    tail_returns = None
+    n_obs = 0
+    var_alpha = 0.05
+    var_value = 0.0
+    if tickers and not calendar.empty:
+        online = OnlineCovariance(len(tickers))
+        portfolio_returns = app_state.portfolio.daily_returns.copy()
+        portfolio_returns.index = pd.to_datetime(portfolio_returns.index, errors="coerce").normalize()
+        aligned_returns = portfolio_returns.reindex(calendar).fillna(0.0)
+        pr_vals = aligned_returns.to_numpy(dtype=np.float64)
+        var_value = float(np.quantile(pr_vals, var_alpha)) if pr_vals.size else 0.0
+        best_diff = None
+
+        for idx, (_, _, returns) in enumerate(iter_price_state(app_state.prices, tickers, calendar)):
+            online.update(returns)
+            n_obs += 1
+            diff = abs(pr_vals[idx] - var_value) if idx < len(pr_vals) else None
+            if diff is not None and (best_diff is None or diff < best_diff):
+                best_diff = diff
+                tail_returns = returns.copy()
+
+        cov = online.covariance()
+
+    risk_output = compute_risk_contributions_from_cov(
+        cov,
+        weights,
+        tail_returns,
+        cash_weight=cash_weight,
+        var_alpha=var_alpha,
+        var_value=var_value,
+    )
     risk_csv_path = base_path / "risk_contribution.csv"
     export_risk_contribution_csv(risk_csv_path, risk_output.contributions)
     repo.add_artifact(run_id, "risk_contribution_csv", str(risk_csv_path))
@@ -308,10 +369,27 @@ def save_artifacts(app_state: AppState):
     export_risk_contribution_json(risk_json_path, risk_output.summary, risk_output.contributions)
     repo.add_artifact(run_id, "risk_contribution_json", str(risk_json_path))
 
-    correlation_payload = compute_correlation_matrix(returns)
+    correlation_payload = compute_correlation_matrix_from_cov(
+        cov,
+        tickers,
+        n_obs,
+    )
     correlation_path = base_path / "correlation_matrix.json"
     export_correlation_matrix_json(correlation_path, correlation_payload)
     repo.add_artifact(run_id, "correlation_matrix_json", str(correlation_path))
+
+    try:
+        from src.utils_memory import log_rss
+        log_rss("after_risk_correlation")
+    except Exception:
+        pass
+    try:
+        import gc
+        del cov
+        del tail_returns
+        gc.collect()
+    except Exception:
+        pass
 
     if manifest.coverage_summary and "metric_status" in manifest.coverage_summary:
         status = correlation_payload.get("status", "unavailable")

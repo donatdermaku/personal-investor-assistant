@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 
@@ -74,6 +75,68 @@ def compute_correlation_matrix(
         "n_obs": int(len(filtered.index)),
         "assets_included": included,
         "assets_excluded": excluded,
+        "matrix": matrix,
+        "reasons": reasons,
+    }
+
+
+def compute_correlation_matrix_from_cov(
+    cov: np.ndarray | None,
+    tickers: list[str],
+    n_obs: int,
+    *,
+    min_obs: int = 60,
+    excluded: list[dict] | None = None,
+) -> dict:
+    if cov is None or not tickers:
+        return {
+            "status": "unavailable",
+            "n_obs": int(n_obs),
+            "assets_included": [],
+            "assets_excluded": excluded or [],
+            "matrix": {},
+            "reasons": ["CORR_NO_RETURNS"],
+        }
+    if len(tickers) < 2:
+        return {
+            "status": "unavailable",
+            "n_obs": int(n_obs),
+            "assets_included": tickers,
+            "assets_excluded": excluded or [],
+            "matrix": {},
+            "reasons": ["CORR_TOO_FEW_ASSETS"],
+        }
+    if n_obs < min_obs:
+        return {
+            "status": "unavailable",
+            "n_obs": int(n_obs),
+            "assets_included": tickers,
+            "assets_excluded": excluded or [],
+            "matrix": {},
+            "reasons": ["CORR_INSUFFICIENT_HISTORY"],
+        }
+
+    cov = np.asarray(cov, dtype=np.float64)
+    std = np.sqrt(np.diag(cov))
+    denom = np.outer(std, std)
+    corr = np.divide(cov, denom, out=np.zeros_like(cov), where=denom != 0)
+    np.fill_diagonal(corr, 1.0)
+    corr = np.round(corr, 4)
+
+    matrix = {
+        tickers[i]: {tickers[j]: float(corr[i, j]) for j in range(len(tickers))}
+        for i in range(len(tickers))
+    }
+    reasons: list[str] = []
+    status = "sufficient"
+    if excluded:
+        status = "partial"
+        reasons.append("CORR_PARTIAL_ASSETS")
+    return {
+        "status": status,
+        "n_obs": int(n_obs),
+        "assets_included": tickers,
+        "assets_excluded": excluded or [],
         "matrix": matrix,
         "reasons": reasons,
     }

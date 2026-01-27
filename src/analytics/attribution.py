@@ -5,6 +5,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from src.analytics.streaming import build_canonical_calendar, iter_portfolio_state
+
 
 @dataclass
 class AttributionOutput:
@@ -18,93 +20,118 @@ def compute_attribution(
     holdings_daily: pd.DataFrame,
     daily_values: pd.DataFrame,
     portfolio_returns: pd.Series,
+    *,
+    calendar: pd.DatetimeIndex | None = None,
 ) -> AttributionOutput:
     if prices.empty or holdings_daily.empty or daily_values.empty:
         return AttributionOutput(summary={}, timeseries=pd.DataFrame(), per_asset=pd.DataFrame())
 
-    prices = prices.copy()
-    prices["date"] = pd.to_datetime(prices["date"], errors="coerce")
     prices = prices.dropna(subset=["date", "ticker", "adj_close"])
-
-    holdings = holdings_daily.copy()
-    holdings["date"] = pd.to_datetime(holdings["date"], errors="coerce")
-    holdings = holdings.dropna(subset=["date", "ticker", "quantity"])
-
+    holdings = holdings_daily.dropna(subset=["date", "ticker", "quantity"])
     if prices.empty or holdings.empty:
         return AttributionOutput(summary={}, timeseries=pd.DataFrame(), per_asset=pd.DataFrame())
 
-    price_wide = (
-        prices.pivot_table(index="date", columns="ticker", values="adj_close")
-        .sort_index()
-        .ffill()
-    )
-    returns = price_wide.pct_change().replace([np.inf, -np.inf], np.nan).fillna(0.0)
-
-    holdings_wide = holdings.pivot_table(index="date", columns="ticker", values="quantity").sort_index()
-    holdings_wide = holdings_wide.reindex(index=price_wide.index, columns=price_wide.columns).fillna(0.0)
-
-    holdings_value = holdings_wide.mul(price_wide, axis=1)
-    total_value = daily_values["value"].reindex(price_wide.index).fillna(0.0)
-    weights = holdings_value.div(total_value.replace({0: np.nan}), axis=0).fillna(0.0)
-
-    aligned_returns = returns.reindex(weights.index).fillna(0.0)
-    weights = weights.shift(1).reindex(aligned_returns.index).fillna(0.0)
-
-    if weights.empty:
-        return AttributionOutput(summary={}, timeseries=pd.DataFrame(), per_asset=pd.DataFrame())
-
-    tickers = list(weights.columns)
+    tickers = sorted(prices["ticker"].dropna().unique().tolist())
     if not tickers:
         return AttributionOutput(summary={}, timeseries=pd.DataFrame(), per_asset=pd.DataFrame())
+    if calendar is None:
+        calendar = build_canonical_calendar(prices, total_values=daily_values)
+    if calendar.empty:
+        return AttributionOutput(summary={}, timeseries=pd.DataFrame(), per_asset=pd.DataFrame())
 
-    bench_weights = pd.Series(1.0 / len(tickers), index=tickers)
-    bench_return = aligned_returns.mul(bench_weights, axis=1).sum(axis=1)
+    portfolio_returns = portfolio_returns.copy()
+    portfolio_returns.index = pd.to_datetime(portfolio_returns.index, errors="coerce").normalize()
+    portfolio_returns = portfolio_returns.reindex(calendar).fillna(0.0)
 
-    allocation_by_asset = weights.mul(bench_return, axis=0)
-    selection_by_asset = (aligned_returns.sub(bench_return, axis=0)).mul(bench_weights, axis=1)
-    interaction_by_asset = (weights.sub(bench_weights, axis=1)).mul(aligned_returns.sub(bench_return, axis=0), axis=1)
+    n_assets = len(tickers)
+    bench_weight = 1.0 / n_assets
+    allocation = np.zeros(len(calendar), dtype=np.float64)
+    selection = np.zeros(len(calendar), dtype=np.float64)
+    interaction = np.zeros(len(calendar), dtype=np.float64)
 
-    allocation = allocation_by_asset.sum(axis=1)
-    selection = selection_by_asset.sum(axis=1)
-    interaction = interaction_by_asset.sum(axis=1)
+    prev_weights = np.zeros(n_assets, dtype=np.float32)
+    for idx, (_, returns, weights) in enumerate(
+        iter_portfolio_state(prices, holdings, daily_values, tickers, calendar)
+    ):
+        bench_return = float(np.mean(returns)) if n_assets else 0.0
+        allocation_by_asset = prev_weights * bench_return
+        selection_by_asset = (returns - bench_return) * bench_weight
+        interaction_by_asset = (prev_weights - bench_weight) * (returns - bench_return)
+
+        allocation[idx] = float(allocation_by_asset.sum())
+        selection[idx] = float(selection_by_asset.sum())
+        interaction[idx] = float(interaction_by_asset.sum())
+        prev_weights = weights
+
     raw_total = allocation + selection + interaction
-
-    portfolio_returns = portfolio_returns.reindex(raw_total.index).fillna(0.0)
-    scale = pd.Series(0.0, index=raw_total.index)
+    scale = np.ones(len(calendar), dtype=np.float64)
     mask = raw_total != 0
-    scale[mask] = portfolio_returns[mask] / raw_total[mask]
+    scale[mask] = portfolio_returns.to_numpy(dtype=np.float64)[mask] / raw_total[mask]
 
-    allocation = allocation.mul(scale, axis=0)
-    selection = selection.mul(scale, axis=0)
-    interaction = interaction.mul(scale, axis=0)
-
-    allocation_by_asset = allocation_by_asset.mul(scale, axis=0)
-    selection_by_asset = selection_by_asset.mul(scale, axis=0)
-    interaction_by_asset = interaction_by_asset.mul(scale, axis=0)
+    allocation_scaled = allocation * scale
+    selection_scaled = selection * scale
+    interaction_scaled = interaction * scale
 
     timeseries = pd.DataFrame(
         {
-            "date": raw_total.index.strftime("%Y-%m-%d"),
-            "allocation": allocation.values,
-            "selection": selection.values,
-            "interaction": interaction.values,
+            "date": calendar.strftime("%Y-%m-%d"),
+            "allocation": allocation_scaled,
+            "selection": selection_scaled,
+            "interaction": interaction_scaled,
             "total_return": portfolio_returns.values,
         }
     )
 
     summary = _summarize_attribution(
-        allocation,
-        selection,
-        interaction,
+        pd.Series(allocation_scaled, index=calendar),
+        pd.Series(selection_scaled, index=calendar),
+        pd.Series(interaction_scaled, index=calendar),
         portfolio_returns,
     )
 
-    per_asset = _summarize_by_asset(
-        allocation_by_asset,
-        selection_by_asset,
-        interaction_by_asset,
-        portfolio_returns,
+    # Per-asset summaries (streamed)
+    log_terms = np.log1p(portfolio_returns.to_numpy(dtype=np.float64))
+    log_terms = np.where(portfolio_returns.to_numpy() == -1.0, np.nan, log_terms)
+    sum_log = float(np.nansum(log_terms))
+    total_return = float(np.expm1(sum_log)) if sum_log != 0 else 0.0
+    carino_weights = np.zeros(len(calendar), dtype=np.float64)
+    pr_vals = portfolio_returns.to_numpy(dtype=np.float64)
+    non_zero = pr_vals != 0
+    carino_weights[non_zero] = log_terms[non_zero] / pr_vals[non_zero]
+    factor = np.log1p(total_return) / sum_log if sum_log != 0 else 1.0
+
+    alloc_sum = np.zeros(n_assets, dtype=np.float64)
+    sel_sum = np.zeros(n_assets, dtype=np.float64)
+    int_sum = np.zeros(n_assets, dtype=np.float64)
+
+    prev_weights = np.zeros(n_assets, dtype=np.float32)
+    for idx, (_, returns, weights) in enumerate(
+        iter_portfolio_state(prices, holdings, daily_values, tickers, calendar)
+    ):
+        bench_return = float(np.mean(returns)) if n_assets else 0.0
+        allocation_by_asset = prev_weights * bench_return
+        selection_by_asset = (returns - bench_return) * bench_weight
+        interaction_by_asset = (prev_weights - bench_weight) * (returns - bench_return)
+
+        scale_t = scale[idx]
+        weight_t = carino_weights[idx]
+        if weight_t != 0 and scale_t != 0:
+            alloc_sum += allocation_by_asset * scale_t * weight_t
+            sel_sum += selection_by_asset * scale_t * weight_t
+            int_sum += interaction_by_asset * scale_t * weight_t
+        prev_weights = weights
+
+    per_asset = pd.DataFrame(
+        {
+            "ticker": tickers,
+            "allocation": alloc_sum * factor,
+            "selection": sel_sum * factor,
+            "interaction": int_sum * factor,
+        }
     )
+    if not per_asset.empty:
+        per_asset["total"] = per_asset["allocation"] + per_asset["selection"] + per_asset["interaction"]
+        per_asset = per_asset.sort_values("total", ascending=False)
 
     summary["per_asset"] = per_asset.to_dict(orient="records") if not per_asset.empty else []
     summary["method"] = "carino"
