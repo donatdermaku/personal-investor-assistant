@@ -77,6 +77,8 @@ class MarketDataStore:
         return True
 
     def get_prices(self, ticker: str, start: str, end: str) -> pd.DataFrame:
+        import logging
+        logger = logging.getLogger(__name__)
         if ticker.upper() == "CASH":
             raise MarketDataError(
                 error_code="MARKET_DATA_SKIP",
@@ -89,21 +91,31 @@ class MarketDataStore:
         if cache_path.exists():
             try:
                 cached = pd.read_parquet(cache_path)
-            except Exception:
+            except Exception as exc:
+                logger.warning("CACHE_READ_FAILED ticker=%s error=%s", ticker, exc)
                 cached = pd.DataFrame()
         
         # Use FIXED_EARLIEST_DATE for fetching to ensure full history coverage
         # Pass the requested start to freshness check for validation
         if cached.empty or not self._is_price_cache_fresh(cached, required_start=start):
-            cache_result = get_or_refresh_frame(
-                source="yahoo",
-                key=ticker,
-                ttl_seconds=21600,
-                fetch_fn=lambda: fetch_prices(ticker, FIXED_EARLIEST_DATE, end),
-                asof_date=end,
-                allow_refresh=True,
-            )
-            cached = cache_result.frame
+            logger.debug("CACHE_MISS ticker=%s fetching from Yahoo", ticker)
+            try:
+                cache_result = get_or_refresh_frame(
+                    source="yahoo",
+                    key=ticker,
+                    ttl_seconds=21600,
+                    fetch_fn=lambda: fetch_prices(ticker, FIXED_EARLIEST_DATE, end),
+                    asof_date=end,
+                    allow_refresh=True,
+                )
+                cached = cache_result.frame
+            except Exception as exc:
+                logger.error("CACHE_FETCH_FAILED ticker=%s error=%s", ticker, exc)
+                raise MarketDataError(
+                    error_code="MARKET_DATA_FETCH_FAILED",
+                    message=f"Failed to fetch market data for {ticker}.",
+                    details={"ticker": ticker, "error": str(exc)},
+                )
             
             # Validate before caching to prevent poisoned cache
             if not cached.empty:
@@ -112,7 +124,7 @@ class MarketDataStore:
                     cached, 
                     required_start=start,
                     required_end=end,
-                    min_rows=1000,  # ~4 years of data; blocks tiny caches but allows IPOs
+                    min_rows=50,  # Proportional logic handles validation better now
                 )
                 if is_valid:
                     cached.to_parquet(cache_path, index=False)

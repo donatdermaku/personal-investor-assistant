@@ -235,9 +235,14 @@ def validate_price_cache(
     if max_date < (req_end_date - end_tolerance):
         reasons.append(f"END_NOT_COVERED:need={required_end},got={max_date.isoformat()}")
     
-    # Check row count (sanity check for 2010+ daily data)
-    if len(df) < min_rows:
-        reasons.append(f"TOO_FEW_ROWS:expected>={min_rows},got={len(df)}")
+    # Check row count - make it proportional to the actual data range
+    # This allows IPO-era stocks (started after 2010) to cache while blocking tiny/poisoned frames
+    actual_days = (max_date - min_date).days
+    expected_trading_days = max(1, actual_days * 5 // 7)  # Rough estimate accounting for weekends
+    # Require at least 70% of expected trading days, with minimum of 50 rows
+    min_expected = max(50, int(expected_trading_days * 0.7))
+    if len(df) < min_expected:
+        reasons.append(f"TOO_FEW_ROWS:expected>={min_expected},got={len(df)}")
     
     # Check for duplicate dates
     if valid_dates.duplicated().any():

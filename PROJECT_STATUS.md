@@ -1,7 +1,7 @@
 # PROJECT STATUS
 
-> **Last Updated:** 2026-01-27 01:07 CET  
-> **Updated By:** Codex (GPT-5)  
+> **Last Updated:** 2026-01-27 16:35 CET  
+> **Updated By:** Claude Sonnet 4  
 > **Version:** 2.0  
 
 ---
@@ -115,6 +115,26 @@ make verify
 ---
 
 ## 4. Recent Changes (Last 30 Days)
+
+### [2026-01-27] - Bugfix
+**Fix Large Portfolio File Upload Crash**
+- Agent: Claude Sonnet 4
+- Files modified:
+  - `src/api/server.py` (modified) - graceful ticker fetch failure, detailed logging
+  - `market_data/rate_limiter.py` (modified) - proportional row validation
+  - `market_data/store.py` (modified) - proper error handling with MarketDataError
+  - `src/streamlit_data.py` (modified) - memory cleanup with gc.collect()
+- Changes:
+  - Added exception handling for non-MarketDataError during ticker price fetch (continues with other tickers)
+  - Changed min_rows validation from fixed 1000 to proportional (70% of expected trading days, min 50)
+  - Added logging at RUN_TICKERS, RUN_COMPUTE_START, RUN_COMPUTE_SUCCESS, RUN_ARTIFACTS_SAVED
+  - Added explicit garbage collection after DataFrame concatenation
+  - Store now converts unexpected exceptions to MarketDataError
+- Testing performed:
+  - ✅ Unit tests: 59 passed
+- Known issues: Needs Render Starter validation with large portfolio
+- Next agent should: Test with large_portfolio_trades_contract_v1_bmonthend.csv on Render
+- Status: ✅ Success
 
 ### [2026-01-27] - Bugfix
 **Allow IPO-era caches while still blocking undersized frames**

@@ -262,6 +262,10 @@ def get_prices(market_state: str, tickers: list[str] | None = None) -> tuple[pd.
     if not frames:
         return pd.DataFrame(), _meta_empty("missing_file", "Missing prices_daily parquet", total=len(tickers or []))
     df = pd.concat(frames, ignore_index=True)
+    # Free memory from intermediate frames
+    del frames
+    import gc
+    gc.collect()
     meta = _coverage_from_df(df, tickers=tickers, ticker_col="ticker")
     if missing:
         meta.missing_tickers = missing

@@ -559,7 +559,8 @@ async def create_run(
     data_manager.save_portfolio_inputs(resolved_portfolio_id, validated, None)
 
     tickers = sorted({t for t in validated["ticker"].astype(str).str.upper().tolist() if t != "CASH"})
-    logger.info("RUN_TICKERS count=%s", len(tickers))
+    logger.info("RUN_TICKERS count=%s tickers=%s", len(tickers), tickers[:10] if len(tickers) > 10 else tickers)
+    failed_tickers: list[str] = []
     if tickers:
         store = MarketDataStore.default()
         trade_dates = pd.to_datetime(validated["date"], errors="coerce").dt.date.dropna().unique().tolist()
@@ -581,7 +582,15 @@ async def create_run(
                         "hint": exc.hint or "Check market data coverage for this ticker.",
                     },
                 )
+            except Exception as exc:
+                # Log unexpected errors but continue with other tickers
+                logger.warning("TICKER_FETCH_FAILED ticker=%s error=%s", ticker, exc)
+                failed_tickers.append(ticker)
+    
+    if failed_tickers:
+        logger.warning("RUN_TICKERS_FAILED count=%s tickers=%s", len(failed_tickers), failed_tickers)
 
+    logger.info("RUN_COMPUTE_START run_id=%s portfolio_id=%s", run_id, resolved_portfolio_id)
     try:
         app_state = compute_app_state(
             portfolio_id=resolved_portfolio_id,
@@ -591,7 +600,9 @@ async def create_run(
             uploads_active=True,
             run_type="uploaded",
         )
+        logger.info("RUN_COMPUTE_SUCCESS run_id=%s", run_id)
         save_artifacts(app_state)
+        logger.info("RUN_ARTIFACTS_SAVED run_id=%s", run_id)
         manifest = app_state.run_manifest
         return {
             "run_id": manifest.run_id if manifest else "",
