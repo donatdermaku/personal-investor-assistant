@@ -562,9 +562,11 @@ async def create_run(
     logger.info("RUN_TICKERS count=%s tickers=%s", len(tickers), tickers[:10] if len(tickers) > 10 else tickers)
     failed_tickers: list[str] = []
     if tickers:
+        import gc
+        import resource
         store = MarketDataStore.default()
         trade_dates = pd.to_datetime(validated["date"], errors="coerce").dt.date.dropna().unique().tolist()
-        for ticker in tickers:
+        for i, ticker in enumerate(tickers):
             try:
                 prices = store.get_prices(
                     ticker,
@@ -572,6 +574,9 @@ async def create_run(
                     end=str(max(trade_dates)),
                 )
                 store.ensure_coverage(prices, trade_dates, ticker)
+                # Free memory immediately after processing each ticker
+                del prices
+                gc.collect()
             except MarketDataError as exc:
                 raise HTTPException(
                     status_code=400,
@@ -586,6 +591,14 @@ async def create_run(
                 # Log unexpected errors but continue with other tickers
                 logger.warning("TICKER_FETCH_FAILED ticker=%s error=%s", ticker, exc)
                 failed_tickers.append(ticker)
+            
+            # Log memory every 5 tickers to track usage
+            if (i + 1) % 5 == 0 or (i + 1) == len(tickers):
+                try:
+                    rss_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024)
+                    logger.info("RUN_MEMORY ticker=%s progress=%s/%s rss_mb=%.1f", ticker, i + 1, len(tickers), rss_mb)
+                except Exception:
+                    pass
     
     if failed_tickers:
         logger.warning("RUN_TICKERS_FAILED count=%s tickers=%s", len(failed_tickers), failed_tickers)
