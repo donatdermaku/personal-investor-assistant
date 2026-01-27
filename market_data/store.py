@@ -129,10 +129,19 @@ class MarketDataStore:
                 if is_valid:
                     cached.to_parquet(cache_path, index=False)
                 else:
-                    import logging
-                    logging.getLogger(__name__).warning(
+                    logger.warning(
                         f"Cache validation failed for {ticker}, not caching: {reasons}"
                     )
+                    # If data doesn't cover required end dates, fail fast
+                    # This prevents crashes from using data that ends years ago
+                    end_not_covered = any("END_NOT_COVERED" in r for r in reasons)
+                    if end_not_covered:
+                        raise MarketDataError(
+                            error_code="MARKET_DATA_STALE",
+                            message=f"Market data for {ticker} is stale and doesn't cover required dates.",
+                            details={"ticker": ticker, "reasons": reasons},
+                            hint="Clear cache and retry, or check Yahoo Finance availability.",
+                        )
         if not cached.empty and "date" in cached.columns:
             cached = cached.copy()
             cached["date"] = pd.to_datetime(cached["date"], errors="coerce").dt.date

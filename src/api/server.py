@@ -674,6 +674,35 @@ def get_cache_status(x_admin_key: str | None = Header(default=None)):
         "local_cache_path": str(cache_dir)
     }
 
+
+@app.delete("/admin/clear-cache")
+def clear_cache(x_admin_key: str | None = Header(default=None)):
+    """
+    Admin endpoint to clear stale market data cache.
+    Use when Yahoo Finance data is returning old/stale dates.
+    """
+    admin_key = os.getenv("ADMIN_WARMUP_KEY")
+    if not admin_key or x_admin_key != admin_key:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    cache_dir = ROOT / "data" / "market_cache" / "persistent" / "yahoo"
+    cleared_count = 0
+    cleared_bytes = 0
+    if cache_dir.exists():
+        for p in cache_dir.glob("*.parquet"):
+            if p.is_file():
+                cleared_bytes += p.stat().st_size
+                p.unlink()
+                cleared_count += 1
+    
+    logger.info("CACHE_CLEARED count=%s bytes=%s", cleared_count, cleared_bytes)
+    return {
+        "status": "cleared",
+        "files_deleted": cleared_count,
+        "bytes_freed": cleared_bytes,
+        "bytes_freed_mb": round(cleared_bytes / (1024 * 1024), 2),
+    }
+
 @app.post("/api/v1/run")
 async def create_run_alias(
     run_type: str = Form("uploaded"),
