@@ -26,6 +26,11 @@ def compute_attribution(
     if prices.empty or holdings_daily.empty or daily_values.empty:
         return AttributionOutput(summary={}, timeseries=pd.DataFrame(), per_asset=pd.DataFrame())
 
+    if not {"date", "ticker", "adj_close"}.issubset(prices.columns):
+        return AttributionOutput(summary={}, timeseries=pd.DataFrame(), per_asset=pd.DataFrame())
+    if not {"date", "ticker", "quantity"}.issubset(holdings_daily.columns):
+        return AttributionOutput(summary={}, timeseries=pd.DataFrame(), per_asset=pd.DataFrame())
+
     prices = prices.dropna(subset=["date", "ticker", "adj_close"])
     holdings = holdings_daily.dropna(subset=["date", "ticker", "quantity"])
     if prices.empty or holdings.empty:

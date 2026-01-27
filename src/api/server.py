@@ -478,6 +478,7 @@ async def create_run(
     Create a new portfolio run from an uploaded trades CSV or demo data.
     """
     resolved_portfolio_id = _resolve_portfolio_id(portfolio_id)
+    logger.info("RUN_START run_type=%s portfolio_id=%s file=%s", run_type, resolved_portfolio_id, bool(file))
     run_id = str(uuid.uuid4())
     run_type_clean = (run_type or "").strip().lower()
 
@@ -554,9 +555,11 @@ async def create_run(
             return 0.0
         validated["amount"] = validated.apply(_calc_amount, axis=1)
 
+    logger.info("RUN_INPUT rows=%s cols=%s", len(validated), list(validated.columns))
     data_manager.save_portfolio_inputs(resolved_portfolio_id, validated, None)
 
     tickers = sorted({t for t in validated["ticker"].astype(str).str.upper().tolist() if t != "CASH"})
+    logger.info("RUN_TICKERS count=%s", len(tickers))
     if tickers:
         store = MarketDataStore.default()
         trade_dates = pd.to_datetime(validated["date"], errors="coerce").dt.date.dropna().unique().tolist()

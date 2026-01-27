@@ -1,6 +1,7 @@
 import uuid
 import json
 import os
+import logging
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
@@ -282,6 +283,15 @@ def save_artifacts(app_state: AppState):
         app_state.prices,
         benchmark_prices=app_state.benchmark_prices,
         total_values=app_state.portfolio.daily_values,
+    )
+
+    logger = logging.getLogger(__name__)
+    logger.info(
+        "RUN_STATE prices_rows=%s prices_cols=%s holdings_rows=%s holdings_cols=%s",
+        len(app_state.prices),
+        list(app_state.prices.columns) if not app_state.prices.empty else [],
+        len(app_state.portfolio.holdings_daily),
+        list(app_state.portfolio.holdings_daily.columns) if not app_state.portfolio.holdings_daily.empty else [],
     )
 
     attribution = compute_attribution(
