@@ -1,7 +1,7 @@
 # PROJECT STATUS
 
-> **Last Updated:** 2026-01-26 21:55 CET  
-> **Updated By:** Claude Sonnet 4  
+> **Last Updated:** 2026-01-27 01:07 CET  
+> **Updated By:** Codex (GPT-5)  
 > **Version:** 2.0  
 
 ---
@@ -115,6 +115,49 @@ make verify
 ---
 
 ## 4. Recent Changes (Last 30 Days)
+
+### [2026-01-27] - Bugfix
+**Allow IPO-era caches while still blocking undersized frames**
+- Agent: Codex (GPT-5)
+- Files modified:
+  - `market_data/rate_limiter.py` (modified)
+  - `market_data/store.py` (modified)
+  - `tests/unit/test_cache_validation.py` (modified)
+- Changes:
+  - Start-date cache guard now only fails when the frame is undersized.
+  - Raised min_rows to 1000 to block tiny caches while allowing IPO histories.
+- Testing performed:
+  - ✅ Manual: `scripts/repro_large_portfolio.py` completed; peak RSS ~308 MB (logs captured).
+- Known issues: None.
+- Next agent should: Validate Render Starter (512MB) with 30 tickers; run targeted pytest.
+- Status: ✅ Success
+
+### [2026-01-26] - Refactor/Performance
+**Phase 20.3 Memory-Bounded Analytics (streaming + float32)**
+- Agent: Codex (GPT-5)
+- Files modified:
+  - `src/pipeline.py` (modified)
+  - `src/analytics/streaming.py` (new)
+  - `src/analytics/attribution.py` (modified)
+  - `src/analytics/correlation.py` (modified)
+  - `src/analytics/risk.py` (modified)
+  - `src/streamlit_data.py` (modified)
+  - `src/utils_memory.py` (new)
+  - `market_data/store.py` (modified)
+  - `market_data/rate_limiter.py` (modified)
+  - `scripts/repro_large_portfolio.py` (new)
+  - `tests/unit/test_streaming_utils.py` (new)
+  - `tests/unit/test_cache_validation.py` (new)
+- Changes:
+  - Replaced wide-matrix attribution/risk/correlation paths with streaming + online covariance (bounded memory).
+  - Enforced float32 casting for market prices; returns vectors are float32.
+  - Added RSS logging hooks + large-portfolio repro script.
+  - Strengthened cache validation (start-date guard, duplicates).
+- Testing performed:
+  - ⚠️ Not run (not requested).
+- Known issues: Needs Render Starter validation (512MB) for large portfolios.
+- Next agent should: Run `scripts/repro_large_portfolio.py` and verify RSS/outputs; validate on Render.
+- Status: ⚠️ Partial
 
 ### [2026-01-26] - Feature
 **Rate Limiting and Cache Validation for Yahoo Finance**
@@ -302,7 +345,7 @@ cd web && npm test  # Frontend tests
 
 | Issue | Severity | Description | Workaround |
 |-------|----------|-------------|------------|
-| None reported | - | - | - |
+| Memory-bounded analytics validation pending | Medium | Phase 20.3 streaming refactor needs Render Starter (512MB) verification | Run `scripts/repro_large_portfolio.py` locally and validate on Render |
 
 ### Platform Stability & Data Coverage Findings (Render Free Tier)
 - **Data Coverage Status**: Live runs showing ~92.2% coverage (Verified with `sample_trades_full_metrics.csv`).
@@ -429,6 +472,8 @@ alembic current
 ## 13. Next Steps & Priorities
 
 ### Immediate (This Week)
+- [ ] Validate Phase 20.3 memory-bounded pipeline on Render Starter (512MB)
+- [ ] Run `scripts/repro_large_portfolio.py` and capture peak RSS
 - [ ] Monitor persistent cache warmup efficiency
 - [ ] Validate correlation matrix accuracy in production
 

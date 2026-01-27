@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
+import numpy as np
 from pandas.tseries.offsets import BDay
 
 from market_data.contracts import MarketDataError, validate_price_frame, validate_price_series_frame
@@ -109,9 +110,9 @@ class MarketDataStore:
                 from market_data.rate_limiter import validate_price_cache
                 is_valid, reasons = validate_price_cache(
                     cached, 
-                    required_start=FIXED_EARLIEST_DATE,
+                    required_start=start,
                     required_end=end,
-                    min_rows=500,  # Lower for newer tickers, ~500 rows for 2 years of data
+                    min_rows=1000,  # ~4 years of data; blocks tiny caches but allows IPOs
                 )
                 if is_valid:
                     cached.to_parquet(cache_path, index=False)
@@ -237,23 +238,23 @@ def normalize_price_frame(
         return pd.DataFrame()
     frame = prices.copy()
     frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.date
-    frame["close"] = pd.to_numeric(frame["close"], errors="coerce")
+    frame["close"] = pd.to_numeric(frame["close"], errors="coerce").astype("float32")
     if "adj_close" not in frame.columns:
         frame["adj_close"] = frame["close"]
-    frame["adj_close"] = pd.to_numeric(frame["adj_close"], errors="coerce")
-    frame["dividend"] = 0.0
-    frame["split_ratio"] = 1.0
+    frame["adj_close"] = pd.to_numeric(frame["adj_close"], errors="coerce").astype("float32")
+    frame["dividend"] = np.float32(0.0)
+    frame["split_ratio"] = np.float32(1.0)
     if dividends is not None and not dividends.empty:
         div = dividends.copy()
         div["date"] = pd.to_datetime(div["date"], errors="coerce").dt.date
         div["amount"] = pd.to_numeric(div["amount"], errors="coerce").fillna(0.0)
         div_map = div.groupby("date")["amount"].sum().to_dict()
-        frame["dividend"] = frame["date"].map(div_map).fillna(0.0)
+        frame["dividend"] = frame["date"].map(div_map).fillna(0.0).astype("float32")
     if splits is not None and not splits.empty:
         split = splits.copy()
         split["date"] = pd.to_datetime(split["date"], errors="coerce").dt.date
         split["ratio"] = pd.to_numeric(split["ratio"], errors="coerce").fillna(1.0)
         split_map = split.groupby("date")["ratio"].prod().to_dict()
-        frame["split_ratio"] = frame["date"].map(split_map).fillna(1.0)
+        frame["split_ratio"] = frame["date"].map(split_map).fillna(1.0).astype("float32")
     frame["source"] = source
     return frame

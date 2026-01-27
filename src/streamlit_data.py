@@ -11,7 +11,7 @@ import streamlit as st
 from src.portfolio import load_portfolio
 from src.utils_io import ROOT
 from storage.datamanager import data_manager
-from market_data.store import MarketDataStore
+from market_data.store import MarketDataStore, FIXED_EARLIEST_DATE
 from market_data.contracts import MarketDataError
 
 
@@ -253,7 +253,7 @@ def get_prices(market_state: str, tickers: list[str] | None = None) -> tuple[pd.
         try:
             data = store.get_prices(
                 ticker,
-                start="2015-01-01",
+                start=FIXED_EARLIEST_DATE,
                 end=datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"),
             )
             frames.append(data)
