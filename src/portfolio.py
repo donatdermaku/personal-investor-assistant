@@ -156,7 +156,13 @@ def align_benchmark(benchmark_prices: pd.DataFrame, portfolio_values: pd.Series)
     bench = bench.sort_values("date")
     if bench["adj_close"].empty:
         return pd.Series(dtype=float)
-    scaled = (bench["adj_close"] / bench["adj_close"].iloc[0]) * portfolio_values.iloc[0]
+    
+    # Protection against division by zero or NaN
+    first_price = bench["adj_close"].iloc[0]
+    if pd.isna(first_price) or first_price == 0:
+        return pd.Series(dtype=float)  # Return empty series instead of crashing
+    
+    scaled = (bench["adj_close"] / first_price) * portfolio_values.iloc[0]
     return pd.Series(scaled.values, index=bench["date"])
 
 
