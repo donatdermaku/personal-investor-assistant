@@ -21,9 +21,7 @@ numexpr
 
 # Reporting
 jinja2                 # HTML templating
-streamlit>=1.32        # Streamlit app
-plotly                 # Streamlit charts
-streamlit-aggrid       # Interactive tables
+plotly                 # Interactive charts
 
 # Optional: PDF report rendering (local use only, not GitHub Actions)
 weasyprint
@@ -50,3 +48,6 @@ psycopg2-binary
 
 # Migrations
 alembic
+
+# Structured logging
+structlog>=24.0.0  # JSON logging for production

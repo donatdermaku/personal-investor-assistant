@@ -1,2 +1,9 @@
-pytest
+pytest>=9.0.0
+pytest-cov
+
+# Type checking
+mypy>=1.0.0
+types-requests
+types-python-dateutil
+
 ruff
