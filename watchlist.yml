@@ -1,17 +1,31 @@
 tickers:
-  - MSFT
-  - AAPL
-  - AMZN
-  - GOOGL
-notes:
-  MSFT: "Core holding; cloud & productivity."
-  AAPL: "Ecosystem; services growth."
-  AMZN: "Commerce+AWS; margin upside."
-  GOOGL: "Search/ads; AI spend vs margin."
-
-# optional weights for portfolio page (must sum to 1.0 if used)
-weights:
-  MSFT: 0.25
-  AAPL: 0.25
-  AMZN: 0.25
-  GOOGL: 0.25
+- AAPL
+- AMZN
+- BND
+- BRK-B
+- EEM
+- EFA
+- GLD
+- GOOGL
+- IEF
+- IWM
+- META
+- MSFT
+- NVDA
+- QQQ
+- SCHD
+- SPY
+- TLT
+- TSLA
+- VNQ
+- VTI
+- VXUS
+- XLB
+- XLE
+- XLF
+- XLI
+- XLK
+- XLP
+- XLU
+- XLV
+- XLY

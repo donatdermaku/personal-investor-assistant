@@ -13,6 +13,7 @@ import numpy as np
 import uuid
 from datetime import datetime, timezone
 
+
 import os
 
 from storage.repo import Repo, use_supabase
@@ -31,6 +32,11 @@ from market_data.yahoo import fetch_prices
 from market_data.fred import get_cached_series
 from market_data.persistent_cache import get_or_refresh_frame
 from market_data.contracts import MarketDataError
+
+# Service layer
+from src.services.portfolio_service import PortfolioService
+from src.services.market_data_service import MarketDataService
+
 import pandas as pd
 
 logger = logging.getLogger("nexus.api")
@@ -550,11 +556,10 @@ async def create_run(
             MAX_ROWS_WARNING,
         )
 
-    df = df.rename(columns={c: str(c).strip().lower() for c in df.columns})
-    if "shares" in df.columns and "quantity" not in df.columns:
-        df = df.rename(columns={"shares": "quantity"})
-
-    validated, errors = validate_ledger(df)
+    # Use PortfolioService for validation
+    portfolio_service = PortfolioService()
+    validated, errors = portfolio_service.validate_and_prepare_ledger(df)
+    
     if errors:
         raise HTTPException(
             status_code=400,
@@ -566,91 +571,34 @@ async def create_run(
             },
         )
 
-    if "quantity" in validated.columns:
-        validated["quantity"] = validated["quantity"].fillna(0)
-
-    if "amount" not in validated.columns:
-        def _calc_amount(row: pd.Series) -> float:
-            qty = row.get("quantity")
-            price = row.get("price")
-            if pd.notna(qty) and pd.notna(price):
-                return float(qty) * float(price)
-            if pd.notna(price):
-                return float(price)
-            return 0.0
-        validated["amount"] = validated.apply(_calc_amount, axis=1)
-
     logger.info("RUN_INPUT rows=%s cols=%s", len(validated), list(validated.columns))
     data_manager.save_portfolio_inputs(resolved_portfolio_id, validated, None)
 
-    tickers = sorted({t for t in validated["ticker"].astype(str).str.upper().tolist() if t != "CASH"})
+    tickers = portfolio_service.extract_tickers(validated)
     logger.info("RUN_TICKERS count=%s tickers=%s", len(tickers), tickers[:10] if len(tickers) > 10 else tickers)
     log_rss("after_csv_read")  # Track memory after CSV parsing
     
+    # Use MarketDataService for fetching
     failed_tickers: list[str] = []
     if tickers:
-        import gc
-        import resource
-        logger.info("TICKER_FETCH_START total_tickers=%s", len(tickers))
-        store = MarketDataStore.default()
         trade_dates = pd.to_datetime(validated["date"], errors="coerce").dt.date.dropna().unique().tolist()
-        logger.info("TICKER_FETCH_DATES min=%s max=%s count=%s", min(trade_dates), max(trade_dates), len(trade_dates))
-        for i, ticker in enumerate(tickers):
-            logger.info("TICKER_FETCH_BEGIN ticker=%s progress=%s/%s", ticker, i+1, len(tickers))
-            try:
-                prices = store.get_prices(
-                    ticker,
-                    start=str(min(trade_dates)),
-                    end=str(max(trade_dates)),
-                )
-                store.ensure_coverage(prices, trade_dates, ticker)
-                logger.info("TICKER_FETCH_SUCCESS ticker=%s rows=%s", ticker, len(prices))
-                # Free memory immediately after processing each ticker
-                del prices
-                gc.collect()
-                logger.info("TICKER_FETCH_CLEANUP_DONE ticker=%s", ticker)
-            except MarketDataError as exc:
-                # Map error codes to user-friendly messages
-                user_messages = {
-                    "MARKET_DATA_FETCH_EMPTY": f"No price data available for {ticker}. Please verify the ticker symbol is correct and has trading history.",
-                    "MARKET_DATA_MALFORMED": f"Unable to process market data for {ticker}. This may be a temporary issue with the data provider. Please try again later.",
-                    "MARKET_DATA_STALE": f"Market data for {ticker} is outdated and doesn't cover the required date range. This may indicate a data provider issue.",
-                    "MARKET_DATA_MISSING_DATE": f"Market data for {ticker} is incomplete (missing required date information). This ticker may not be fully supported.",
-                    "MARKET_DATA_FETCH_FAILED": f"Failed to fetch market data for {ticker}. Please check your internet connection and try again.",
-                }
-                
-                user_message = user_messages.get(exc.error_code, exc.message)
-                
-                logger.error(
-                    "MARKET_DATA_ERROR ticker=%s error_code=%s message=%s",
-                    ticker,
-                    exc.error_code,
-                    exc.message,
-                    extra={"details": exc.details}
-                )
-                
-                raise HTTPException(
-                    status_code=422,  # Unprocessable Entity - semantically correct for validation issues
-                    detail={
-                        "error_code": exc.error_code,
-                        "message": user_message,
-                        "ticker": ticker,
-                        "hint": exc.hint or "Check market data coverage for this ticker.",
-                    },
-                )
-            except Exception as exc:
-                # Log unexpected errors but continue with other tickers
-                logger.exception("TICKER_FETCH_EXCEPTION ticker=%s", ticker)
-                logger.warning("TICKER_FETCH_FAILED ticker=%s error=%s", ticker, exc)
-                failed_tickers.append(ticker)
+        
+        try:
+            market_data_service = MarketDataService()
+            _, failed_tickers = market_data_service.fetch_batch(tickers, trade_dates)
+        except MarketDataError as exc:
+            # Get user-friendly error message
+            user_message = MarketDataService.get_user_friendly_error_message(exc.error_code, exc.details.get("ticker", "unknown"))
             
-            # Log memory every 5 tickers to track usage
-            if (i + 1) % 5 == 0 or (i + 1) == len(tickers):
-                try:
-                    rss_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024)
-                    logger.info("RUN_MEMORY ticker=%s progress=%s/%s rss_mb=%.1f", ticker, i + 1, len(tickers), rss_mb)
-                except Exception:
-                    pass
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error_code": exc.error_code,
+                    "message": user_message,
+                    "ticker": exc.details.get("ticker"),
+                    "hint": exc.hint or "Check market data coverage for this ticker.",
+                },
+            )
     
     if failed_tickers:
         logger.warning("RUN_TICKERS_FAILED count=%s tickers=%s", len(failed_tickers), failed_tickers)

@@ -222,3 +222,4 @@ __marimo__/
 /data/
 sample_trades_full_metrics.csv
 /reports/
+google-cloud-sdk-test/
