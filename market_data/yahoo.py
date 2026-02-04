@@ -11,11 +11,27 @@ from market_data.rate_limiter import throttled_fetch
 
 
 def _normalize_prices(raw: pd.DataFrame) -> pd.DataFrame:
+    import logging
+    logger = logging.getLogger(__name__)
+    
     if raw is None or raw.empty:
+        logger.warning("Yahoo Finance returned empty dataframe")
         return pd.DataFrame()
+    
     df = raw.copy()
+    logger.debug(f"Raw Yahoo columns: {df.columns.tolist()}, shape: {df.shape}")
+    
+    # Try to get date from index first
     if "Date" not in df.columns:
-        df = df.reset_index()
+        if df.index.name == "Date" or isinstance(df.index, pd.DatetimeIndex):
+            df = df.reset_index()
+        elif "Datetime" in df.columns:
+            df = df.rename(columns={"Datetime": "Date"})
+        else:
+            logger.error(f"Cannot find date column in Yahoo data. Columns: {df.columns.tolist()}, Index: {df.index.name}")
+            # Return empty instead of corrupted data
+            return pd.DataFrame()
+    
     if isinstance(df.columns, pd.MultiIndex):
         # yfinance often returns (field, ticker); drop ticker level to keep field names.
         if df.columns.nlevels >= 2:
@@ -24,13 +40,25 @@ def _normalize_prices(raw: pd.DataFrame) -> pd.DataFrame:
     else:
         cols = {c: str(c).strip() for c in df.columns}
         df = df.rename(columns=cols)
+    
     if "Date" in df.columns:
         df = df.rename(columns={"Date": "date"})
+    
     df.columns = [c.lower() for c in df.columns]
+    
     if "adj close" in df.columns:
         df = df.rename(columns={"adj close": "adj_close"})
+    
     if "close" not in df.columns and "adj_close" in df.columns:
         df["close"] = df["adj_close"]
+    
+    logger.debug(f"Normalized columns: {df.columns.tolist()}")
+    
+    # Final validation: ensure date column exists
+    if "date" not in df.columns:
+        logger.error("Date column missing after normalization! This should not happen.")
+        return pd.DataFrame()
+    
     return df
 
 

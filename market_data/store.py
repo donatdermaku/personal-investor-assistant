@@ -117,6 +117,29 @@ class MarketDataStore:
                     details={"ticker": ticker, "error": str(exc)},
                 )
             
+            # Validate immediately after fetching - before caching
+            if cached.empty:
+                raise MarketDataError(
+                    error_code="MARKET_DATA_FETCH_EMPTY",
+                    message=f"Yahoo Finance returned no data for {ticker}",
+                    details={"ticker": ticker, "start": FIXED_EARLIEST_DATE, "end": end},
+                    hint="Verify ticker symbol is valid and has trading history in the requested range.",
+                )
+            
+            if "date" not in cached.columns:
+                raise MarketDataError(
+                    error_code="MARKET_DATA_MALFORMED",
+                    message=f"Fetched data for {ticker} is missing date column",
+                    details={
+                        "ticker": ticker,
+                        "columns_received": list(cached.columns),
+                        "shape": cached.shape,
+                        "start": FIXED_EARLIEST_DATE,
+                        "end": end
+                    },
+                    hint="This may indicate a Yahoo Finance API change or network issue. Check logs for raw response.",
+                )
+            
             # Validate before caching to prevent poisoned cache
             if not cached.empty:
                 from market_data.rate_limiter import validate_price_cache
