@@ -484,6 +484,7 @@ async def create_run(
     run_id = str(uuid.uuid4())
     run_type_clean = (run_type or "").strip().lower()
 
+    if run_type_clean == "demo":
         try:
             app_state = compute_app_state(
                 portfolio_id=resolved_portfolio_id,
