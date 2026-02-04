@@ -13,6 +13,10 @@ from src.coverage import build_coverage_summary
 from src.risk_free import compute_risk_free_series
 from src.utils_io import ROOT
 from src.portfolio import load_portfolio, PortfolioResult
+from src.streamlit_data import (
+    get_prices, get_scores, get_fundamentals,
+    market_status, get_benchmark_prices,
+)
 from storage.datamanager import data_manager
 from storage import repo
 
