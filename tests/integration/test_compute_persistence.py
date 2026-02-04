@@ -35,9 +35,9 @@ def test_compute_and_save(test_db, tmp_path):
         
         # Mock Market Data to avoid DuckDB/Network
         # We patch the getters in src.pipeline
-        with patch("src.pipeline.get_prices") as mock_prices, \
-             patch("src.pipeline.get_scores") as mock_scores, \
-             patch("src.pipeline.get_fundamentals") as mock_fund:
+        with patch("src.streamlit_data.get_prices") as mock_prices, \
+             patch("src.streamlit_data.get_scores") as mock_scores, \
+             patch("src.streamlit_data.get_fundamentals") as mock_fund:
             
             # Dummy Meta
             from src.streamlit_data import CoverageMeta
