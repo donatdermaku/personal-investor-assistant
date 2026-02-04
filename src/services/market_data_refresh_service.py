@@ -37,12 +37,8 @@ class MarketDataRefreshService:
             trades = session.query(models.Trade.ticker).distinct().all()
             tickers = [t.ticker for t in trades if t.ticker]
             
-            # Also get tickers from snapshots
-            snapshots = session.query(models.Snapshot.ticker).distinct().all()
-            snapshot_tickers = [s.ticker for s in snapshots if s.ticker]
-            
-            # Combine and deduplicate
-            all_tickers = sorted(set(tickers + snapshot_tickers))
+            # Deduplicate and sort
+            all_tickers = sorted(set(tickers))
             
             # Filter out CASH
             all_tickers = [t for t in all_tickers if t.upper() != "CASH"]
