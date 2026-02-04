@@ -472,14 +472,18 @@ def health():
 
 @app.post("/run")
 async def create_run(
-    run_type: str = Form(...),
-    portfolio_id: str = Form(...),
-    file: UploadFile = File(None),
-    X_Request_ID: Optional[str] = Header(default=None),
+    run_type: str = Form("uploaded"),
+    portfolio_id: str = Form("default"),
+    file: UploadFile | None = File(None),
 ):
     """
+    Create a new portfolio run from an uploaded trades CSV or demo data.
+    """
+    resolved_portfolio_id = _resolve_portfolio_id(portfolio_id)
+    logger.info("RUN_START run_type=%s portfolio_id=%s file=%s", run_type, resolved_portfolio_id, bool(file))
+    run_id = str(uuid.uuid4())
+    run_type_clean = (run_type or "").strip().lower()
 
-    if run_type_clean == "demo":
         try:
             app_state = compute_app_state(
                 portfolio_id=resolved_portfolio_id,
