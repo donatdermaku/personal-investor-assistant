@@ -6,7 +6,6 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
-import streamlit as st
 
 from src.portfolio import load_portfolio
 from src.utils_io import ROOT
@@ -141,38 +140,38 @@ def _previous_parquet(prefix: str) -> Path | None:
     return files[-2]
 
 
-@st.cache_data(ttl=3600)
+# Removed streamlit caching decorator
 def load_watchlist() -> dict:
     tickers = data_manager.load_watchlist()
     return {"tickers": tickers}
 
 
-@st.cache_data(ttl=1800)
+# Removed streamlit caching decorator
 def load_scores() -> pd.DataFrame:
     return get_scores()[0]
 
 
-@st.cache_data(ttl=1800)
+# Removed streamlit caching decorator
 def load_scores_prior() -> pd.DataFrame:
     return get_scores_prior()[0]
 
 
-@st.cache_data(ttl=86400)
+# Removed streamlit caching decorator
 def load_fundamentals() -> pd.DataFrame:
     return get_fundamentals()[0]
 
 
-@st.cache_data(ttl=1800)
+# Removed streamlit caching decorator
 def load_universe() -> pd.DataFrame:
     return get_universe()[0]
 
 
-@st.cache_data(ttl=21600)
+# Removed streamlit caching decorator
 def _load_prices_open() -> pd.DataFrame:
     return get_prices("open")[0]
 
 
-@st.cache_data(ttl=21600)
+# Removed streamlit caching decorator
 def _load_prices_closed() -> pd.DataFrame:
     return get_prices("closed")[0]
 
@@ -181,7 +180,7 @@ def load_prices(market_state: str) -> pd.DataFrame:
     return get_prices(market_state)[0]
 
 
-@st.cache_data(ttl=1800)
+# Removed streamlit caching decorator
 def load_portfolio_cached(
     prices: pd.DataFrame,
     watchlist: list[str],
@@ -200,17 +199,17 @@ def portfolio_cache_token() -> tuple[float, float]:
     return (ledger_mtime, snapshot_mtime)
 
 
-@st.cache_data(ttl=21600)
+# Removed streamlit caching decorator
 def load_benchmark_prices(ticker: str) -> pd.DataFrame:
     return get_benchmark_prices(ticker)[0]
 
 
-@st.cache_data(ttl=604800)
+# Removed streamlit caching decorator
 def load_news(vendor_ticker: str) -> list[dict]:
     return get_news(vendor_ticker)[0]
 
 
-@st.cache_data(ttl=1800)
+# Removed streamlit caching decorator
 def get_scores(tickers: list[str] | None = None) -> tuple[pd.DataFrame, CoverageMeta]:
     path = _latest_parquet("scores_daily")
     if not path:
@@ -218,7 +217,7 @@ def get_scores(tickers: list[str] | None = None) -> tuple[pd.DataFrame, Coverage
     return _read_parquet_with_meta(path, required_cols=["ticker"], tickers=tickers)
 
 
-@st.cache_data(ttl=1800)
+# Removed streamlit caching decorator
 def get_scores_prior(tickers: list[str] | None = None) -> tuple[pd.DataFrame, CoverageMeta]:
     path = _previous_parquet("scores_daily")
     if not path:
@@ -226,7 +225,7 @@ def get_scores_prior(tickers: list[str] | None = None) -> tuple[pd.DataFrame, Co
     return _read_parquet_with_meta(path, required_cols=["ticker"], tickers=tickers)
 
 
-@st.cache_data(ttl=86400)
+# Removed streamlit caching decorator
 def get_fundamentals(tickers: list[str] | None = None) -> tuple[pd.DataFrame, CoverageMeta]:
     path = _latest_parquet("fundamentals_quarterly")
     if not path:
@@ -234,13 +233,13 @@ def get_fundamentals(tickers: list[str] | None = None) -> tuple[pd.DataFrame, Co
     return _read_parquet_with_meta(path, required_cols=["ticker"], tickers=tickers)
 
 
-@st.cache_data(ttl=1800)
+# Removed streamlit caching decorator
 def get_universe() -> tuple[pd.DataFrame, CoverageMeta]:
     path = DATA_DIR / "universe.csv"
     return _read_csv_with_meta(path, required_cols=["ticker"])
 
 
-@st.cache_data(ttl=21600)
+# Removed streamlit caching decorator
 def get_prices(market_state: str, tickers: list[str] | None = None) -> tuple[pd.DataFrame, CoverageMeta]:
     if not tickers:
         return pd.DataFrame(), _meta_empty("missing_tickers", "Missing tickers for price fetch", total=0)
@@ -272,7 +271,7 @@ def get_prices(market_state: str, tickers: list[str] | None = None) -> tuple[pd.
     return df, meta
 
 
-@st.cache_data(ttl=21600)
+# Removed streamlit caching decorator
 def get_benchmark_prices(ticker: str) -> tuple[pd.DataFrame, CoverageMeta]:
     prices, meta = get_prices("closed")
     if not prices.empty and "ticker" in prices.columns and ticker in prices["ticker"].values:
@@ -281,7 +280,7 @@ def get_benchmark_prices(ticker: str) -> tuple[pd.DataFrame, CoverageMeta]:
     return pd.DataFrame(), _meta_empty("missing_benchmark", f"Benchmark data missing for {ticker}", total=1)
 
 
-@st.cache_data(ttl=604800)
+# Removed streamlit caching decorator
 def get_news(vendor_ticker: str) -> tuple[list[dict], CoverageMeta]:
     try:
         import yfinance as yf

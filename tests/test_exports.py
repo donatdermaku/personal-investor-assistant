@@ -2,7 +2,7 @@ import pytest
 import pandas as pd
 from unittest.mock import MagicMock
 from datetime import datetime
-from src.streamlit_data import CoverageMeta
+from src.coverage_meta import CoverageMeta
 from src.app_state import AppState
 from src.manifest import RunManifest
 from src.streamlit_export import generate_html_report

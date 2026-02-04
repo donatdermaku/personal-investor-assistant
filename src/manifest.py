@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.streamlit_data import CoverageMeta
+from src.coverage_meta import CoverageMeta
 from src.utils_io import DATA, ROOT
 
 

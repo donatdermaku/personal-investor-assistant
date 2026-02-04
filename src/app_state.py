@@ -8,7 +8,7 @@ from src.manifest import RunManifest
 from src.portfolio import PortfolioResult
 # check if CoverageMeta can be imported from streamlit_data without cycle
 # streamlit_data imports NOTHING from here.
-from src.streamlit_data import CoverageMeta
+from src.coverage_meta import CoverageMeta
 from src.risk_free import RiskFreeSeries
 
 @dataclass
