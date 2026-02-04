@@ -610,12 +610,31 @@ async def create_run(
                 gc.collect()
                 logger.info("TICKER_FETCH_CLEANUP_DONE ticker=%s", ticker)
             except MarketDataError as exc:
+                # Map error codes to user-friendly messages
+                user_messages = {
+                    "MARKET_DATA_FETCH_EMPTY": f"No price data available for {ticker}. Please verify the ticker symbol is correct and has trading history.",
+                    "MARKET_DATA_MALFORMED": f"Unable to process market data for {ticker}. This may be a temporary issue with the data provider. Please try again later.",
+                    "MARKET_DATA_STALE": f"Market data for {ticker} is outdated and doesn't cover the required date range. This may indicate a data provider issue.",
+                    "MARKET_DATA_MISSING_DATE": f"Market data for {ticker} is incomplete (missing required date information). This ticker may not be fully supported.",
+                    "MARKET_DATA_FETCH_FAILED": f"Failed to fetch market data for {ticker}. Please check your internet connection and try again.",
+                }
+                
+                user_message = user_messages.get(exc.error_code, exc.message)
+                
+                logger.error(
+                    "MARKET_DATA_ERROR ticker=%s error_code=%s message=%s",
+                    ticker,
+                    exc.error_code,
+                    exc.message,
+                    extra={"details": exc.details}
+                )
+                
                 raise HTTPException(
-                    status_code=400,
+                    status_code=422,  # Unprocessable Entity - semantically correct for validation issues
                     detail={
                         "error_code": exc.error_code,
-                        "message": exc.message,
-                        "details": exc.details or {},
+                        "message": user_message,
+                        "ticker": ticker,
                         "hint": exc.hint or "Check market data coverage for this ticker.",
                     },
                 )
