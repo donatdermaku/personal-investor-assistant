@@ -70,3 +70,28 @@ def get_logger(name: str) -> structlog.stdlib.BoundLogger:
         Configured structlog logger
     """
     return structlog.get_logger(name)
+
+
+def log_critical_error(error_type: str, details: dict):
+    """
+    Log critical errors with structured format for alerting.
+    
+    Args:
+        error_type: Type of error (e.g., "MARKET_DATA_REFRESH_FAILED")
+        details: Dict with error details
+        
+    Usage:
+        from src.core.logging import log_critical_error
+        log_critical_error("MARKET_DATA_REFRESH_FAILED", {
+            "ticker": "AAPL",
+            "error": "Connection timeout"
+        })
+    """
+    import structlog
+    logger = structlog.get_logger()
+    logger.error(
+        "CRITICAL_ERROR",
+        error_type=error_type,
+        details=details,
+        severity="CRITICAL"  # For Cloud Logging filtering
+    )
