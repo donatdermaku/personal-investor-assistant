@@ -155,16 +155,43 @@ class MarketDataStore:
                     logger.warning(
                         f"Cache validation failed for {ticker}, not caching: {reasons}"
                     )
-                    # If data doesn't cover required end dates, fail fast
-                    # This prevents crashes from using data that ends years ago
+                    # If data doesn't cover required end dates, clear cache and retry
                     end_not_covered = any("END_NOT_COVERED" in r for r in reasons)
                     if end_not_covered:
-                        raise MarketDataError(
-                            error_code="MARKET_DATA_STALE",
-                            message=f"Market data for {ticker} is stale and doesn't cover required dates.",
-                            details={"ticker": ticker, "reasons": reasons},
-                            hint="Clear cache and retry, or check Yahoo Finance availability.",
-                        )
+                        logger.warning(f"Stale cache detected for {ticker}, clearing and retrying once...")
+                        from market_data.persistent_cache import clear_stale_cache
+                        clear_stale_cache(source="yahoo", key=ticker)
+                        
+                        # Retry once with fresh fetch
+                        try:
+                            cached = fetch_prices(ticker, FIXED_EARLIEST_DATE, end)
+                            if not cached.empty:
+                                # Re-validate
+                                is_valid_retry, reasons_retry = validate_price_cache(
+                                    cached,
+                                    required_start=start,
+                                    required_end=end,
+                                    min_rows=50,
+                                )
+                                if is_valid_retry:
+                                    cached.to_parquet(cache_path, index=False)
+                                    logger.info(f"Successfully fetched fresh data for {ticker} after cache clear")
+                                else:
+                                    # Still invalid after retry
+                                    raise MarketDataError(
+                                        error_code="MARKET_DATA_STALE",
+                                        message=f"Market data for {ticker} is stale even after refresh.",
+                                        details={"ticker": ticker, "reasons": reasons_retry},
+                                        hint="Yahoo Finance may not have recent data for this ticker.",
+                                    )
+                        except Exception as retry_exc:
+                            # Retry failed
+                            raise MarketDataError(
+                                error_code="MARKET_DATA_STALE",
+                                message=f"Market data for {ticker} is stale and refresh failed.",
+                                details={"ticker": ticker, "error": str(retry_exc)},
+                                hint="Clear cache manually or check Yahoo Finance availability.",
+                            )
         if not cached.empty and "date" in cached.columns:
             cached = cached.copy()
             cached["date"] = pd.to_datetime(cached["date"], errors="coerce").dt.date

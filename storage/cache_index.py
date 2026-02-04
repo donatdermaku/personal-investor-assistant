@@ -112,3 +112,24 @@ def upsert_cache_entry(
         error_code=error_code,
         error_message=error_message,
     )
+
+
+def delete_cache_entry(source: str, key: str) -> bool:
+    """Delete cache entry from database."""
+    if use_supabase():
+        from storage_supabase.db import session_scope
+        from storage_supabase import models
+    else:
+        from storage.db import session_scope
+        from storage import models
+
+    with session_scope() as session:
+        row = (
+            session.query(models.DataCacheIndex)
+            .filter_by(source=source, key=key)
+            .first()
+        )
+        if row:
+            session.delete(row)
+            return True
+        return False

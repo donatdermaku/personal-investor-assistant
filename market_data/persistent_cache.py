@@ -50,6 +50,75 @@ def _write_parquet_bytes(frame: pd.DataFrame) -> bytes:
     return buffer.getvalue()
 
 
+def clear_stale_cache(source: str, key: str) -> bool:
+    """
+    Delete stale cache files and database entries.
+    
+    Args:
+        source: Cache source (e.g., "yahoo")
+        key: Cache key (e.g., ticker symbol)
+        
+    Returns:
+        True if cache was cleared, False if not found
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    local_path = _local_cache_path(source, key)
+    deleted = False
+    
+    # Delete local file
+    if local_path.exists():
+        local_path.unlink()
+        logger.info(f"Cleared local cache: {source}/{key}")
+        deleted = True
+    
+    # Delete from Supabase
+    if use_supabase():
+        try:
+            from storage_supabase.storage import delete_file
+            bucket = os.getenv("SUPABASE_STORAGE_BUCKET", "nexus-artifacts")
+            delete_file(bucket, _storage_path(source, key))
+            logger.info(f"Cleared remote cache: {source}/{key}")
+            deleted = True
+        except Exception:
+            pass  # File might not exist
+    
+    # Remove database entry
+    from storage.cache_index import delete_cache_entry
+    if delete_cache_entry(source, key):
+        logger.info(f"Removed cache index entry: {source}/{key}")
+        deleted = True
+    
+    return deleted
+
+
+def get_cache_age(source: str, key: str) -> float | None:
+    """
+    Return cache age in seconds, or None if not cached.
+    """
+    entry = get_cache_entry(source, key)
+    if not entry or not entry.updated_at:
+        return None
+    
+    updated_at = entry.updated_at
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+    
+    now = datetime.now(timezone.utc)
+    return (now - updated_at).total_seconds()
+
+
+def is_cache_fresh(source: str, key: str, ttl_seconds: int) -> bool:
+    """
+    Check if cache is within TTL window.
+    """
+    age = get_cache_age(source, key)
+    if age is None:
+        return False
+    return age <= ttl_seconds
+
+
 def load_cached_frame(source: str, key: str) -> CacheResult:
     entry = get_cache_entry(source, key)
     local_path = _local_cache_path(source, key)
