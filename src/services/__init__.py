@@ -1,14 +1,17 @@
 """
 Service layer for the Personal Investor Assistant API.
+Service layer for business logic.
 
-Services contain business logic and orchestrate data flow between
-repositories, external APIs, and the presentation layer.
+Services provide a clean abstraction over business operations,
+making code more testable and maintainable.
 """
 
 from src.services.portfolio_service import PortfolioService
 from src.services.market_data_service import MarketDataService
+from src.services.cache_service import CacheService
 
 __all__ = [
     "PortfolioService",
     "MarketDataService",
+    "CacheService",
 ]
