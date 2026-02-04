@@ -525,6 +525,29 @@ async def create_run(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Failed to read CSV: {exc}")
 
+    # Validate file size to prevent OOM
+    row_count = len(df)
+    MAX_ROWS_WARNING = 500
+    MAX_ROWS_HARD_LIMIT = 2000
+
+    if row_count > MAX_ROWS_HARD_LIMIT:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "FILE_TOO_LARGE",
+                "message": f"CSV file too large ({row_count} rows).",
+                "details": {"row_count": row_count, "max_rows": MAX_ROWS_HARD_LIMIT},
+                "hint": f"Please reduce file size to under {MAX_ROWS_HARD_LIMIT} rows or split into multiple uploads.",
+            },
+        )
+
+    if row_count > MAX_ROWS_WARNING:
+        logger.warning(
+            "LARGE_FILE_UPLOAD row_count=%s warning_threshold=%s",
+            row_count,
+            MAX_ROWS_WARNING,
+        )
+
     df = df.rename(columns={c: str(c).strip().lower() for c in df.columns})
     if "shares" in df.columns and "quantity" not in df.columns:
         df = df.rename(columns={"shares": "quantity"})
@@ -617,11 +640,24 @@ async def create_run(
         save_artifacts(app_state)
         logger.info("RUN_ARTIFACTS_SAVED run_id=%s", run_id)
         manifest = app_state.run_manifest
-        return {
+        
+        # Build response with warnings if any tickers failed
+        response = {
             "run_id": manifest.run_id if manifest else "",
             "status": "completed",
             "timestamp": manifest.timestamp if manifest else None,
         }
+        
+        if failed_tickers:
+            response["warnings"] = {
+                "failed_tickers": {
+                    "count": len(failed_tickers),
+                    "tickers": failed_tickers,
+                    "message": f"{len(failed_tickers)} ticker(s) failed to load market data. Results may be incomplete.",
+                }
+            }
+        
+        return response
     except Exception as exc:
         logger.exception("RUN_COMPUTE_FAILED: Full traceback for run_id=%s", run_id)
         repo.update_run_failed(run_id, "RUN_COMPUTE_FAILED", str(exc))
