@@ -7,6 +7,7 @@ import json
 import csv
 import math
 import io
+import gc
 from pathlib import Path
 import numpy as np
 import uuid
@@ -21,6 +22,7 @@ from storage.datamanager import data_manager
 from storage.db import session_scope
 from storage.models import Portfolio
 from src.utils_io import ROOT
+from src.utils_memory import log_rss
 from src.definitions import DEFINITIONS_REGISTRY
 from src.pipeline import compute_app_state, save_artifacts
 from src.portfolio import validate_ledger
@@ -470,17 +472,12 @@ def health():
 
 @app.post("/run")
 async def create_run(
-    run_type: str = Form("uploaded"),
-    portfolio_id: str = Form("default"),
-    file: UploadFile | None = File(None),
+    run_type: str = Form(...),
+    portfolio_id: str = Form(...),
+    file: UploadFile = File(None),
+    X_Request_ID: Optional[str] = Header(default=None),
 ):
     """
-    Create a new portfolio run from an uploaded trades CSV or demo data.
-    """
-    resolved_portfolio_id = _resolve_portfolio_id(portfolio_id)
-    logger.info("RUN_START run_type=%s portfolio_id=%s file=%s", run_type, resolved_portfolio_id, bool(file))
-    run_id = str(uuid.uuid4())
-    run_type_clean = (run_type or "").strip().lower()
 
     if run_type_clean == "demo":
         try:
@@ -583,13 +580,18 @@ async def create_run(
 
     tickers = sorted({t for t in validated["ticker"].astype(str).str.upper().tolist() if t != "CASH"})
     logger.info("RUN_TICKERS count=%s tickers=%s", len(tickers), tickers[:10] if len(tickers) > 10 else tickers)
+    log_rss("after_csv_read")  # Track memory after CSV parsing
+    
     failed_tickers: list[str] = []
     if tickers:
         import gc
         import resource
+        logger.info("TICKER_FETCH_START total_tickers=%s", len(tickers))
         store = MarketDataStore.default()
         trade_dates = pd.to_datetime(validated["date"], errors="coerce").dt.date.dropna().unique().tolist()
+        logger.info("TICKER_FETCH_DATES min=%s max=%s count=%s", min(trade_dates), max(trade_dates), len(trade_dates))
         for i, ticker in enumerate(tickers):
+            logger.info("TICKER_FETCH_BEGIN ticker=%s progress=%s/%s", ticker, i+1, len(tickers))
             try:
                 prices = store.get_prices(
                     ticker,
@@ -597,9 +599,11 @@ async def create_run(
                     end=str(max(trade_dates)),
                 )
                 store.ensure_coverage(prices, trade_dates, ticker)
+                logger.info("TICKER_FETCH_SUCCESS ticker=%s rows=%s", ticker, len(prices))
                 # Free memory immediately after processing each ticker
                 del prices
                 gc.collect()
+                logger.info("TICKER_FETCH_CLEANUP_DONE ticker=%s", ticker)
             except MarketDataError as exc:
                 raise HTTPException(
                     status_code=400,
@@ -612,6 +616,7 @@ async def create_run(
                 )
             except Exception as exc:
                 # Log unexpected errors but continue with other tickers
+                logger.exception("TICKER_FETCH_EXCEPTION ticker=%s", ticker)
                 logger.warning("TICKER_FETCH_FAILED ticker=%s error=%s", ticker, exc)
                 failed_tickers.append(ticker)
             
@@ -626,6 +631,11 @@ async def create_run(
     if failed_tickers:
         logger.warning("RUN_TICKERS_FAILED count=%s tickers=%s", len(failed_tickers), failed_tickers)
 
+    log_rss("before_compute")  # Track memory before computation
+    
+    # Aggressive cleanup before compute to reduce memory footprint  
+    gc.collect()
+    
     logger.info("RUN_COMPUTE_START run_id=%s portfolio_id=%s", run_id, resolved_portfolio_id)
     try:
         app_state = compute_app_state(
@@ -637,6 +647,7 @@ async def create_run(
             run_type="uploaded",
         )
         logger.info("RUN_COMPUTE_SUCCESS run_id=%s", run_id)
+        log_rss("after_compute")  # Track memory after computation
         save_artifacts(app_state)
         logger.info("RUN_ARTIFACTS_SAVED run_id=%s", run_id)
         manifest = app_state.run_manifest
