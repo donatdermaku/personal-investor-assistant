@@ -34,6 +34,7 @@ def compute_app_state(
     source_override: str | None = None,
     uploads_active: bool = True,
     run_type: str | None = None,
+    trade_tickers: list[str] | None = None,
 ) -> AppState:
     """
     Central logic to compute the application state.
@@ -61,23 +62,27 @@ def compute_app_state(
     # 4. Load User Data (Watchlist)
     watch_tickers = data_manager.load_watchlist() or []
     
-    # 5. Load Market Data
-    # For now, we load what we need for the watchlist
-    prices, price_meta = get_prices(market_state, watch_tickers)
-    scores, scores_meta = get_scores(watch_tickers)
-    fund, fund_meta = get_fundamentals(watch_tickers)
+    # 5. Determine tickers to use for this run
+    # Prioritize trade_tickers from CSV upload over watchlist
+    coverage_tickers = trade_tickers if trade_tickers is not None else watch_tickers
+    
+    # 6. Load Market Data
+    # Use coverage_tickers to ensure we load prices for actual trade tickers
+    prices, price_meta = get_prices(market_state, coverage_tickers)
+    scores, scores_meta = get_scores(coverage_tickers)
+    fund, fund_meta = get_fundamentals(coverage_tickers)
     try:
         from src.utils_memory import log_rss
         log_rss("after_market_data")
     except Exception:
         pass
     
-    # 6. Load Portfolio
+    # 7. Load Portfolio
     # Here we use the underlying 'load_portfolio' which now uses DataManager
     # Note: load_portfolio calls DataManager internally for trades/snapshot.
     portfolio_result = load_portfolio(
         prices,
-        watch_tickers,
+        coverage_tickers,
         source_override=source_override,
         uploads_active=uploads_active,
     )
@@ -87,11 +92,11 @@ def compute_app_state(
     except Exception:
         pass
     
-    # 7. Benchmark
+    # 8. Benchmark
     bench_ticker = "SPY" # Default, should come from settings
     bench_prices, bench_meta = get_benchmark_prices(bench_ticker)
     
-    # 8. Create Manifest
+    # 9. Create Manifest
     # Calculate hashes for manifest
     # We need raw inputs for input_hash. 'load_portfolio' consumes them but doesn't return raw easily.
     # We can fetch them again for hashing or trust that RunManifest handles it?
@@ -115,9 +120,10 @@ def compute_app_state(
     from src.analytics.required_start import compute_required_start_per_ticker
     req_starts = compute_required_start_per_ticker(portfolio_result.holdings_daily)
     
+    # CRITICAL FIX: Use coverage_tickers (trade tickers) instead of watch_tickers
     coverage_summary = build_coverage_summary(
         prices,
-        required_tickers=watch_tickers,
+        required_tickers=coverage_tickers,  # ← FIXED: Use trade tickers, not empty watchlist
         benchmark_ticker=bench_ticker,
         benchmark_prices=bench_prices,
         as_of=as_of,
@@ -139,20 +145,20 @@ def compute_app_state(
         coverage_summary=coverage_summary,
     )
 
-    # 9. Persist latest holdings snapshot (if available)
+    # 10. Persist latest holdings snapshot (if available)
     _persist_snapshot_from_result(portfolio_id, portfolio_result)
 
-    # 10. Update Run in DB
+    # 11. Update Run in DB
     if save_run:
         repo.update_run_complete(run_id, manifest.to_json(), run_type=run_type)
     
-    # 11. Assemble AppState
+    # 12. Assemble AppState
     app_state = AppState(
         run_manifest=manifest,
         portfolio=portfolio_result,
         prices=prices,
         scores=scores,
-        watch_tickers=watch_tickers,
+        watch_tickers=coverage_tickers,  # Use the tickers that were actually used
         price_meta=price_meta,
         fundamentals_meta=fund_meta,
         scores_meta=scores_meta,

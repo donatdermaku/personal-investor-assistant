@@ -610,6 +610,7 @@ async def create_run(
     
     logger.info("RUN_COMPUTE_START run_id=%s portfolio_id=%s", run_id, resolved_portfolio_id)
     try:
+        # CRITICAL FIX: Pass extracted tickers to pipeline
         app_state = compute_app_state(
             portfolio_id=resolved_portfolio_id,
             run_id=run_id,
@@ -617,6 +618,7 @@ async def create_run(
             source_override="Ledger",
             uploads_active=True,
             run_type="uploaded",
+            trade_tickers=tickers,  # ← FIXED: Pass trade tickers to pipeline
         )
         logger.info("RUN_COMPUTE_SUCCESS run_id=%s", run_id)
         log_rss("after_compute")  # Track memory after computation
