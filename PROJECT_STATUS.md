@@ -1,8 +1,8 @@
 # PROJECT STATUS
 
-> **Last Updated:** 2026-02-04 16:40 CET  
+> **Last Updated:** 2026-02-05 14:53 CET  
 > **Updated By:** Antigravity Agent  
-> **Version:** 2.0  
+> **Version:** 2.1  
 
 ---
 
@@ -115,6 +115,39 @@ make verify
 ---
 
 ## 4. Recent Changes (Last 30 Days)
+
+### [2026-02-05] - Refactoring Phases 1-4
+**Production-Ready Refactoring: Bug Fixes, Architecture, Caching, ETL**
+- Agent: Antigravity  
+- Branches: `feature/refactoring-phase1` → `feature/refactoring-phase4`
+- **Phase 1: Critical Bug Fixes** ✅ Merged
+  - Fixed market data "date column" bug with defensive validation in `market_data/yahoo.py` and `market_data/store.py`
+  - Enhanced error handling in `src/api/server.py` with structured responses (HTTP 422 for validation errors)
+  - All 117 tests passing
+- **Phase 2: Architecture Cleanup** ✅ Merged
+  - Removed Streamlit dependencies (streamlit, streamlit-aggrid) from requirements.txt
+  - Extracted service layer: `src/services/market_data_service.py`, `src/services/portfolio_service.py`
+  - Implemented repository pattern: `src/repositories/portfolio_repository.py`, `src/repositories/run_repository.py`
+  - Added structured logging with structlog: `src/core/logging.py` (JSON logs for production)
+  - Added mypy type checking configuration
+  - Reduced server.py by 100+ lines
+- **Phase 3: Database & Caching** ✅ Merged
+  - Added database indexes via Alembic migration `20250204_0001_add_performance_indexes.py`
+  - Implemented cache invalidation: `delete_cache_entry()`, `clear_stale_cache()`, `get_cache_age()`, `is_cache_fresh()`
+  - Added auto-retry mechanism for MARKET_DATA_STALE errors in `market_data/store.py`
+  - Created `CacheService` with monitoring methods: `get_cache_stats()`, `get_stale_caches()`, `clear_all_stale_caches()`
+  - Admin cache endpoints: GET /admin/cache/stats, POST /admin/cache/clear-stale, GET /admin/cache/stale
+- **Phase 4: ETL & Automation** ✅ Complete (Pending Merge)
+  - Created `MarketDataRefreshService` for automated data refresh with `get_active_tickers()`, `refresh_market_data()`, `validate_refresh_results()`
+  - Added 3 admin endpoints: POST /admin/refresh-market-data, GET /admin/refresh-status, POST /admin/backfill-market-data
+  - Implemented `MarketDataValidator` with 5 data quality rules: no nulls, OHLC logic, positive volume, no duplicates, valid dates
+  - Added `log_critical_error()` for Cloud Monitoring alerting with structured logging
+- Testing performed:
+  - ✅ All 117 tests passing across all phases
+  - ✅ End-to-end testing with 1586-row CSV (30 tickers), all metrics calculated
+  - ✅ Cache auto-retry mechanism verified - detects stale data, clears, and refetches successfully
+  - ✅ Refresh endpoint tested with 30 tickers: 100% success rate
+- Status: Phases 1-3 merged to main, Phase 4 on `feature/refactoring-phase4` ready to merge
 
 ### [2026-02-04] - Stability/Robustness
 **Comprehensive Stability & Robustness Audit**
