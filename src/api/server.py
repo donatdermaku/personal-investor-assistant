@@ -1111,15 +1111,21 @@ async def get_refresh_status():
 
 
 @app.post("/admin/backfill-market-data")
-async def backfill_market_data(
-    tickers: list[str],
-    start_date: str,
-    end_date: str
-):
+async def backfill_market_data(request: dict):
     """Backfill market data for specific tickers and date range."""
     from datetime import datetime
-    from src.services.market_data_refresh_service import MarketDataRefreshService
     from market_data.store import MarketDataStore
+    
+    # Extract from request body
+    tickers = request.get("tickers", [])
+    start_date = request.get("start_date")
+    end_date = request.get("end_date")
+    
+    if not tickers or not start_date or not end_date:
+        raise HTTPException(
+            status_code=400, 
+            detail="Missing required fields: tickers, start_date, end_date"
+        )
     
     # Validate dates
     try:
