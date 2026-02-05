@@ -9,9 +9,11 @@ making code more testable and maintainable.
 from src.services.portfolio_service import PortfolioService
 from src.services.market_data_service import MarketDataService
 from src.services.cache_service import CacheService
+from src.services.market_data_refresh_service import MarketDataRefreshService
 
 __all__ = [
     "PortfolioService",
     "MarketDataService",
     "CacheService",
+    "MarketDataRefreshService",
 ]

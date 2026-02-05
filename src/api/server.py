@@ -1067,3 +1067,106 @@ def export_artifact_alias(run_id: str, artifact: str):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# =====================================================
+# Market Data Refresh Admin Endpoints
+# =====================================================
+
+@app.post("/admin/refresh-market-data")
+async def refresh_market_data(days_back: int = 30, force_refresh: bool = False):
+    """Manually trigger market data refresh for all active tickers."""
+    from src.services.market_data_refresh_service import MarketDataRefreshService
+    
+    service = MarketDataRefreshService()
+    tickers = service.get_active_tickers()
+    
+    if not tickers:
+        return {
+            "status": "no_tickers",
+            "message": "No active tickers found in portfolios"
+        }
+    
+    results = service.refresh_market_data(tickers, days_back, force_refresh)
+    validation = service.validate_refresh_results(results)
+    
+    return {
+        "status": "completed",
+        "results": results,
+        "validation": validation
+    }
+
+
+@app.get("/admin/refresh-status")
+async def get_refresh_status():
+    """Get basic statistics about cached market data."""
+    from src.services.cache_service import CacheService
+    
+    cache_service = CacheService()
+    stats = cache_service.get_cache_stats()
+    
+    return {
+        "status": "ok",
+        "cache_stats": stats
+    }
+
+
+@app.post("/admin/backfill-market-data")
+async def backfill_market_data(request: dict):
+    """Backfill market data for specific tickers and date range."""
+    from datetime import datetime
+    from market_data.store import MarketDataStore
+    
+    # Extract from request body
+    tickers = request.get("tickers", [])
+    start_date = request.get("start_date")
+    end_date = request.get("end_date")
+    
+    if not tickers or not start_date or not end_date:
+        raise HTTPException(
+            status_code=400, 
+            detail="Missing required fields: tickers, start_date, end_date"
+        )
+    
+    # Validate dates
+    try:
+        start = datetime.fromisoformat(start_date)
+        end = datetime.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+    
+    # Validate date range (max 1 year)
+    if (end - start).days > 365:
+        raise HTTPException(status_code=400, detail="Date range cannot exceed 1 year")
+    
+    if end < start:
+        raise HTTPException(status_code=400, detail="end_date must be after start_date")
+    
+    # Fetch data
+    store = MarketDataStore.default()
+    success_count = 0
+    failure_count = 0
+    errors = []
+    
+    for ticker in tickers:
+        try:
+            prices = store.get_prices(ticker, start_date, end_date)
+            if not prices.empty:
+                success_count += 1
+            else:
+                failure_count += 1
+                errors.append({"ticker": ticker, "error": "No data returned"})
+        except Exception as e:
+            failure_count += 1
+            errors.append({"ticker": ticker, "error": str(e)})
+    
+    return {
+        "status": "completed",
+        "success_count": success_count,
+        "failure_count": failure_count,
+        "total_tickers": len(tickers),
+        "errors": errors,
+        "date_range": {
+            "start": start_date,
+            "end": end_date
+        }
+    }
