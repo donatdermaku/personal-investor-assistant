@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, JSONResponse
-from typing import Optional
+from typing import Optional, Any
 import logging
 import json
 import csv
@@ -85,6 +85,38 @@ RATE_LIMIT_PER_WINDOW = int(os.getenv("NEXUS_RATE_LIMIT_PER_WINDOW", "120"))
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("NEXUS_RATE_LIMIT_WINDOW_SECONDS", "60"))
 RATE_LIMIT_EXEMPT_PATHS = {"/", "/health", "/ops/health"}
 _rate_limiter = SlidingWindowRateLimiter(RATE_LIMIT_PER_WINDOW, RATE_LIMIT_WINDOW_SECONDS)
+TIMING_LOG_ENABLED = _read_bool_env("NEXUS_TIMING_LOG_ENABLED", True)
+DEFINITIONS_CACHE_TTL_SECONDS = int(os.getenv("NEXUS_DEFINITIONS_CACHE_TTL_SECONDS", "300"))
+OPS_CACHE_STATS_TTL_SECONDS = int(os.getenv("NEXUS_OPS_CACHE_STATS_TTL_SECONDS", "30"))
+
+
+class TtlValueCache:
+    """Thread-safe in-memory TTL cache for small, read-heavy payloads."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._store: dict[str, tuple[float, Any]] = {}
+
+    def get(self, key: str, ttl_seconds: int) -> Any | None:
+        if ttl_seconds <= 0:
+            return None
+        now = time.time()
+        with self._lock:
+            entry = self._store.get(key)
+            if not entry:
+                return None
+            ts, value = entry
+            if now - ts > ttl_seconds:
+                self._store.pop(key, None)
+                return None
+            return value
+
+    def set(self, key: str, value: Any) -> None:
+        with self._lock:
+            self._store[key] = (time.time(), value)
+
+
+_ttl_cache = TtlValueCache()
 
 def parse_allowed_origins(raw: str | None) -> list[str]:
     if raw is None or raw.strip() == "":
@@ -115,6 +147,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def security_and_rate_limit_middleware(request: Request, call_next):
+    started = time.perf_counter()
     path = request.url.path
     if RATE_LIMIT_ENABLED and path not in RATE_LIMIT_EXEMPT_PATHS:
         client_host = request.client.host if request.client else "unknown"
@@ -143,6 +176,7 @@ async def security_and_rate_limit_middleware(request: Request, call_next):
         remaining = RATE_LIMIT_PER_WINDOW
 
     response = await call_next(request)
+    duration_ms = (time.perf_counter() - started) * 1000
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -150,6 +184,15 @@ async def security_and_rate_limit_middleware(request: Request, call_next):
     response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_PER_WINDOW)
     response.headers["X-RateLimit-Remaining"] = str(remaining)
     response.headers["X-RateLimit-Window"] = str(RATE_LIMIT_WINDOW_SECONDS)
+    response.headers["X-Process-Time-Ms"] = f"{duration_ms:.2f}"
+    if TIMING_LOG_ENABLED:
+        logger.info(
+            "HTTP_REQUEST method=%s path=%s status=%s duration_ms=%.2f",
+            request.method,
+            path,
+            response.status_code,
+            duration_ms,
+        )
     return response
 
 @app.on_event("startup")
@@ -569,7 +612,7 @@ def _current_rss_mb() -> float:
 
 
 @app.get("/ops/health")
-def ops_health():
+def ops_health(full: bool = False):
     uptime_seconds = int((datetime.now(timezone.utc) - APP_STARTED_AT).total_seconds())
     runtime = {
         "uptime_seconds": uptime_seconds,
@@ -589,12 +632,18 @@ def ops_health():
         latest = None
         database["status"] = "disconnected"
 
-    try:
-        from src.services.cache_service import CacheService
+    if full:
+        cache_stats = _ttl_cache.get("ops_cache_stats", OPS_CACHE_STATS_TTL_SECONDS)
+        if cache_stats is None:
+            try:
+                from src.services.cache_service import CacheService
 
-        cache_stats = CacheService().get_cache_stats()
-    except Exception:
-        cache_stats = {}
+                cache_stats = CacheService().get_cache_stats()
+                _ttl_cache.set("ops_cache_stats", cache_stats)
+            except Exception:
+                cache_stats = {}
+    else:
+        cache_stats = {"status": "skipped", "reason": "Use full=true to include cache stats."}
 
     latest_run = None
     if latest:
@@ -1083,6 +1132,10 @@ def portfolio_alias(portfolio_id: str):
 
 @app.get("/api/v1/definitions")
 def get_definitions():
+    cached = _ttl_cache.get("definitions_registry", DEFINITIONS_CACHE_TTL_SECONDS)
+    if cached is not None:
+        return cached
+    _ttl_cache.set("definitions_registry", DEFINITIONS_REGISTRY)
     return DEFINITIONS_REGISTRY
 
 @app.get("/definitions")
