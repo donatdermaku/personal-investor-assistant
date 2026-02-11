@@ -1,4 +1,4 @@
-.PHONY: setup run run-pro test verify clean sample-data
+.PHONY: setup run run-pro test verify clean sample-data perf-smoke
 
 PYTHON := python
 
@@ -30,3 +30,6 @@ clean:
 
 sample-data:
 	@echo "Sample data located in data/sample/"
+
+perf-smoke:
+	$(PYTHON) scripts/perf_smoke.py --base-url http://localhost:8000 --path /health --requests 25

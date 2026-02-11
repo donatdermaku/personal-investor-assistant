@@ -6,6 +6,7 @@ import type {
     RunMetricsResponse,
     RunListItem,
     RunCreateResponse,
+    OpsHealthResponse,
 } from "@/types/nexus";
 import {
     MOCK_DEFINITIONS,
@@ -86,6 +87,17 @@ export async function getHealth(): Promise<boolean> {
     } catch {
         return false;
     }
+}
+
+export async function getOpsHealth(): Promise<OpsHealthResponse> {
+    if (!API_BASE) {
+        throw new Error("Backend URL is not configured.");
+    }
+    const data = await fetchJson<OpsHealthResponse>(`${API_BASE}/ops/health`);
+    if (!data) {
+        throw new Error("Operations status unavailable.");
+    }
+    return data;
 }
 
 export async function getLatestRun(): Promise<RunManifest | null> {

@@ -8,6 +8,7 @@ const NAV_ITEMS = [
     { label: "Performance", href: "/performance" },
     { label: "Risk", href: "/risk" },
     { label: "Holdings", href: "/holdings" },
+    { label: "Operations", href: "/operations" },
 ];
 
 export function Sidebar() {
@@ -47,7 +48,7 @@ export function Sidebar() {
             </aside>
 
             <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#E5E7EB] px-4 py-2">
-                <div className="grid grid-cols-4 gap-2 text-center text-xs font-medium text-gray-500">
+                <div className="grid grid-cols-5 gap-2 text-center text-xs font-medium text-gray-500">
                     {NAV_ITEMS.map((item) => {
                         const isActive = pathname === item.href;
                         return (
