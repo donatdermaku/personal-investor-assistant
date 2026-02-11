@@ -327,6 +327,31 @@ export interface RunMetricsResponse {
     data_contracts?: DataContractsPayload | null;
 }
 
+export interface OpsHealthResponse {
+    status: string;
+    runtime: {
+        uptime_seconds: number;
+        started_at: string;
+        now: string;
+        rss_mb: number;
+    };
+    database: {
+        status: string;
+        backend: string;
+    };
+    cache: Record<string, unknown>;
+    rate_limit: {
+        enabled: boolean;
+        limit_per_window: number;
+        window_seconds: number;
+    };
+    latest_run: {
+        run_id: string;
+        status: string;
+        timestamp: string | null;
+    } | null;
+}
+
 export interface PortfolioResponse {
     portfolio: PortfolioMeta;
     holdings: Holding[];

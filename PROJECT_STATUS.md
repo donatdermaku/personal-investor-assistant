@@ -116,6 +116,27 @@ make verify
 
 ## 4. Recent Changes (Last 30 Days)
 
+### [2026-02-11] - Refactoring Phase 6 (In Progress)
+**Production Readiness: Monitoring + Security Baseline**
+- Agent: Codex
+- Branch: `feature/refactoring-phase6`
+- **Phase 6.1: Monitoring Dashboards** ✅ Implemented
+  - Added `GET /ops/health` in `src/api/server.py` with uptime, memory RSS, DB status, cache stats, rate-limit config, latest run metadata
+  - Added Operations page at `web/src/app/(routes)/operations/page.tsx`
+  - Added route bridge at `web/app/(routes)/operations/page.tsx` and nav item in `web/src/components/nexus/Sidebar.tsx`
+- **Phase 6.2: Rate Limiting and Security** ✅ Implemented (baseline)
+  - Added sliding-window rate limiting middleware in `src/api/server.py` (env-driven)
+  - Added security headers across API responses (nosniff, frame deny, referrer policy, permissions policy)
+  - Added tests in `tests/test_api_server.py` for ops health and rate-limit enforcement
+- **Phase 6.3: Performance Testing and Optimization** 🚧 Started
+  - Added `scripts/perf_smoke.py` and `make perf-smoke` for repeatable latency probes
+  - Remaining work: run on target deployment and tune thresholds/optimizations
+- Verification:
+  - ✅ `pytest tests/test_api_server.py -q`
+  - ✅ `npm --prefix web run lint`
+  - ✅ `npm --prefix web run test`
+  - ✅ `npm --prefix web run build`
+
 ### [2026-02-11] - Refactoring Phase 5
 **UX Polish: Error Clarity, Progress Indicators, and UI Refinement**
 - Agent: Codex
@@ -588,9 +609,8 @@ alembic current
 ## 13. Next Steps & Priorities
 
 ### Immediate (This Week)
-- [ ] Merge `feature/refactoring-phase5` to `main`
-- [ ] Start Phase 6.1: Monitoring dashboards (backend + frontend health)
-- [ ] Start Phase 6.2: Rate limiting and security hardening
+- [ ] Complete Phase 6.3 performance benchmark run on deployed environment
+- [ ] Tune thresholds and optimize top latency bottleneck identified by `scripts/perf_smoke.py`
 - [ ] Validate Phase 20.3 memory-bounded pipeline on Render Starter (512MB)
 - [ ] Run `scripts/repro_large_portfolio.py` and capture peak RSS
 - [ ] Monitor persistent cache warmup efficiency

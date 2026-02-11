@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, JSONResponse
 from typing import Optional
 import logging
 import json
@@ -12,6 +12,10 @@ from pathlib import Path
 import numpy as np
 import uuid
 from datetime import datetime, timezone
+import time
+import threading
+import sys
+import resource
 
 
 import os
@@ -42,6 +46,45 @@ import pandas as pd
 logger = logging.getLogger("nexus.api")
 
 app = FastAPI(title="Nexus Analytics API")
+APP_STARTED_AT = datetime.now(timezone.utc)
+
+
+class SlidingWindowRateLimiter:
+    """Simple in-memory sliding window rate limiter by client IP."""
+
+    def __init__(self, limit: int, window_seconds: int):
+        self.limit = max(1, int(limit))
+        self.window_seconds = max(1, int(window_seconds))
+        self._requests: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
+
+    def allow(self, key: str, now: float) -> tuple[bool, int, int]:
+        cutoff = now - self.window_seconds
+        with self._lock:
+            entries = [ts for ts in self._requests.get(key, []) if ts > cutoff]
+            if len(entries) >= self.limit:
+                retry_after = max(1, int(self.window_seconds - (now - entries[0])))
+                remaining = 0
+                self._requests[key] = entries
+                return False, retry_after, remaining
+            entries.append(now)
+            self._requests[key] = entries
+            remaining = max(0, self.limit - len(entries))
+            return True, 0, remaining
+
+
+def _read_bool_env(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+RATE_LIMIT_ENABLED = _read_bool_env("NEXUS_RATE_LIMIT_ENABLED", True)
+RATE_LIMIT_PER_WINDOW = int(os.getenv("NEXUS_RATE_LIMIT_PER_WINDOW", "120"))
+RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("NEXUS_RATE_LIMIT_WINDOW_SECONDS", "60"))
+RATE_LIMIT_EXEMPT_PATHS = {"/", "/health", "/ops/health"}
+_rate_limiter = SlidingWindowRateLimiter(RATE_LIMIT_PER_WINDOW, RATE_LIMIT_WINDOW_SECONDS)
 
 def parse_allowed_origins(raw: str | None) -> list[str]:
     if raw is None or raw.strip() == "":
@@ -68,6 +111,46 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def security_and_rate_limit_middleware(request: Request, call_next):
+    path = request.url.path
+    if RATE_LIMIT_ENABLED and path not in RATE_LIMIT_EXEMPT_PATHS:
+        client_host = request.client.host if request.client else "unknown"
+        allowed, retry_after, remaining = _rate_limiter.allow(client_host, time.time())
+        if not allowed:
+            response = JSONResponse(
+                status_code=429,
+                content={
+                    "detail": {
+                        "error_code": "RATE_LIMIT_EXCEEDED",
+                        "message": "Too many requests. Please retry shortly.",
+                        "hint": "Wait before retrying or reduce request frequency.",
+                    }
+                },
+            )
+            response.headers["Retry-After"] = str(retry_after)
+            response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_PER_WINDOW)
+            response.headers["X-RateLimit-Remaining"] = str(remaining)
+            response.headers["X-RateLimit-Window"] = str(RATE_LIMIT_WINDOW_SECONDS)
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["Referrer-Policy"] = "no-referrer"
+            response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+            return response
+    else:
+        remaining = RATE_LIMIT_PER_WINDOW
+
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_PER_WINDOW)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    response.headers["X-RateLimit-Window"] = str(RATE_LIMIT_WINDOW_SECONDS)
+    return response
 
 @app.on_event("startup")
 def init_db_tables() -> None:
@@ -475,6 +558,64 @@ def health_check():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+def _current_rss_mb() -> float:
+    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    # macOS reports bytes, Linux reports KiB.
+    if sys.platform == "darwin":
+        return round(rss / (1024 * 1024), 2)
+    return round(rss / 1024, 2)
+
+
+@app.get("/ops/health")
+def ops_health():
+    uptime_seconds = int((datetime.now(timezone.utc) - APP_STARTED_AT).total_seconds())
+    runtime = {
+        "uptime_seconds": uptime_seconds,
+        "started_at": APP_STARTED_AT.isoformat(),
+        "now": datetime.now(timezone.utc).isoformat(),
+        "rss_mb": _current_rss_mb(),
+    }
+
+    database = {
+        "status": "unknown",
+        "backend": "supabase" if use_supabase() else "sqlite",
+    }
+    try:
+        latest = repo.get_latest_run()
+        database["status"] = "connected"
+    except Exception:
+        latest = None
+        database["status"] = "disconnected"
+
+    try:
+        from src.services.cache_service import CacheService
+
+        cache_stats = CacheService().get_cache_stats()
+    except Exception:
+        cache_stats = {}
+
+    latest_run = None
+    if latest:
+        latest_run = {
+            "run_id": latest.run_id,
+            "status": latest.status,
+            "timestamp": latest.created_at.isoformat() if latest.created_at else None,
+        }
+
+    return {
+        "status": "ok",
+        "runtime": runtime,
+        "database": database,
+        "cache": cache_stats,
+        "rate_limit": {
+            "enabled": RATE_LIMIT_ENABLED,
+            "limit_per_window": RATE_LIMIT_PER_WINDOW,
+            "window_seconds": RATE_LIMIT_WINDOW_SECONDS,
+        },
+        "latest_run": latest_run,
+    }
 
 @app.post("/run")
 async def create_run(
