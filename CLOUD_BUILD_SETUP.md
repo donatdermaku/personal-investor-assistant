@@ -60,10 +60,10 @@ After creating the trigger:
    ```bash
    git add cloudbuild.yaml CLOUD_BUILD_SETUP.md
    git commit -m "Add Cloud Build auto-deploy configuration"
-   git push origin feature/refactoring-phase4
+   git push origin <your-feature-branch>
    ```
 
-2. Merge Phase 4 PR to main
+2. Merge your PR to `main`
 
 3. Watch Cloud Build → History for automatic deployment
 
@@ -79,8 +79,8 @@ If a build fails:
 
 ## Next Steps
 
-After this trigger is set up and Phase 4 is merged:
-- CSV uploads will work with all Phase 4 improvements
+After this trigger is set up and your PR is merged:
+- Production auto-deploys from `main` on every merge
 - Cache auto-retry active
 - Admin refresh endpoints available
 - All 117 tests verified

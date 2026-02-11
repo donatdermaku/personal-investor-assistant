@@ -24,7 +24,7 @@ function coveragePercentFromState(state: NexusState | null) {
 }
 
 export function ContextPanel() {
-    const { state, status, mode, lastFetched, backendOk, benchmark, runs, runId, setRunId } = useNexus();
+    const { state, status, error, mode, lastFetched, backendOk, benchmark, runs, runId, setRunId } = useNexus();
     const [toast, setToast] = useState<string | null>(null);
 
     const coverage = useMemo(() => coveragePercentFromState(state), [state]);
@@ -192,7 +192,7 @@ export function ContextPanel() {
                         <SkeletonBlock className="h-32 w-full" />
                     </div>
                 ) : hasError ? (
-                    <div className="text-sm text-red-500">Unable to load context data.</div>
+                    <div className="text-sm text-red-500">{error || "Unable to load context data."}</div>
                 ) : content}
             </aside>
 
@@ -209,7 +209,7 @@ export function ContextPanel() {
                             <SkeletonBlock className="h-32 w-full" />
                         </div>
                     ) : hasError ? (
-                        <div className="text-sm text-red-500">Unable to load context data.</div>
+                        <div className="text-sm text-red-500">{error || "Unable to load context data."}</div>
                     ) : content}
                 </div>
             </div>

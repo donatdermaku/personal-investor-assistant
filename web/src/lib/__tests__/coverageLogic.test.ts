@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { shouldHideKpiValue, getKpiBadge } from "@/lib/coverageLogic";
+import type { CoverageSummaryDetailed } from "@/types/nexus";
 
 describe("shouldHideKpiValue", () => {
     it("shows KPI when coverage summary is missing", () => {
@@ -21,10 +22,10 @@ describe("shouldHideKpiValue", () => {
             },
         };
 
-        expect(shouldHideKpiValue("twr", coverageSummary as any)).toBe(false);
-        expect(shouldHideKpiValue("sharpe", coverageSummary as any)).toBe(true);
-        expect(shouldHideKpiValue("allocation_effect", coverageSummary as any)).toBe(true);
-        expect(shouldHideKpiValue("max_drawdown", coverageSummary as any)).toBe(false);
+        expect(shouldHideKpiValue("twr", coverageSummary as CoverageSummaryDetailed)).toBe(false);
+        expect(shouldHideKpiValue("sharpe", coverageSummary as CoverageSummaryDetailed)).toBe(true);
+        expect(shouldHideKpiValue("allocation_effect", coverageSummary as CoverageSummaryDetailed)).toBe(true);
+        expect(shouldHideKpiValue("max_drawdown", coverageSummary as CoverageSummaryDetailed)).toBe(false);
     });
 
     it("hides KPIs when prices are insufficient", () => {
@@ -39,24 +40,24 @@ describe("shouldHideKpiValue", () => {
             },
         };
 
-        expect(shouldHideKpiValue("twr", coverageSummary as any)).toBe(true);
-        expect(shouldHideKpiValue("portfolio_value", coverageSummary as any)).toBe(true);
+        expect(shouldHideKpiValue("twr", coverageSummary as CoverageSummaryDetailed)).toBe(true);
+        expect(shouldHideKpiValue("portfolio_value", coverageSummary as CoverageSummaryDetailed)).toBe(true);
     });
 });
 
 describe('getKpiBadge', () => {
     it('returns INSUFFICIENT when hidden', () => {
-        const summary: any = { metric_status: { sharpe: "insufficient" } };
+        const summary = { metric_status: { sharpe: "insufficient" } } as CoverageSummaryDetailed;
         expect(getKpiBadge('sharpe', summary)).toBe('INSUFFICIENT');
     });
 
     it('returns WARNING when available_low_coverage', () => {
-        const summary: any = { metric_status: { sharpe: "available_low_coverage" } };
+        const summary = { metric_status: { sharpe: "available_low_coverage" } } as CoverageSummaryDetailed;
         expect(getKpiBadge('sharpe', summary)).toBe('WARNING');
     });
 
     it('returns null when sufficient', () => {
-        const summary: any = { metric_status: { sharpe: "sufficient" } };
+        const summary = { metric_status: { sharpe: "sufficient" } } as CoverageSummaryDetailed;
         expect(getKpiBadge('sharpe', summary)).toBe(null);
     });
 });
