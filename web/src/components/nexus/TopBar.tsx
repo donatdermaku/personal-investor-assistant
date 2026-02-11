@@ -18,6 +18,8 @@ export function TopBar() {
         benchmark,
         setBenchmark,
         status,
+        loadingMessage,
+        loadingProgress,
         lastFetched,
         backendOk,
         refresh,
@@ -88,6 +90,20 @@ export function TopBar() {
                     Create Run
                 </button>
             </div>
+            {status === "loading" && (
+                <div className="w-full lg:basis-full">
+                    <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
+                        <span>{loadingMessage || "Refreshing data..."}</span>
+                        <span>{Math.max(5, Math.min(100, Math.round(loadingProgress || 0)))}%</span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                        <div
+                            className="h-full rounded-full bg-[#2563EB] transition-all duration-300"
+                            style={{ width: `${Math.max(5, Math.min(100, Math.round(loadingProgress || 0)))}%` }}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

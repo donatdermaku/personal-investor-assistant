@@ -21,6 +21,13 @@ export interface RunCreateResponse {
     run_id: string;
     status: string;
     timestamp: string | null;
+    warnings?: {
+        failed_tickers?: {
+            count: number;
+            tickers: string[];
+            message: string;
+        };
+    };
 }
 
 export interface PortfolioSummary {

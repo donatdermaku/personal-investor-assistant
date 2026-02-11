@@ -16,7 +16,7 @@ export default function PerformancePage() {
         return (
             <EmptyState
                 title="Unable to load performance data"
-                description={error || "Check your backend connection and try again."}
+                description={error || "Check API connectivity, then retry in Live Mode or continue in Demo Mode."}
                 primaryAction={{ label: "Retry in Live Mode", onClick: () => setMode("live") }}
                 secondaryAction={{ label: "Switch to Demo Mode", onClick: () => setMode("demo") }}
             />

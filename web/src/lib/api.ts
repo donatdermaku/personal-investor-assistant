@@ -20,13 +20,60 @@ export type NexusMode = "live" | "demo";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+type ApiErrorPayload = {
+    detail?: string | {
+        message?: string;
+        hint?: string;
+        details?: {
+            errors?: string[];
+        };
+    };
+};
+
+function fallbackErrorMessage(status: number): string {
+    if (status === 400) return "The request is invalid. Check your inputs and retry.";
+    if (status === 401 || status === 403) return "Access denied for this action.";
+    if (status === 404) return "Requested data was not found.";
+    if (status === 422) return "Input validation failed. Review data and retry.";
+    if (status >= 500) return "The backend failed while processing the request. Retry shortly.";
+    return "Request failed.";
+}
+
+async function resolveErrorMessage(res: Response): Promise<string> {
+    const fallback = fallbackErrorMessage(res.status);
+    try {
+        const payload = (await res.json()) as ApiErrorPayload;
+        if (typeof payload?.detail === "string" && payload.detail.trim().length > 0) {
+            return payload.detail;
+        }
+        if (payload?.detail && typeof payload.detail === "object") {
+            const message = payload.detail.message?.trim();
+            const hint = payload.detail.hint?.trim();
+            const validationErrors = payload.detail.details?.errors ?? [];
+            if (message && hint) {
+                return `${message} ${hint}`;
+            }
+            if (message) {
+                return message;
+            }
+            if (validationErrors.length > 0) {
+                return `CSV validation failed: ${validationErrors.slice(0, 3).join("; ")}`;
+            }
+        }
+    } catch {
+        // Fallback to status-based message.
+    }
+    return fallback;
+}
+
 async function fetchJson<T>(url: string, allow404 = false): Promise<T | null> {
     const res = await fetch(url, { cache: "no-store" });
     if (res.status === 404 && allow404) {
         return null;
     }
     if (!res.ok) {
-        throw new Error(`Request failed (${res.status})`);
+        const message = await resolveErrorMessage(res);
+        throw new Error(message);
     }
     return res.json();
 }
@@ -93,20 +140,8 @@ export async function createRun(params: {
         body: formData,
     });
     if (!res.ok) {
-        let detail = "Run creation failed.";
-        try {
-            const payload = await res.json();
-            if (payload?.detail) {
-                if (typeof payload.detail === "string") {
-                    detail = payload.detail;
-                } else {
-                    detail = payload.detail.message || detail;
-                }
-            }
-        } catch {
-            // ignore parse errors
-        }
-        throw new Error(detail);
+        const message = await resolveErrorMessage(res);
+        throw new Error(message);
     }
     return res.json();
 }
@@ -254,10 +289,8 @@ export async function downloadExport(runId: string, artifact: string): Promise<v
     }
     const res = await fetch(`${API_BASE}/run/${runId}/export/${artifact}`);
     if (!res.ok) {
-        if (res.status === 404) {
-            throw new Error("Artifact not available.");
-        }
-        throw new Error("Export failed.");
+        const message = await resolveErrorMessage(res);
+        throw new Error(message);
     }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);

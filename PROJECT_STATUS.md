@@ -116,6 +116,28 @@ make verify
 
 ## 4. Recent Changes (Last 30 Days)
 
+### [2026-02-11] - Refactoring Phase 5
+**UX Polish: Error Clarity, Progress Indicators, and UI Refinement**
+- Agent: Codex
+- Branch: `feature/refactoring-phase5`
+- **Phase 5.1: Improve Error Messages** ✅ Complete
+  - Added structured API error parsing and status-aware fallbacks in `web/src/lib/api.ts`
+  - Improved route-level error descriptions in `web/src/app/(routes)/overview/page.tsx`, `web/src/app/(routes)/performance/page.tsx`, `web/src/app/(routes)/risk/page.tsx`, `web/src/app/(routes)/holdings/page.tsx`
+  - Surfaced actual provider error text in `web/src/components/nexus/ContextPanel.tsx`
+- **Phase 5.2: Add Progress Indicators** ✅ Complete
+  - Added loading progress state (`loadingMessage`, `loadingProgress`) in `web/src/components/nexus/NexusProvider.tsx`
+  - Added top-bar refresh progress UI in `web/src/components/nexus/TopBar.tsx`
+  - Added run creation progress bar + step messaging in `web/src/components/nexus/RunCreationModal.tsx`
+- **Phase 5.3: Polish Frontend Components** ✅ Complete
+  - Refined empty states in `web/src/components/nexus/EmptyState.tsx`
+  - Added subtle visual polish (background gradients + hover lift) in `web/src/app/globals.css`
+  - Extended run creation typings for warning visibility in `web/src/types/nexus.ts`
+- Testing performed:
+  - ✅ `npm --prefix web run lint`
+  - ✅ `npm --prefix web run test`
+  - ✅ `npm --prefix web run build`
+- Status: ✅ Complete - Ready to merge
+
 ### [2026-02-05] - Refactoring Phases 1-4
 **Production-Ready Refactoring: Bug Fixes, Architecture, Caching, ETL**
 - Agent: Antigravity  
@@ -137,7 +159,7 @@ make verify
   - Added auto-retry mechanism for MARKET_DATA_STALE errors in `market_data/store.py`
   - Created `CacheService` with monitoring methods: `get_cache_stats()`, `get_stale_caches()`, `clear_all_stale_caches()`
   - Admin cache endpoints: GET /admin/cache/stats, POST /admin/cache/clear-stale, GET /admin/cache/stale
-- **Phase 4: ETL & Automation** ✅ Complete (Pending Merge)
+- **Phase 4: ETL & Automation** ✅ Merged
   - Created `MarketDataRefreshService` for automated data refresh with `get_active_tickers()`, `refresh_market_data()`, `validate_refresh_results()`
   - Added 3 admin endpoints: POST /admin/refresh-market-data, GET /admin/refresh-status, POST /admin/backfill-market-data
   - Implemented `MarketDataValidator` with 5 data quality rules: no nulls, OHLC logic, positive volume, no duplicates, valid dates
@@ -147,7 +169,7 @@ make verify
   - ✅ End-to-end testing with 1586-row CSV (30 tickers), all metrics calculated
   - ✅ Cache auto-retry mechanism verified - detects stale data, clears, and refetches successfully
   - ✅ Refresh endpoint tested with 30 tickers: 100% success rate
-- Status: Phases 1-3 merged to main, Phase 4 on `feature/refactoring-phase4` ready to merge
+- Status: Phases 1-4 merged to main
 
 ### [2026-02-04] - Stability/Robustness
 **Comprehensive Stability & Robustness Audit**
@@ -566,6 +588,9 @@ alembic current
 ## 13. Next Steps & Priorities
 
 ### Immediate (This Week)
+- [ ] Merge `feature/refactoring-phase5` to `main`
+- [ ] Start Phase 6.1: Monitoring dashboards (backend + frontend health)
+- [ ] Start Phase 6.2: Rate limiting and security hardening
 - [ ] Validate Phase 20.3 memory-bounded pipeline on Render Starter (512MB)
 - [ ] Run `scripts/repro_large_portfolio.py` and capture peak RSS
 - [ ] Monitor persistent cache warmup efficiency

@@ -27,6 +27,8 @@ interface NexusContextValue {
     lastFetched: string | null;
     backendOk: boolean;
     error: string | null;
+    loadingMessage: string | null;
+    loadingProgress: number;
     state: NexusState | null;
     refresh: () => void;
 }
@@ -57,6 +59,8 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
     const [status, setStatus] = useState<NexusStatus>("idle");
     const [state, setState] = useState<NexusState | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
+    const [loadingProgress, setLoadingProgress] = useState(0);
     const [lastFetched, setLastFetched] = useState<string | null>(null);
     const [backendOk, setBackendOk] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
@@ -104,20 +108,28 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
         const load = async () => {
             setStatus("loading");
             setError(null);
+            setLoadingMessage("Checking backend health...");
+            setLoadingProgress(15);
             const health = await getHealth();
             if (!active) return;
             setBackendOk(health);
 
             try {
+                setLoadingMessage(mode === "live" ? "Loading available runs..." : "Preparing demo context...");
+                setLoadingProgress(35);
                 const runsList = mode === "live" ? await getRuns() : [];
                 if (!active) return;
                 setRuns(runsList);
                 const runIdValid = runId ? runsList.some((run) => run.run_id === runId) : false;
                 const resolvedRunId = runIdValid ? runId : runsList[0]?.run_id || null;
+                setLoadingMessage("Loading portfolio analytics...");
+                setLoadingProgress(70);
                 const response = await getNexusState(mode, portfolioId, resolvedRunId);
                 if (!active) return;
                 setState(response.state);
                 setStatus(response.empty ? "empty" : "ready");
+                setLoadingMessage(null);
+                setLoadingProgress(100);
                 setLastFetched(new Date().toISOString());
                 if (!runIdValid && response.activeRunId) {
                     setRunId(response.activeRunId);
@@ -125,7 +137,9 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
             } catch (err) {
                 if (!active) return;
                 setStatus("error");
-                setError(err instanceof Error ? err.message : "Failed to load data.");
+                const message = err instanceof Error ? err.message : "Failed to load data.";
+                setError(health ? message : "Backend is offline. Start the API service or switch to demo mode.");
+                setLoadingMessage(null);
             }
         };
         load();
@@ -162,6 +176,8 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
             lastFetched,
             backendOk,
             error,
+            loadingMessage,
+            loadingProgress,
             state,
             refresh: () => setRefreshKey((prev) => prev + 1),
         }),
@@ -177,6 +193,8 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
             lastFetched,
             backendOk,
             error,
+            loadingMessage,
+            loadingProgress,
             state,
         ]
     );
