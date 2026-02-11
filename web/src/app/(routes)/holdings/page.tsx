@@ -34,11 +34,11 @@ export default function HoldingsPage() {
     if (status === "loading" || !state) {
         return (
             <div className="space-y-6">
-                <SkeletonBlock className="h-8 w-40" />
-                <SkeletonBlock className="h-4 w-56" />
-                <div className="bg-white border border-gray-200 rounded-lg p-6">
-                    <SkeletonBlock className="h-4 w-32" />
-                    <SkeletonBlock className="mt-4 h-40 w-full" />
+                <SkeletonBlock className="h-8 w-40 bg-[var(--color-nexus-surface)]" />
+                <SkeletonBlock className="h-4 w-56 bg-[var(--color-nexus-surface)]" />
+                <div className="nexus-card p-6 min-h-[400px]">
+                    <SkeletonBlock className="h-4 w-32 bg-[var(--color-nexus-surface-hover)]" />
+                    <SkeletonBlock className="mt-4 h-full w-full bg-[var(--color-nexus-surface-hover)]" />
                 </div>
             </div>
         );
@@ -51,13 +51,13 @@ export default function HoldingsPage() {
     const nonCashHoldings = holdings.filter((holding) => holding.ticker !== "CASH");
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 animate-in fade-in duration-500">
             <div>
-                <h2 className="text-3xl font-bold text-[#0F172A] mb-2">Holdings</h2>
-                <p className="text-gray-600">
+                <h2 className="text-3xl font-sans font-bold text-[var(--color-nexus-text-primary)] mb-2 tracking-tight">Holdings</h2>
+                <p className="text-[var(--color-nexus-text-secondary)]">
                     {mode === "demo" ? "Demo portfolio positions" : "Current portfolio positions"}
                 </p>
-                <div className="text-xs text-gray-400 mt-2">
+                <div className="text-xs text-[var(--color-nexus-text-muted)] mt-2 font-mono">
                     {coverageText} · {asOf ? `As of ${asOf}` : "As of --"}
                 </div>
             </div>
@@ -85,50 +85,60 @@ export default function HoldingsPage() {
             />
 
             {/* Holdings Table */}
-            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+            <div className="nexus-card overflow-hidden">
+                <table className="min-w-full divide-y divide-[var(--color-nexus-border)] text-sm">
+                    <thead className="bg-[var(--color-nexus-surface-hover)]">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-[var(--color-nexus-text-secondary)] uppercase tracking-wider font-mono">
                                 Ticker
                             </th>
-                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-right text-xs font-semibold text-[var(--color-nexus-text-secondary)] uppercase tracking-wider font-mono">
                                 Shares
                             </th>
-                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-right text-xs font-semibold text-[var(--color-nexus-text-secondary)] uppercase tracking-wider font-mono">
                                 Price
                             </th>
-                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-right text-xs font-semibold text-[var(--color-nexus-text-secondary)] uppercase tracking-wider font-mono">
                                 Weight
                             </th>
-                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-right text-xs font-semibold text-[var(--color-nexus-text-secondary)] uppercase tracking-wider font-mono">
                                 Value
                             </th>
                         </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-[var(--color-nexus-surface)] divide-y divide-[var(--color-nexus-border)]">
                         {holdings.map((holding, idx) => (
-                            <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                            <tr key={idx} className="hover:bg-[var(--color-nexus-surface-hover)] transition-colors group">
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm font-medium text-[#0F172A]">{holding.ticker}</div>
+                                    <div className="text-sm font-medium text-[var(--color-nexus-text-primary)] font-mono group-hover:text-[var(--color-nexus-primary)] transition-colors">{holding.ticker}</div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
-                                    <div className="text-sm text-gray-900">
+                                    <div className="text-sm text-[var(--color-nexus-text-secondary)] font-mono">
                                         {holding.shares != null ? holding.shares.toLocaleString() : "--"}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
-                                    <div className="text-sm text-gray-900">
+                                    <div className="text-sm text-[var(--color-nexus-text-secondary)] font-mono">
                                         {holding.price != null ? `$${holding.price.toLocaleString()}` : "--"}
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right">
-                                    <div className="text-sm text-gray-900">
+                                <td className="px-6 py-4 whitespace-nowrap text-right relative">
+                                    {/* Weight Bar Background */}
+                                    {holding.weight != null && (
+                                        <div
+                                            className="absolute inset-y-2 right-2 bg-[var(--color-nexus-primary)]/10 rounded-l"
+                                            style={{
+                                                width: `${Math.min(holding.weight * 100 * 2, 100)}px`, // Visual scaling, max 100px width 
+                                                opacity: 0.5
+                                            }}
+                                        />
+                                    )}
+                                    <div className="relative z-10 text-sm text-[var(--color-nexus-text-primary)] font-mono font-bold">
                                         {holding.weight != null ? `${(holding.weight * 100).toFixed(1)}%` : "--"}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right">
-                                    <div className="text-sm font-medium text-gray-900">
+                                    <div className="text-sm font-medium text-[var(--color-nexus-text-primary)] font-mono">
                                         {holding.value != null ? `$${holding.value.toLocaleString()}` : "--"}
                                     </div>
                                 </td>
@@ -139,13 +149,13 @@ export default function HoldingsPage() {
             </div>
 
             {holdings.length === 0 && (
-                <div className="text-center py-12 text-gray-500">
+                <div className="text-center py-12 text-[var(--color-nexus-text-muted)] italic">
                     No holdings data available
                 </div>
             )}
 
             {holdings.length > 0 && nonCashHoldings.length === 0 && (
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-[var(--color-nexus-text-muted)] text-center mt-4">
                     Holdings are cash-only for this run.
                 </div>
             )}

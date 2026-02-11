@@ -31,6 +31,8 @@ interface NexusContextValue {
     loadingProgress: number;
     state: NexusState | null;
     refresh: () => void;
+    contextPanelOpen: boolean;
+    toggleContextPanel: () => void;
 }
 
 const NexusContext = createContext<NexusContextValue | null>(null);
@@ -64,6 +66,7 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
     const [lastFetched, setLastFetched] = useState<string | null>(null);
     const [backendOk, setBackendOk] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [contextPanelOpen, setContextPanelOpen] = useState(false);
 
     /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
@@ -180,6 +183,8 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
             loadingProgress,
             state,
             refresh: () => setRefreshKey((prev) => prev + 1),
+            contextPanelOpen,
+            toggleContextPanel: () => setContextPanelOpen((prev) => !prev),
         }),
         [
             mode,
@@ -196,6 +201,7 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
             loadingMessage,
             loadingProgress,
             state,
+            contextPanelOpen,
         ]
     );
 

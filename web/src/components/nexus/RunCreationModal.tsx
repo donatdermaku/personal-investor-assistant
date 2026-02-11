@@ -16,7 +16,12 @@ function parseHeaders(text: string): string[] {
         .filter(Boolean);
 }
 
-export function RunCreationModal() {
+interface RunCreationModalProps {
+    isOpen?: boolean;
+    onClose?: () => void;
+}
+
+export function RunCreationModal({ isOpen, onClose }: RunCreationModalProps) {
     const {
         runCreatorOpen,
         closeRunCreator,
@@ -34,8 +39,17 @@ export function RunCreationModal() {
     const [submitMode, setSubmitMode] = useState<"upload" | "demo" | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Use passed props if available (from MissionControl), otherwise fall back to context (global trigger)
+    // If isOpen is provided, use it. If not, use runCreatorOpen from context.
+    // However, if isOpen IS provided, we should probably ignore context or OR them?
+    // The requirement is MissionControl controls its own modal state.
+    // Let's say: if isOpen is defined, we use it. If undefined, we use context.
+    const show = isOpen !== undefined ? isOpen : runCreatorOpen;
+    const handleClose = onClose || closeRunCreator;
+
+    // We need to keep the useEffect for resetting state when the modal closes
     useEffect(() => {
-        if (!runCreatorOpen) {
+        if (!show) {
             setFile(null);
             setFileError(null);
             setSubmitError(null);
@@ -46,9 +60,9 @@ export function RunCreationModal() {
             setSubmitMode(null);
             setIsSubmitting(false);
         }
-    }, [runCreatorOpen]);
+    }, [show]);
 
-    if (!runCreatorOpen) return null;
+    if (!show) return null;
 
     const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
         const selected = event.target.files?.[0] ?? null;
@@ -144,98 +158,131 @@ export function RunCreationModal() {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-            <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="text-lg font-semibold text-[#0F172A]">Create a Portfolio Run</h3>
-                        <p className="text-sm text-gray-500">
-                            Portfolio: <span className="font-semibold text-gray-700">{portfolioId}</span>
-                        </p>
-                    </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+            <div className="w-full max-w-xl nexus-card p-0 overflow-hidden shadow-2xl skew-y-0">
+                {/* Header */}
+                <div className="flex items-center justify-between p-6 border-b border-[var(--color-nexus-border)]">
+                    <h2 className="text-xl font-sans font-bold text-[var(--color-nexus-text-primary)] tracking-tight">
+                        Create New Run
+                    </h2>
                     <button
-                        type="button"
-                        onClick={closeRunCreator}
-                        className="text-sm text-gray-500 hover:text-gray-700"
+                        onClick={handleClose}
+                        className="text-[var(--color-nexus-text-secondary)] hover:text-[var(--color-nexus-primary)] transition-colors"
                     >
-                        Close
+                        ✕
                     </button>
                 </div>
 
-                <div className="mt-6 space-y-4">
-                    <div className="rounded-lg border border-[#E3E7EE] bg-[#F8FAFC] p-4">
-                        <div className="text-xs font-semibold uppercase tracking-wider text-[#1E40AF]">
-                            Upload Trades CSV
+                <div className="p-6 space-y-6 bg-[var(--color-nexus-surface)]/80 backdrop-blur-md">
+                    {/* CSV Upload Section */}
+                    <div className="rounded-none border border-[var(--color-nexus-border)] bg-[var(--color-nexus-surface-hover)] p-4 relative overflow-hidden group">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-[var(--color-nexus-primary)]" />
+                        <div className="text-xs font-mono font-bold uppercase tracking-widest text-[var(--color-nexus-primary)] mb-2">
+                            Option A: Upload Trades
                         </div>
-                        <p className="mt-2 text-sm text-gray-600">
-                            Required columns: date, ticker, action, quantity (or shares), price. Optional: fees.
+                        <p className="text-xs text-[var(--color-nexus-text-secondary)] mb-4">
+                            Upload a CSV with columns: <span className="font-mono text-[var(--color-nexus-text-primary)]">date, ticker, action, quantity, price</span>.
                         </p>
-                        <input
-                            type="file"
-                            accept=".csv"
-                            onChange={handleFileChange}
-                            className="mt-3 block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-[#E8F0FF] file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-[#1E40AF]"
-                        />
+
+                        <div className="relative">
+                            <input
+                                type="file"
+                                accept=".csv"
+                                onChange={handleFileChange}
+                                className="block w-full text-xs text-[var(--color-nexus-text-secondary)] 
+                                    file:mr-4 file:py-2 file:px-4
+                                    file:rounded-none file:border-0
+                                    file:text-xs file:font-mono file:uppercase file:font-bold
+                                    file:bg-[var(--color-nexus-primary)] file:text-black
+                                    hover:file:bg-[var(--color-nexus-accent)]
+                                    cursor-pointer"
+                            />
+                        </div>
+
                         {fileError && (
-                            <div className="mt-2 text-xs text-red-600">{fileError}</div>
+                            <div className="mt-3 text-xs text-[var(--color-nexus-danger)] font-mono border-l-2 border-[var(--color-nexus-danger)] pl-2">
+                                {fileError}
+                            </div>
                         )}
+
                         <button
                             type="button"
                             disabled={isSubmitting || !!fileError}
                             onClick={handleUpload}
-                            className="mt-4 rounded-md bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                            className="mt-4 w-full py-2 bg-[var(--color-nexus-surface)] border border-[var(--color-nexus-border)] text-[var(--color-nexus-text-primary)] hover:border-[var(--color-nexus-primary)] hover:text-[var(--color-nexus-primary)] text-xs font-mono uppercase tracking-widest transition-all disabled:opacity-50 disabled:hover:border-[var(--color-nexus-border)]"
                         >
-                            {isSubmitting ? "Creating run..." : "Upload & Compute"}
+                            {isSubmitting && submitMode === "upload" ? "Computing..." : "Start Computation"}
                         </button>
                     </div>
 
-                    <div className="rounded-lg border border-[#E3E7EE] p-4">
-                        <div className="text-xs font-semibold uppercase tracking-wider text-[#1E40AF]">
-                            Create Demo Run
+                    {/* Divider */}
+                    <div className="flex items-center gap-4">
+                        <div className="h-px flex-1 bg-[var(--color-nexus-border)]" />
+                        <span className="text-[10px] text-[var(--color-nexus-text-muted)] font-mono uppercase">OR</span>
+                        <div className="h-px flex-1 bg-[var(--color-nexus-border)]" />
+                    </div>
+
+                    {/* Demo Run Section */}
+                    <div className="rounded-none border border-[var(--color-nexus-border)] p-4 hover:border-[var(--color-nexus-text-muted)] transition-colors">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <div className="text-xs font-mono font-bold uppercase tracking-widest text-[var(--color-nexus-text-secondary)]">
+                                    Option B: Demo Simulation
+                                </div>
+                                <p className="text-xs text-[var(--color-nexus-text-muted)] mt-1">
+                                    Generate analytics using sample market data.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={isSubmitting}
+                                onClick={handleCreateDemo}
+                                className="px-4 py-2 border border-[var(--color-nexus-border)] text-[var(--color-nexus-text-secondary)] hover:bg-[var(--color-nexus-surface-hover)] hover:text-[var(--color-nexus-primary)] text-xs font-mono uppercase tracking-widest transition-all disabled:opacity-50"
+                            >
+                                {isSubmitting && submitMode === "demo" ? "Loading..." : "Load Demo"}
+                            </button>
                         </div>
-                        <p className="mt-2 text-sm text-gray-600">
-                            Generate a demo portfolio run using your watchlist data.
-                        </p>
-                        <button
-                            type="button"
-                            disabled={isSubmitting}
-                            onClick={handleCreateDemo}
-                            className="mt-3 rounded-md border border-[#2563EB] px-4 py-2 text-sm font-semibold text-[#1E40AF] hover:bg-[#E8F0FF] disabled:opacity-60"
-                        >
-                            {isSubmitting ? "Creating run..." : "Create Demo Run"}
-                        </button>
                     </div>
                 </div>
 
+                {/* Progress Bar */}
                 {isSubmitting && (
-                    <div className="mt-4 rounded-md border border-[#DBEAFE] bg-[#EFF6FF] px-3 py-3 text-sm text-[#1E40AF]">
-                        <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
-                            <span>{submitMode === "demo" ? "Demo Run Progress" : "Upload Progress"}</span>
-                            <span>{Math.max(5, Math.min(100, Math.round(submitProgress)))}%</span>
+                    <div className="p-6 pt-0 bg-[var(--color-nexus-surface)]/80 backdrop-blur-md">
+                        <div className="border border-[var(--color-nexus-primary)]/20 bg-[var(--color-nexus-primary)]/5 p-4 relative overflow-hidden">
+                            <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-[var(--color-nexus-primary)] mb-2 relative z-10">
+                                <span>{submitMode === "demo" ? "Simulation Progress" : "Processing Pipeline"}</span>
+                                <span>{Math.round(submitProgress)}%</span>
+                            </div>
+                            <div className="h-1 w-full bg-[var(--color-nexus-border)] overflow-hidden relative z-10">
+                                <div
+                                    className="h-full bg-[var(--color-nexus-primary)] shadow-[0_0_10px_var(--color-nexus-primary)] transition-all duration-300"
+                                    style={{ width: `${submitProgress}%` }}
+                                />
+                            </div>
+                            <div className="mt-2 text-[10px] text-[var(--color-nexus-text-secondary)] font-mono relative z-10">
+                                {submitStep || "Initializing..."}
+                            </div>
+                            {/* Animated sheen */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[var(--color-nexus-primary)]/5 to-transparent animate-pulse-slow pointer-events-none" />
                         </div>
-                        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#DBEAFE]">
-                            <div
-                                className="h-full rounded-full bg-[#2563EB] transition-all duration-300"
-                                style={{ width: `${Math.max(5, Math.min(100, Math.round(submitProgress)))}%` }}
-                            />
-                        </div>
-                        <div className="mt-2 text-xs text-[#1D4ED8]">{submitStep || "Starting..."}</div>
                     </div>
                 )}
 
-                {submitWarning && (
-                    <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                        {submitWarning}
-                    </div>
-                )}
-
-                {submitError && (
-                    <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                        {submitError}
-                        {submitHint && <div className="mt-1 text-xs text-red-600">{submitHint}</div>}
-                        <div className="mt-1 text-xs text-red-600">
-                            Common fixes: validate CSV headers, ensure dates are ISO format, and retry with a smaller file.
-                        </div>
+                {/* Status Messages */}
+                {(submitError || submitWarning) && (
+                    <div className="p-6 pt-0 bg-[var(--color-nexus-surface)]/80 backdrop-blur-md">
+                        {submitWarning && (
+                            <div className="p-3 border border-[var(--color-nexus-warning)] bg-[var(--color-nexus-warning)]/10 text-xs text-[var(--color-nexus-warning)] font-mono">
+                                <span className="font-bold">WARNING:</span> {submitWarning}
+                            </div>
+                        )}
+                        {submitError && (
+                            <div className="p-3 border border-[var(--color-nexus-danger)] bg-[var(--color-nexus-danger)]/10 text-xs text-[var(--color-nexus-danger)] font-mono">
+                                <div className="font-bold mb-1">EXECUTION FAILED</div>
+                                {submitError}
+                                {submitHint && <div className="mt-1 opacity-75">{submitHint}</div>}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

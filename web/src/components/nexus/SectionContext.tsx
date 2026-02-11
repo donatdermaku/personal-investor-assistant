@@ -12,17 +12,19 @@ interface SectionContextProps {
 
 export function SectionContext({ title = "Context", items }: SectionContextProps) {
     return (
-        <div className="rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
-            <div className="inline-flex items-center rounded-full bg-[#F2F6FF] px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[#1E40AF] mb-4">
+        <div className="nexus-card p-6 border-l-2 border-[var(--color-nexus-primary)]">
+            <div className="text-label mb-4 text-[var(--color-nexus-primary)]">
                 {title}
             </div>
-            <div className="space-y-3 text-sm">
+            <div className="space-y-4">
                 {items.map((item) => (
-                    <div key={item.label} className="flex gap-3">
-                        <div className="min-w-[140px] text-xs uppercase tracking-wider text-gray-400">
+                    <div key={item.label} className="grid grid-cols-[120px_1fr] gap-4">
+                        <div className="text-[10px] uppercase tracking-wider text-[var(--color-nexus-text-muted)] pt-0.5">
                             {item.label}
                         </div>
-                        <div className="text-gray-600">{item.text}</div>
+                        <div className="text-sm text-[var(--color-nexus-text-secondary)] font-light leading-relaxed">
+                            {item.text}
+                        </div>
                     </div>
                 ))}
             </div>

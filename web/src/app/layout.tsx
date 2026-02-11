@@ -1,14 +1,27 @@
 import type { Metadata } from "next";
+import { Outfit, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/nexus/Sidebar";
-import { ContextPanel } from "@/components/nexus/ContextPanel";
+import { MissionControl } from "@/components/nexus/MissionControl";
 import { NexusProvider } from "@/components/nexus/NexusProvider";
 import { TopBar } from "@/components/nexus/TopBar";
-import { RunCreationModal } from "@/components/nexus/RunCreationModal";
+import { AmbientBackground } from "@/components/nexus/AmbientBackground";
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-outfit",
+  display: "swap",
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "Nexus Analytics Platform",
-  description: "Professional Investment Analytics",
+  title: "NEXUS | Private Perspective",
+  description: "Advanced Investment Intelligence",
 };
 
 export default function RootLayout({
@@ -17,30 +30,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="antialiased bg-[#F3F4F6] text-[#0F172A]">
+    <html lang="en" className={`${outfit.variable} ${spaceGrotesk.variable}`}>
+      <body className="antialiased bg-[var(--color-nexus-bg)] text-[var(--color-nexus-text-primary)] selection:bg-[var(--color-nexus-primary)] selection:text-black overflow-hidden h-screen">
         <NexusProvider>
-          {/* Zone 1: Sidebar (Fixed Left) */}
-          <Sidebar />
+          <AmbientBackground />
 
-          {/* Zone 2: Main Content (Fluid Center) */}
-          <main className="min-h-screen p-6 lg:ml-64 lg:mr-80 lg:p-8 pb-24 lg:pb-8">
-            <div className="max-w-5xl mx-auto">
-              <TopBar />
-              {children}
-              <footer className="mt-12 border-t border-[#E5E7EB] pt-6 text-xs text-gray-500">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>Data sources: Yahoo Finance, FRED.</div>
-                  <div>Informational only · Metrics reflect available data and documented assumptions.</div>
-                </div>
-              </footer>
-            </div>
-          </main>
+          <div className="flex h-screen overflow-hidden">
+            {/* Zone 1: Sidebar (Fixed Left) */}
+            <Sidebar />
 
-          {/* Zone 3: Context Panel (Fixed Right on Large screens) */}
-          <ContextPanel />
+            {/* Zone 2: Main Content (Fluid Center) */}
+            <main className="flex-1 overflow-y-auto relative z-10">
+              <div className="max-w-7xl mx-auto p-6 lg:p-8 pb-24 lg:pb-8">
+                <TopBar />
+                {children}
+              </div>
+            </main>
 
-          <RunCreationModal />
+            {/* Zone 3: Mission Control (Fixed Right) */}
+            <MissionControl />
+          </div>
+
         </NexusProvider>
       </body>
     </html>

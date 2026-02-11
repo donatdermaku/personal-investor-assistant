@@ -6,7 +6,7 @@ function formatTimestamp(value: string | null) {
     if (!value) return "--";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleTimeString();
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 export function TopBar() {
@@ -24,81 +24,117 @@ export function TopBar() {
         backendOk,
         refresh,
         openRunCreator,
+        contextPanelOpen,
+        toggleContextPanel,
     } = useNexus();
 
     return (
-        <div className="mb-8 flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-3">
-                <div className="text-xs uppercase tracking-wider text-gray-400">Mode</div>
-                <div className="flex items-center rounded-full border border-gray-200 bg-gray-50 p-1 text-xs font-semibold">
+        <div className="mb-12 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 border-b border-[var(--color-nexus-border)] pb-6">
+            <div className="flex flex-col gap-1">
+                <div className="text-label mb-1">System Status</div>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <div className={`w-1.5 h-1.5 rounded-full ${backendOk ? "bg-[var(--color-nexus-success)] shadow-[0_0_10px_var(--color-nexus-success)]" : "bg-[var(--color-nexus-danger)]"}`} />
+                        <span className="text-sm font-mono text-[var(--color-nexus-text-primary)]">
+                            {backendOk ? "ONLINE" : "OFFLINE"}
+                        </span>
+                    </div>
+                    <span className="text-[var(--color-nexus-border-light)]">|</span>
+                    <div className="text-sm font-mono text-[var(--color-nexus-text-secondary)]">
+                        LAST SYNC: <span className="text-[var(--color-nexus-text-primary)]">{formatTimestamp(lastFetched)}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-6">
+
+                {/* Mode Switcher */}
+                <div className="flex items-center bg-[var(--color-nexus-surface)] rounded-sm p-1 border border-[var(--color-nexus-border)]">
                     <button
                         type="button"
                         onClick={() => setMode("live")}
-                        className={`px-3 py-1 rounded-full ${mode === "live" ? "bg-[#0F172A] text-white" : "text-gray-500"}`}
+                        className={`px-4 py-1.5 text-xs font-mono uppercase tracking-wider transition-all ${mode === "live"
+                            ? "bg-[var(--color-nexus-border-light)] text-[var(--color-nexus-text-primary)]"
+                            : "text-[var(--color-nexus-text-muted)] hover:text-[var(--color-nexus-text-secondary)]"
+                            }`}
                     >
                         Live
                     </button>
                     <button
                         type="button"
                         onClick={() => setMode("demo")}
-                        className={`px-3 py-1 rounded-full ${mode === "demo" ? "bg-[#0F172A] text-white" : "text-gray-500"}`}
+                        className={`px-4 py-1.5 text-xs font-mono uppercase tracking-wider transition-all ${mode === "demo"
+                            ? "bg-[var(--color-nexus-border-light)] text-[var(--color-nexus-text-primary)]"
+                            : "text-[var(--color-nexus-text-muted)] hover:text-[var(--color-nexus-text-secondary)]"
+                            }`}
                     >
                         Demo
                     </button>
                 </div>
-                <div className="text-xs text-gray-500">
-                    Backend:{" "}
-                    <span className={backendOk ? "text-green-600" : "text-red-500"}>
-                        {backendOk ? "Connected" : "Offline"}
-                    </span>
-                </div>
-                <div className="text-xs text-gray-400">
-                    Last fetch: {formatTimestamp(lastFetched)}
-                </div>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-                <div className="flex flex-col text-xs uppercase tracking-wider text-gray-400">
-                    Portfolio
-                    <input
-                        className="mt-1 rounded-md border border-gray-200 px-2 py-1 text-sm text-gray-900"
-                        value={portfolioId}
-                        onChange={(event) => setPortfolioId(event.target.value)}
-                    />
+                <div className="h-8 w-[1px] bg-[var(--color-nexus-border)] hidden lg:block" />
+
+                {/* Controls */}
+                <div className="flex items-center gap-4">
+                    <div className="group flex flex-col">
+                        <label className="text-[10px] uppercase tracking-wider text-[var(--color-nexus-text-muted)] mb-1 group-focus-within:text-[var(--color-nexus-primary)] transition-colors">Portfolio</label>
+                        <input
+                            className="bg-transparent border-b border-[var(--color-nexus-border)] py-1 text-sm font-mono text-[var(--color-nexus-text-primary)] focus:outline-none focus:border-[var(--color-nexus-primary)] transition-colors w-24"
+                            value={portfolioId}
+                            onChange={(event) => setPortfolioId(event.target.value)}
+                        />
+                    </div>
+
+                    <div className="group flex flex-col">
+                        <label className="text-[10px] uppercase tracking-wider text-[var(--color-nexus-text-muted)] mb-1 group-focus-within:text-[var(--color-nexus-primary)] transition-colors">Ref</label>
+                        <input
+                            className="bg-transparent border-b border-[var(--color-nexus-border)] py-1 text-sm font-mono text-[var(--color-nexus-text-primary)] focus:outline-none focus:border-[var(--color-nexus-primary)] transition-colors w-16"
+                            value={benchmark}
+                            onChange={(event) => setBenchmark(event.target.value.toUpperCase())}
+                        />
+                    </div>
                 </div>
-                <div className="flex flex-col text-xs uppercase tracking-wider text-gray-400">
-                    Benchmark
-                    <input
-                        className="mt-1 rounded-md border border-gray-200 px-2 py-1 text-sm text-gray-900"
-                        value={benchmark}
-                        onChange={(event) => setBenchmark(event.target.value.toUpperCase())}
-                    />
-                </div>
+
                 <button
                     type="button"
                     onClick={refresh}
                     disabled={status === "loading"}
-                    className="rounded-md border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                    className="group relative ml-4"
                 >
-                    {status === "loading" ? "Refreshing..." : "Refresh data"}
+                    <div className="absolute -inset-2 bg-gradient-to-r from-[var(--color-nexus-primary)] to-[var(--color-nexus-accent)] rounded-lg opacity-20 group-hover:opacity-40 blur transition duration-200" />
+                    <div className="relative border border-[var(--color-nexus-border)] bg-[var(--color-nexus-bg)] px-4 py-2 text-xs font-mono uppercase tracking-widest text-[var(--color-nexus-text-primary)] hover:text-[var(--color-nexus-primary)] transition-colors">
+                        {status === "loading" ? "SYNCING..." : "REFRESH"}
+                    </div>
                 </button>
+
                 <button
                     type="button"
                     onClick={openRunCreator}
-                    className="rounded-md bg-[#2563EB] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1E40AF]"
+                    className="border border-[var(--color-nexus-primary)] bg-[var(--color-nexus-primary)]/10 px-4 py-2 text-xs font-mono uppercase tracking-widest text-[var(--color-nexus-primary)] hover:bg-[var(--color-nexus-primary)] hover:text-black transition-all duration-300"
                 >
-                    Create Run
+                    NEW RUN
+                </button>
+
+                <button
+                    type="button"
+                    onClick={toggleContextPanel}
+                    className={`
+                        border px-4 py-2 text-xs font-mono uppercase tracking-widest transition-all duration-300
+                        ${contextPanelOpen
+                            ? "border-[var(--color-nexus-primary)] bg-[var(--color-nexus-primary)] text-black"
+                            : "border-[var(--color-nexus-border)] text-[var(--color-nexus-text-secondary)] hover:text-[var(--color-nexus-primary)] hover:border-[var(--color-nexus-primary)]"
+                        }
+                    `}
+                >
+                    MISSION CONTROL
                 </button>
             </div>
+
             {status === "loading" && (
-                <div className="w-full lg:basis-full">
-                    <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
-                        <span>{loadingMessage || "Refreshing data..."}</span>
-                        <span>{Math.max(5, Math.min(100, Math.round(loadingProgress || 0)))}%</span>
-                    </div>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                <div className="absolute bottom-0 left-0 w-full">
+                    <div className="h-[2px] w-full bg-[var(--color-nexus-border)] overflow-hidden">
                         <div
-                            className="h-full rounded-full bg-[#2563EB] transition-all duration-300"
+                            className="h-full bg-[var(--color-nexus-primary)] transition-all duration-300 shadow-[0_0_10px_var(--color-nexus-primary)]"
                             style={{ width: `${Math.max(5, Math.min(100, Math.round(loadingProgress || 0)))}%` }}
                         />
                     </div>
