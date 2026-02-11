@@ -130,7 +130,12 @@ make verify
   - Added tests in `tests/test_api_server.py` for ops health and rate-limit enforcement
 - **Phase 6.3: Performance Testing and Optimization** 🚧 Started
   - Added `scripts/perf_smoke.py` and `make perf-smoke` for repeatable latency probes
-  - Remaining work: run on target deployment and tune thresholds/optimizations
+  - Added documented thresholds + optimization plan in `docs/PHASE6_3_PERFORMANCE.md`
+  - Implemented timing instrumentation and lightweight ops health optimization
+  - Post-deploy benchmarks executed against Cloud Run revision `00007`
+  - Remaining work: configure Cloud Monitoring alerts/dashboards using documented thresholds
+- UX adjustment:
+  - Removed Operations page from user-visible sidebar navigation; route remains available for internal/admin usage
 - Verification:
   - ✅ `pytest tests/test_api_server.py -q`
   - ✅ `npm --prefix web run lint`
