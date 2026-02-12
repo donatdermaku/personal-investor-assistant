@@ -77,7 +77,7 @@ class Run(Base):
     __tablename__ = "runs"
     id = Column(String, primary_key=True) # UUID
     portfolio_id = Column(Integer, ForeignKey("portfolios.id"), index=True)
-    status = Column(String, default="running")
+    status = Column(String, default="running", index=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     completed_at = Column(DateTime, nullable=True)
     input_hash = Column(String, nullable=True)

@@ -3,8 +3,19 @@ from __future__ import annotations
 import os
 from datetime import datetime
 
+from contextlib import contextmanager
 from storage.models import User, Portfolio, Trade, HoldingsSnapshot, WatchlistItem, Run, Artifact
 from storage.db import session_scope
+
+
+@contextmanager
+def _use_session(external_session=None):
+    """Use the provided session or create a new one via session_scope."""
+    if external_session is not None:
+        yield external_session
+    else:
+        with session_scope() as s:
+            yield s
 
 
 def _supabase_enabled() -> bool:
@@ -100,8 +111,8 @@ class LocalRepoBackend:
                 for s in snaps
             ]
 
-    def create_run(self, run_id: str, portfolio_id: int, input_hash: str | None, config_hash: str | None, run_type: str | None = None):
-        with session_scope() as session:
+    def create_run(self, run_id: str, portfolio_id: int, input_hash: str | None, config_hash: str | None, run_type: str | None = None, session=None):
+        with _use_session(session) as s:
             run = Run(
                 id=run_id,
                 portfolio_id=portfolio_id,
@@ -110,27 +121,35 @@ class LocalRepoBackend:
                 input_hash=input_hash,
                 config_hash=config_hash,
             )
-            session.add(run)
+            s.add(run)
+            if session is not None:
+                s.flush()
 
-    def update_run_complete(self, run_id: str, manifest_json: str, run_type: str | None = None):
-        with session_scope() as session:
-            run = session.query(Run).filter_by(id=run_id).first()
+    def update_run_complete(self, run_id: str, manifest_json: str, run_type: str | None = None, session=None):
+        with _use_session(session) as s:
+            run = s.query(Run).filter_by(id=run_id).first()
             if run:
                 run.status = "completed"
                 run.completed_at = datetime.utcnow()
                 run.manifest_json = manifest_json
+            if session is not None:
+                s.flush()
 
-    def update_run_failed(self, run_id: str, error_code: str | None = None, message: str | None = None):
-        with session_scope() as session:
-            run = session.query(Run).filter_by(id=run_id).first()
+    def update_run_failed(self, run_id: str, error_code: str | None = None, message: str | None = None, session=None):
+        with _use_session(session) as s:
+            run = s.query(Run).filter_by(id=run_id).first()
             if run:
                 run.status = "failed"
                 run.completed_at = datetime.utcnow()
+            if session is not None:
+                s.flush()
 
-    def add_artifact(self, run_id: str, artifact_type: str, path: str):
-        with session_scope() as session:
+    def add_artifact(self, run_id: str, artifact_type: str, path: str, session=None):
+        with _use_session(session) as s:
             artifact = Artifact(run_id=run_id, type=artifact_type, path=path)
-            session.add(artifact)
+            s.add(artifact)
+            if session is not None:
+                s.flush()
 
     def get_latest_run(self):
         with session_scope() as session:
@@ -213,20 +232,20 @@ def get_latest_snapshot(portfolio_id: int) -> list[dict]:
     return _backend.get_latest_snapshot(portfolio_id)
 
 
-def create_run(run_id: str, portfolio_id: int, input_hash: str | None, config_hash: str | None, run_type: str | None = None):
-    return _backend.create_run(run_id, portfolio_id, input_hash, config_hash, run_type)
+def create_run(run_id: str, portfolio_id: int, input_hash: str | None, config_hash: str | None, run_type: str | None = None, session=None):
+    return _backend.create_run(run_id, portfolio_id, input_hash, config_hash, run_type, session=session)
 
 
-def update_run_complete(run_id: str, manifest_json: str, run_type: str | None = None):
-    return _backend.update_run_complete(run_id, manifest_json, run_type)
+def update_run_complete(run_id: str, manifest_json: str, run_type: str | None = None, session=None):
+    return _backend.update_run_complete(run_id, manifest_json, run_type, session=session)
 
 
-def update_run_failed(run_id: str, error_code: str | None = None, message: str | None = None):
-    return _backend.update_run_failed(run_id, error_code, message)
+def update_run_failed(run_id: str, error_code: str | None = None, message: str | None = None, session=None):
+    return _backend.update_run_failed(run_id, error_code, message, session=session)
 
 
-def add_artifact(run_id: str, artifact_type: str, path: str):
-    return _backend.add_artifact(run_id, artifact_type, path)
+def add_artifact(run_id: str, artifact_type: str, path: str, session=None):
+    return _backend.add_artifact(run_id, artifact_type, path, session=session)
 
 
 class Repo:
