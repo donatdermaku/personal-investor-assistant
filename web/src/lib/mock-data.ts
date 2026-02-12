@@ -24,7 +24,7 @@ function generateRandomWalk(days: number, startValue: number, volatility: number
     const dailyVol = volatility / Math.sqrt(252);
 
     // Start date: 1 year ago
-    let currentDate = new Date();
+    const currentDate = new Date();
     currentDate.setFullYear(currentDate.getFullYear() - 1);
 
     for (let i = 0; i < days; i++) {
