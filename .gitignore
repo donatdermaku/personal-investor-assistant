@@ -221,5 +221,7 @@ __marimo__/
 .DS_Store
 /data/
 sample_trades_full_metrics.csv
+trades_part*.csv
+large_portfolio_*.csv
 /reports/
 google-cloud-sdk-test/
