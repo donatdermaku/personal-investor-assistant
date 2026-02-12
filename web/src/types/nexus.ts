@@ -199,11 +199,13 @@ export interface DataContractsPayload {
 
 export interface DiagnosticSignal {
     key: string;
-    check?: string; // Component uses 'check'
+    /** Alternative check identifier used by some components */
+    check?: string;
     category: "risk" | "performance" | "data" | "structure";
     severity: "low" | "medium" | "high" | "critical";
     summary: string;
-    message?: string; // Component uses 'message'
+    /** Human-readable diagnostic message */
+    message?: string;
     evidence: string[];
     metrics_used: string[];
     as_of: string | null;
@@ -238,8 +240,6 @@ export interface CoverageAggregate {
     min_ticker_score: number;
     benchmark_score: number | null;
     rf_score: number | null;
-    // Missing properties from original definition? 
-    // Wait, original definition had coverage_ratio, min_ticker_score, benchmark_score, rf_score.
 }
 
 export type MetricCoverageStatus = "sufficient" | "insufficient" | "unknown" | "available_low_coverage" | "unavailable";

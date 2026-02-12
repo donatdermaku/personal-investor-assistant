@@ -172,15 +172,15 @@ export function MissionControl() {
         <>
             {isDesktopMission && (
                 <aside className="flex flex-col min-h-screen border-l border-[var(--color-nexus-border)] bg-[var(--color-nexus-surface)]/60 backdrop-blur-md nexus-panel-scroll">
-                {loading ? (
-                    <div className="p-6 space-y-4">
-                        <div className="h-5 w-36 bg-[var(--color-nexus-surface-hover)] animate-pulse" />
-                        <div className="h-24 bg-[var(--color-nexus-surface-hover)] animate-pulse" />
-                        <div className="h-24 bg-[var(--color-nexus-surface-hover)] animate-pulse" />
-                    </div>
-                ) : (
-                    sectionContent
-                )}
+                    {loading ? (
+                        <div className="p-6 space-y-4">
+                            <div className="h-5 w-36 bg-[var(--color-nexus-surface-hover)] animate-pulse" />
+                            <div className="h-24 bg-[var(--color-nexus-surface-hover)] animate-pulse" />
+                            <div className="h-24 bg-[var(--color-nexus-surface-hover)] animate-pulse" />
+                        </div>
+                    ) : (
+                        sectionContent
+                    )}
                 </aside>
             )}
 
@@ -191,6 +191,9 @@ export function MissionControl() {
                         onClick={closeContextPanel}
                     />
                     <aside
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Mission Control panel"
                         className={`fixed inset-y-0 right-0 w-[340px] max-w-[85vw] bg-[var(--color-nexus-bg)] border-l border-[var(--color-nexus-border)] z-[60] transform transition-transform duration-300 flex flex-col nexus-panel-scroll ${panelMode === "open" ? "translate-x-0" : "translate-x-full"}`}
                     >
                         {sectionContent}
@@ -205,6 +208,9 @@ export function MissionControl() {
                         onClick={closeContextPanel}
                     />
                     <aside
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Mission Control panel"
                         className={`fixed bottom-0 left-0 right-0 z-[60] rounded-t-xl border-t border-[var(--color-nexus-border)] bg-[var(--color-nexus-bg)] max-h-[85vh] min-h-[48vh] nexus-panel-scroll transform transition-transform duration-300 ${panelMode === "open" ? "translate-y-0" : "translate-y-full"}`}
                     >
                         {sectionContent}
@@ -215,6 +221,7 @@ export function MissionControl() {
             {isPhone && (
                 <button
                     type="button"
+                    aria-label="Open Mission Control"
                     onClick={toggleContextPanel}
                     className="fixed bottom-24 right-4 z-40 nexus-touch-target px-4 py-3 border border-[var(--color-nexus-primary)] bg-[var(--color-nexus-primary)] text-black text-xs font-mono uppercase tracking-wide shadow-[var(--shadow-glow)]"
                 >
@@ -227,6 +234,7 @@ export function MissionControl() {
                     {toast}
                     <button
                         type="button"
+                        aria-label="Dismiss notification"
                         className="ml-3 text-[var(--color-nexus-primary)] hover:underline"
                         onClick={() => setToast(null)}
                     >

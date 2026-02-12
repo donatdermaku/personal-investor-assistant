@@ -65,6 +65,18 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/*
+ * Z-Index Scale
+ * ──────────────────────────────────
+ *  10  – Sidebar / bottom nav
+ *  20  – TopBar
+ *  40  – Mobile FAB (Mission button)
+ *  50  – Overlay backdrop (drawer/modal)
+ *  60  – Drawer / slide-over panels
+ *  70  – Toast notifications
+ *  80  – Modal dialogs (RunCreationModal)
+ */
+
 /* Nexus Component Utilities */
 .nexus-card {
   @apply bg-[var(--color-nexus-surface)] border border-[var(--color-nexus-border)];

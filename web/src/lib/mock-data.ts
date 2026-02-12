@@ -1,10 +1,12 @@
 import type {
     DefinitionsRegistry,
     Holding,
+    PerformancePoint,
     PortfolioMeta,
     PortfolioSummary,
     RunManifest,
     RunMetricsResponse,
+    TimeSeriesPoint,
     DiagnosticSignal,
     RiskMetrics,
     RiskContributionPayload,
@@ -219,8 +221,13 @@ ASSETS.forEach((rowTicker, i) => {
 export const MOCK_METRICS: RunMetricsResponse = {
     manifest: MOCK_MANIFEST,
     summary: MOCK_SUMMARY,
-    equity_curve: EQUITY_SERIES as any,
-    performance: EQUITY_SERIES as any,
+    equity_curve: EQUITY_SERIES.map(({ date, value }): TimeSeriesPoint => ({ date, value })),
+    performance: EQUITY_SERIES.map((p): PerformancePoint => ({
+        date: p.date,
+        value: p.value,
+        daily_return: p.daily_return,
+        drawdown: p.drawdown,
+    })),
     monthly_returns: [
         { date: "2023-04-30", return: 0.02 },
         { date: "2023-05-31", return: 0.015 },
