@@ -24,7 +24,7 @@ function coveragePercentFromState(state: NexusState | null) {
 }
 
 export function ContextPanel() {
-    const { state, status, error, mode, lastFetched, backendOk, benchmark, runs, runId, setRunId, contextPanelOpen, toggleContextPanel } = useNexus();
+    const { state, status, error, mode, benchmark, runs, runId, setRunId, contextPanelOpen, toggleContextPanel } = useNexus();
     const [toast, setToast] = useState<string | null>(null);
 
     const coverage = useMemo(() => coveragePercentFromState(state), [state]);

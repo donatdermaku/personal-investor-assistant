@@ -36,9 +36,9 @@ def test_load_portfolio_from_db(test_db_session):
         "adj_close": [160.0]
     })
     
-    # 3. Call load_portfolio with Strict DB (or hybrid with no files) behavior
+    # 3. Call load_portfolio with repository-backed mode behavior
     # We patch STORAGE_MODE to ensure we are testing DB path
-    with patch("storage.datamanager.STORAGE_MODE", "db"):
+    with patch("storage.datamanager.STORAGE_MODE", "supabase"):
         # We need to re-init DM or patch the repo functions if DM was already init? 
         # DM checks env var at init. But we patch strictly before DM logic runs?
         # Actually DM is a global singleton. `datamanager` import likely already ran.

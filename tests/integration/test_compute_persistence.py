@@ -13,7 +13,7 @@ def test_db(tmp_path):
 
 def test_compute_and_save(test_db, tmp_path):
     # Setup DataManager mode
-    with patch("storage.datamanager.STORAGE_MODE", "db"), \
+    with patch("storage.datamanager.STORAGE_MODE", "supabase"), \
          patch("src.pipeline.EXPORTS_DIR", tmp_path / "exports"):
              
         # Create User/Portfolio

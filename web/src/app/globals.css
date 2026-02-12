@@ -43,6 +43,8 @@
 }
 
 :root {
+  --font-outfit: "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-space-grotesk: "IBM Plex Sans", "SF Mono", "Roboto Mono", Menlo, Monaco, Consolas, monospace;
   --background: var(--color-nexus-bg);
   --foreground: var(--color-nexus-text-primary);
   --spacing-xs: 8px;

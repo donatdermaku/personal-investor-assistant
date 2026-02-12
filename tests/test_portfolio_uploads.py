@@ -30,7 +30,7 @@ def test_load_portfolio_ignores_files_without_uploads(tmp_path: Path) -> None:
     
     # We must patch ROOT because DataManager uses ROOT, not the passed base_dir
     with patch("storage.datamanager.ROOT", tmp_path), \
-         patch("storage.datamanager.STORAGE_MODE", "files"):
+         patch("storage.datamanager.STORAGE_MODE", "local"):
         result = load_portfolio(prices, ["AAA"], uploads_active=False)
 
     assert result.daily_values.empty
@@ -47,7 +47,7 @@ def test_load_portfolio_snapshot_when_uploaded(tmp_path: Path) -> None:
     prices = _prices_for("AAA")
     
     with patch("storage.datamanager.ROOT", tmp_path), \
-         patch("storage.datamanager.STORAGE_MODE", "files"):
+         patch("storage.datamanager.STORAGE_MODE", "local"):
         result = load_portfolio(prices, ["AAA"], source_override="Snapshot", uploads_active=True)
 
     assert not result.daily_values.empty

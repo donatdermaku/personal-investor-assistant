@@ -26,7 +26,6 @@ export function RunCreationModal({ isOpen, onClose }: RunCreationModalProps) {
         runCreatorOpen,
         closeRunCreator,
         createRun,
-        portfolioId,
     } = useNexus();
     const router = useRouter();
     const [file, setFile] = useState<File | null>(null);

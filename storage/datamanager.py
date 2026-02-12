@@ -1,63 +1,84 @@
 import os
-from pathlib import Path
-from typing import Any
+import logging
 from datetime import datetime
 import pandas as pd
 
 from storage import repo, db
 from src.utils_io import ROOT
 
-# Config
-# modes: "db", "files", "hybrid"
-STORAGE_MODE = os.getenv("STORAGE_MODE", "hybrid")
+_LOGGER = logging.getLogger(__name__)
+_VALID_STORAGE_MODES = {"local", "supabase"}
+_LEGACY_MODE_MAP = {
+    "files": "local",
+    "db": "supabase",
+    "hybrid": "supabase",
+}
+
+
+def _resolve_storage_mode(raw_mode: str | None) -> str:
+    normalized = (raw_mode or "local").strip().lower()
+    if normalized in _LEGACY_MODE_MAP:
+        mapped = _LEGACY_MODE_MAP[normalized]
+        _LOGGER.warning(
+            "Legacy STORAGE_MODE=%r detected; using STORAGE_MODE=%r.",
+            normalized,
+            mapped,
+        )
+        return mapped
+    if normalized not in _VALID_STORAGE_MODES:
+        _LOGGER.warning(
+            "Invalid STORAGE_MODE=%r detected; defaulting to STORAGE_MODE='local'.",
+            normalized,
+        )
+        return "local"
+    return normalized
+
+
+STORAGE_MODE = _resolve_storage_mode(os.getenv("STORAGE_MODE", "local"))
 
 class DataManager:
     """
-    Facade for all data operations.
-    Handles 'User Data' (SQLite vs Files) and 'Market Data' (DuckDB).
+    Facade for user data operations.
+    - local: file-backed uploads/watchlist for local development and tests
+    - supabase: repository-backed storage (local sqlite backend or Supabase backend)
     """
     def __init__(self):
-        # Initialize DB if needed
-        if STORAGE_MODE in ("db", "hybrid"):
+        # Initialize DB when using repository-backed mode.
+        if self._uses_repo_backend():
             db.init_db()
+
+    def _uses_local_files(self) -> bool:
+        return STORAGE_MODE == "local"
+
+    def _uses_repo_backend(self) -> bool:
+        return STORAGE_MODE == "supabase"
 
     # --- User Identity ---
     def get_current_user_id(self) -> int:
-        if STORAGE_MODE == "files":
-            return 0 # Mock ID
+        if self._uses_local_files():
+            return 0  # Mock ID
         return repo.get_user_id()
 
     def get_main_portfolio_id(self, user_id: int) -> int:
-        if STORAGE_MODE == "files":
+        if self._uses_local_files():
             return 0
         return repo.get_default_portfolio_id(user_id)
 
     # --- Watchlist ---
     def load_watchlist(self) -> list[str]:
-        if STORAGE_MODE == "files":
+        if self._uses_local_files():
             return self._load_watchlist_file()
-        
-        # Hybrid/DB: Try DB first
+
         user_id = self.get_current_user_id()
-        tickers = repo.list_watch_tickers(user_id)
-        
-        if not tickers and STORAGE_MODE == "hybrid":
-            # Fallback to file if DB empty
-            file_tickers = self._load_watchlist_file()
-            if file_tickers:
-                # Optional: Auto-migrate to DB on read? 
-                # For now, just return file data, or better: keep clean separation.
-                # Let's return file data to respect "Hybrid means fallback".
-                return file_tickers
-        
-        return tickers
+        return repo.list_watch_tickers(user_id)
 
     def save_watchlist(self, tickers: list[str]):
-        if STORAGE_MODE in ("db", "hybrid"):
+        if self._uses_repo_backend():
             user_id = self.get_current_user_id()
             repo.replace_watchlist(user_id, tickers)
-        
-        if STORAGE_MODE in ("files", "hybrid"):
+            return
+
+        if self._uses_local_files():
             self._save_watchlist_file(tickers)
 
     # --- File/Legacy Helpers ---
@@ -81,36 +102,27 @@ class DataManager:
 
     # --- Portfolio Inputs ---
     def load_trades(self, portfolio_id: int) -> pd.DataFrame:
-        if STORAGE_MODE == "files":
+        if self._uses_local_files():
             return self._load_trades_file()
-        
+
         data = repo.get_trades(portfolio_id)
-        if not data and STORAGE_MODE == "hybrid":
-             return self._load_trades_file()
-        
         if not data:
             return pd.DataFrame()
-        
+
         # Convert list of dicts to DF and cleanup cols
         df = pd.DataFrame(data)
-        # Rename 'shares'->'quantity' to match portfolio.py expectation if needed?
-        # portfolio.py expects "quantity". Schema said "shares". 
-        # let's map it here or in repo.
         if "shares" in df.columns:
             df = df.rename(columns={"shares": "quantity"})
         return df
 
     def load_snapshot(self, portfolio_id: int) -> pd.DataFrame:
-        if STORAGE_MODE == "files":
+        if self._uses_local_files():
             return self._load_snapshot_file()
-        
+
         data = repo.get_latest_snapshot(portfolio_id)
-        if not data and STORAGE_MODE == "hybrid":
-            return self._load_snapshot_file()
-            
         if not data:
             return pd.DataFrame()
-            
+
         df = pd.DataFrame(data)
         if "shares" in df.columns:
             df = df.rename(columns={"shares": "quantity"})
@@ -129,10 +141,7 @@ class DataManager:
         return pd.DataFrame()
 
     def save_portfolio_inputs(self, portfolio_id: int, trades: pd.DataFrame | None, snapshot: pd.DataFrame | None):
-        """
-        Save inputs to the appropriate backend based on STORAGE_MODE.
-        In hybrid mode, DB is the source of truth — no redundant file writes.
-        """
+        """Save inputs to the backend selected by STORAGE_MODE."""
         # Save Trades
         if trades is not None:
             # Map DF to list of dicts
@@ -149,12 +158,11 @@ class DataManager:
             
             # Ensure date format
             t_df["date"] = pd.to_datetime(t_df["date"])
-            
-            if STORAGE_MODE in ("db", "hybrid"):
+
+            if self._uses_repo_backend():
                 records = t_df.to_dict(orient="records")
                 repo.replace_trades(portfolio_id, records)
-            
-            if STORAGE_MODE == "files":
+            elif self._uses_local_files():
                 path = ROOT / "data" / "user_uploads" / "transactions.csv"
                 path.parent.mkdir(parents=True, exist_ok=True)
                 trades.to_csv(path, index=False)
@@ -169,12 +177,11 @@ class DataManager:
                 s_df["cost_basis"] = 0.0
                 
             s_df["as_of_date"] = datetime.utcnow()
-            
-            if STORAGE_MODE in ("db", "hybrid"):
+
+            if self._uses_repo_backend():
                 records = s_df.to_dict(orient="records")
                 repo.replace_snapshot(portfolio_id, records)
-                
-            if STORAGE_MODE == "files":
+            elif self._uses_local_files():
                 path = ROOT / "data" / "user_uploads" / "holdings.csv"
                 path.parent.mkdir(parents=True, exist_ok=True)
                 snapshot.to_csv(path, index=False)
