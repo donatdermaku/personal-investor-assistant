@@ -1,17 +1,17 @@
 "use client";
 
-import { MetricCard } from "@/components/ui/MetricCard";
-import { definitionTooltip } from "@/lib/definitions";
 import { useNexus } from "@/components/nexus/NexusProvider";
 import { EmptyState } from "@/components/nexus/EmptyState";
-import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
+import { SkeletonBlock } from "@/components/nexus/Skeleton";
 import { SectionContext } from "@/components/nexus/SectionContext";
-import { BentoGrid, BentoItem } from "@/components/nexus/BentoGrid";
-import { getMetricReasons, getMetricStatus } from "@/lib/coverageLogic";
-import { LineChart, Line, Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { LazyChart } from "@/components/nexus/LazyChart";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { downsampleSeries } from "@/lib/chartPerformance";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export default function PerformancePage() {
     const { state, status, error, mode, setMode, openRunCreator } = useNexus();
+    const isPhone = useMediaQuery("(max-width: 767px)");
 
     if (status === "error") {
         return (
@@ -37,62 +37,36 @@ export default function PerformancePage() {
 
     if (status === "loading" || !state) {
         return (
-            <div className="space-y-8">
+            <div className="nexus-page">
                 <div>
                     <SkeletonBlock className="h-8 w-40 bg-[var(--color-nexus-surface)]" />
                     <SkeletonBlock className="mt-2 h-4 w-56 bg-[var(--color-nexus-surface)]" />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <SkeletonCard />
-                    <SkeletonCard />
-                    <SkeletonCard />
-                </div>
-                <div className="nexus-card p-6 h-80 flex flex-col">
-                    <SkeletonBlock className="h-5 w-32 bg-[var(--color-nexus-surface-hover)]" />
-                    <SkeletonBlock className="mt-4 flex-1 w-full bg-[var(--color-nexus-surface-hover)]" />
+                <div className="nexus-metrics-grid metrics-3">
+                    <SkeletonBlock className="h-28 bg-[var(--color-nexus-surface)]" />
+                    <SkeletonBlock className="h-28 bg-[var(--color-nexus-surface)]" />
+                    <SkeletonBlock className="h-28 bg-[var(--color-nexus-surface)]" />
                 </div>
             </div>
         );
     }
 
-    const {
-        summary,
-        performance,
-        monthly_returns,
-        definitions,
-        attribution_summary,
-        attribution_timeseries,
-        benchmark_comparison,
-        benchmark_timeseries,
-        macro,
-        macro_regimes,
-        manifest,
-        coverage_summary,
-    } = state;
-    const performanceSeries = performance as Array<{ date: string; value: number | null; benchmark?: number | null; drawdown?: number | null }>;
-    const hasBenchmark = performanceSeries.some((point) => point.benchmark != null);
+    const { summary, performance, monthly_returns, attribution_summary, attribution_timeseries } = state;
     const firstValue = performance[0]?.value ?? null;
     const lastValue = performance[performance.length - 1]?.value ?? null;
-    const totalReturn =
-        firstValue && lastValue ? (lastValue / firstValue) - 1 : null;
-    const attributionRows = attribution_summary?.per_asset?.slice(0, 5) ?? [];
-    const macroFlags = macro?.flags ?? macro_regimes ?? [];
-    const macroStatus = macro?.status ?? (macroFlags.length > 0 ? "sufficient" : "unavailable");
-    const latestMacro = macroFlags.length > 0 ? macroFlags[macroFlags.length - 1] : null;
+    const latestDrawdown = performance[performance.length - 1]?.drawdown ?? null;
+    const totalReturn = firstValue && lastValue ? (lastValue / firstValue) - 1 : null;
     const hasAttribution = attribution_summary && typeof attribution_summary.allocation === "number";
-    const hasBenchmarkComparison = benchmark_comparison && typeof benchmark_comparison.tracking_error === "number";
-    const metricStatus = (kpiKey: string) => getMetricStatus(kpiKey, coverage_summary ?? null);
-    const metricReasons = (kpiKey: string) => getMetricReasons(kpiKey, coverage_summary ?? null);
-    const metricCoverage = (kpiKey: string) => (metricStatus(kpiKey) === "insufficient" ? "insufficient" : undefined);
-    const metricReasonCodes = (kpiKey: string) =>
-        metricStatus(kpiKey) === "insufficient" ? metricReasons(kpiKey) : undefined;
-    const asOf = summary.last_date || manifest.timestamp;
+    const attributionBars = attribution_summary?.per_asset?.slice(0, 8) ?? [];
+    const lightPerformance = downsampleSeries(performance, isPhone ? 120 : 260);
+    const lightMonthly = downsampleSeries(monthly_returns, isPhone ? 60 : 120);
+    const lightAttributionSeries = downsampleSeries(attribution_timeseries ?? [], isPhone ? 90 : 180);
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="nexus-page animate-in fade-in duration-500">
             <div>
-                <h2 className="text-3xl font-sans font-bold text-[var(--color-nexus-text-primary)] mb-2 tracking-tight">Performance</h2>
-                <p className="text-[var(--color-nexus-text-secondary)]">
+                <h2 className="nexus-heading-1 font-sans font-bold text-[var(--color-nexus-text-primary)] mb-2 tracking-tight">Performance</h2>
+                <p className="text-[var(--color-nexus-text-secondary)] text-base">
                     {mode === "demo" ? "Demo returns analysis" : "Detailed returns analysis"}
                 </p>
             </div>
@@ -111,320 +85,162 @@ export default function PerformancePage() {
                 ]}
             />
 
-            {summary.errors && summary.errors.length > 0 && (
-                <div className="rounded-none border border-[var(--color-nexus-warning)] bg-[var(--color-nexus-warning)]/10 px-4 py-3 text-sm text-[var(--color-nexus-warning)] font-mono">
-                    Some inputs are missing or incomplete for this run. Metrics relying on those inputs may be limited.
-                </div>
-            )}
-
-            <BentoGrid>
-                {/* HEADLINE METRICS - Span 12 */}
-                <BentoItem span={12} className="p-0 border-none bg-transparent hover:shadow-none hover:border-transparent">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <MetricCard
-                            label="TWR (Strategy)"
-                            value={summary.twr !== null ? `${(summary.twr * 100).toFixed(2)}%` : "--"}
-                            tooltip={definitionTooltip(definitions, "twr")}
-                            coverageStatus={metricCoverage("twr")}
-                            asOf={asOf}
-                            reasonCodes={metricReasonCodes("twr")}
-                        />
-                        <MetricCard
-                            label="MWR (Personal)"
-                            value={summary.mwr !== null ? `${(summary.mwr * 100).toFixed(2)}%` : "--"}
-                            tooltip={definitionTooltip(definitions, "mwr")}
-                            coverageStatus={metricCoverage("mwr")}
-                            asOf={asOf}
-                            reasonCodes={metricReasonCodes("mwr")}
-                        />
-                        <MetricCard
-                            label="Total Return"
-                            value={totalReturn !== null ? `${(totalReturn * 100).toFixed(2)}%` : "--"}
-                            subtext="From first valuation"
-                            coverageStatus={metricCoverage("total_return")}
-                            asOf={asOf}
-                            reasonCodes={metricReasonCodes("total_return")}
-                        />
+            <section className="nexus-metrics-grid metrics-3">
+                <article className="nexus-card p-6">
+                    <div className="text-label mb-3">TWR</div>
+                    <div className={`nexus-number font-mono font-bold ${summary.twr && summary.twr >= 0 ? "text-[var(--color-nexus-success)]" : "text-[var(--color-nexus-danger)]"}`}>
+                        {summary.twr !== null ? `${(summary.twr * 100).toFixed(2)}%` : "--"}
                     </div>
-                </BentoItem>
+                </article>
+                <article className="nexus-card p-6">
+                    <div className="text-label mb-3">MWR</div>
+                    <div className={`nexus-number font-mono font-bold ${summary.mwr && summary.mwr >= 0 ? "text-[var(--color-nexus-success)]" : "text-[var(--color-nexus-danger)]"}`}>
+                        {summary.mwr !== null ? `${(summary.mwr * 100).toFixed(2)}%` : "--"}
+                    </div>
+                </article>
+                <article className="nexus-card p-6">
+                    <div className="text-label mb-3">Total Return</div>
+                    <div className={`nexus-number font-mono font-bold ${totalReturn && totalReturn >= 0 ? "text-[var(--color-nexus-success)]" : "text-[var(--color-nexus-danger)]"}`}>
+                        {totalReturn !== null ? `${(totalReturn * 100).toFixed(2)}%` : "--"}
+                    </div>
+                </article>
+            </section>
 
-                {/* MAIN CHART: Portfolio Value - Span 8 */}
-                <BentoItem span={8} title="Portfolio Value" rowSpan={2}>
-                    {performance.length === 0 ? (
+            <section className="grid gap-[var(--grid-gap)] min-[1200px]:grid-cols-5">
+                <article className="nexus-card p-6 min-h-[330px] min-[1200px]:col-span-3">
+                    <h3 className="nexus-heading-3 font-semibold text-[var(--color-nexus-text-primary)] mb-4">Portfolio Value</h3>
+                    {lightPerformance.length === 0 ? (
                         <div className="text-sm text-[var(--color-nexus-text-secondary)]">No performance data available.</div>
                     ) : (
-                        <div className="flex-1 min-h-0 h-72 md:h-full">
+                        <LazyChart heightClassName="h-[280px] min-[1200px]:h-[340px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={performanceSeries}>
+                                <AreaChart data={lightPerformance}>
+                                    <defs>
+                                        <linearGradient id="perfValue" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="var(--color-nexus-primary)" stopOpacity={0.22} />
+                                            <stop offset="95%" stopColor="var(--color-nexus-primary)" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="var(--color-nexus-border)" vertical={false} />
-                                    <XAxis
-                                        dataKey="date"
-                                        stroke="var(--color-nexus-text-muted)"
-                                        style={{ fontSize: "10px", fontFamily: "var(--font-mono)" }}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        dy={10}
-                                    />
-                                    <YAxis
-                                        stroke="var(--color-nexus-text-muted)"
-                                        style={{ fontSize: "10px", fontFamily: "var(--font-mono)" }}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        dx={-10}
-                                        domain={["auto", "auto"]}
-                                    />
-                                    <Tooltip
-                                        animationDuration={100}
-                                        contentStyle={{
-                                            backgroundColor: "var(--color-nexus-surface)",
-                                            borderColor: "var(--color-nexus-primary)",
-                                            borderRadius: "0",
-                                            color: "var(--color-nexus-text-primary)",
-                                            fontFamily: "var(--font-mono)",
-                                            fontSize: "12px"
-                                        }}
-                                        itemStyle={{ color: "var(--color-nexus-text-primary)" }}
-                                        formatter={(value) =>
-                                            value != null ? [`$${Number(value).toLocaleString()}`, "Value"] : ["--", "Value"]
-                                        }
-                                        labelStyle={{ color: "var(--color-nexus-text-secondary)", marginBottom: "0.5rem" }}
-                                    />
-                                    <Area
-                                        type="monotone"
-                                        dataKey="value"
-                                        stroke="var(--color-nexus-primary)"
-                                        strokeWidth={2}
-                                        fill="var(--color-nexus-primary)"
-                                        fillOpacity={0.05}
-                                        name="Portfolio Value"
-                                        activeDot={{ r: 4, strokeWidth: 0, fill: "var(--color-nexus-text-primary)" }}
-                                    />
-                                    {hasBenchmark && (
-                                        <Area
-                                            type="monotone"
-                                            dataKey="benchmark"
-                                            stroke="var(--color-nexus-secondary)"
-                                            strokeWidth={1}
-                                            strokeDasharray="4 4"
-                                            fill="transparent"
-                                            dot={false}
-                                            name="Benchmark"
-                                            activeDot={false}
-                                        />
-                                    )}
+                                    <XAxis dataKey="date" tickLine={false} axisLine={false} minTickGap={28} />
+                                    <YAxis tickLine={false} axisLine={false} />
+                                    <Tooltip formatter={(value) => (value != null ? [`$${Number(value).toLocaleString()}`, "Value"] : ["--", "Value"])} />
+                                    <Area type="monotone" dataKey="value" stroke="var(--color-nexus-primary)" fill="url(#perfValue)" strokeWidth={2} />
                                 </AreaChart>
                             </ResponsiveContainer>
-                        </div>
+                        </LazyChart>
                     )}
-                </BentoItem>
-
-                {/* SECONDARY CHART 1: Drawdowns - Span 4 */}
-                <BentoItem span={4} title="Drawdowns" rowSpan={2}>
-                    {performance.length === 0 ? (
+                </article>
+                <article className="nexus-card p-6 min-h-[360px] min-[1200px]:col-span-2">
+                    <h3 className="nexus-heading-3 font-semibold text-[var(--color-nexus-text-primary)] mb-4">Drawdowns</h3>
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="border border-[var(--color-nexus-border)] bg-[var(--color-nexus-surface-hover)]/20 p-3">
+                            <div className="text-[10px] uppercase tracking-wider text-[var(--color-nexus-text-muted)]">Current</div>
+                            <div className="text-base font-mono text-[var(--color-nexus-danger)] nexus-inline-number">
+                                {latestDrawdown != null ? `${(latestDrawdown * 100).toFixed(2)}%` : "--"}
+                            </div>
+                        </div>
+                        <div className="border border-[var(--color-nexus-border)] bg-[var(--color-nexus-surface-hover)]/20 p-3">
+                            <div className="text-[10px] uppercase tracking-wider text-[var(--color-nexus-text-muted)]">Max</div>
+                            <div className="text-base font-mono text-[var(--color-nexus-danger)] nexus-inline-number">
+                                {summary.max_drawdown != null ? `${(summary.max_drawdown * 100).toFixed(2)}%` : "--"}
+                            </div>
+                        </div>
+                    </div>
+                    {lightPerformance.length === 0 ? (
                         <div className="text-sm text-[var(--color-nexus-text-secondary)]">No drawdown data available.</div>
                     ) : (
-                        <div className="flex-1 min-h-0 h-full">
+                        <LazyChart heightClassName="h-[290px] min-[1200px]:h-[340px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={performanceSeries}>
+                                <AreaChart data={lightPerformance}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="var(--color-nexus-border)" vertical={false} />
-                                    <XAxis dataKey="date" hide />
-                                    <YAxis
-                                        stroke="var(--color-nexus-text-muted)"
-                                        style={{ fontSize: "10px", fontFamily: "var(--font-mono)" }}
-                                        tickFormatter={(value) => `${(Number(value) * 100).toFixed(0)}%`}
-                                        tickLine={false} axisLine={false} dx={-10}
-                                        width={30}
-                                    />
-                                    <Tooltip
-                                        animationDuration={100}
-                                        contentStyle={{
-                                            backgroundColor: "var(--color-nexus-surface)",
-                                            borderColor: "var(--color-nexus-danger)",
-                                            borderRadius: "0",
-                                            color: "var(--color-nexus-text-primary)",
-                                            fontFamily: "var(--font-mono)",
-                                            fontSize: "12px"
-                                        }}
-                                        itemStyle={{ color: "var(--color-nexus-danger)" }}
-                                        formatter={(value) =>
-                                            value != null ? [`${(Number(value) * 100).toFixed(2)}%`, "Drawdown"] : ["--", "Drawdown"]
-                                        }
-                                        labelStyle={{ color: "var(--color-nexus-text-secondary)", marginBottom: "0.5rem" }}
-                                    />
-                                    <Area
-                                        type="monotone"
-                                        dataKey="drawdown"
-                                        stroke="var(--color-nexus-danger)"
-                                        strokeWidth={1}
-                                        fill="var(--color-nexus-danger)"
-                                        fillOpacity={0.1}
-                                        activeDot={{ r: 4, strokeWidth: 0, fill: "var(--color-nexus-danger)" }}
-                                        name="Drawdown"
-                                    />
+                                    <XAxis dataKey="date" tickLine={false} axisLine={false} minTickGap={32} />
+                                    <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `${(Number(value) * 100).toFixed(0)}%`} />
+                                    <Tooltip formatter={(value) => (value != null ? [`${(Number(value) * 100).toFixed(2)}%`, "Drawdown"] : ["--", "Drawdown"])} />
+                                    <Area type="monotone" dataKey="drawdown" stroke="var(--color-nexus-danger)" fill="var(--color-nexus-danger)" fillOpacity={0.15} />
                                 </AreaChart>
                             </ResponsiveContainer>
-                        </div>
+                        </LazyChart>
                     )}
-                </BentoItem>
+                </article>
+            </section>
 
-                {/* SECONDARY CHART 2: Monthly Returns - Span 4 */}
-                <BentoItem span={4} title="Monthly Returns" rowSpan={2}>
+            <section className="nexus-two-up">
+                <article className="nexus-card p-6 min-h-[320px]">
+                    <h3 className="nexus-heading-3 font-semibold text-[var(--color-nexus-text-primary)] mb-4">Monthly Returns</h3>
                     {monthly_returns.length === 0 ? (
                         <div className="text-sm text-[var(--color-nexus-text-secondary)]">No monthly return data available.</div>
                     ) : (
-                        <div className="flex-1 min-h-0 h-full">
+                        <LazyChart heightClassName="h-[260px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={monthly_returns}>
+                                <BarChart data={lightMonthly}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="var(--color-nexus-border)" vertical={false} />
                                     <XAxis dataKey="date" hide />
-                                    <YAxis
-                                        stroke="var(--color-nexus-text-muted)"
-                                        style={{ fontSize: "10px", fontFamily: "var(--font-mono)" }}
-                                        tickFormatter={(value) => `${(Number(value) * 100).toFixed(0)}%`}
-                                        tickLine={false} axisLine={false} dx={-10}
-                                        width={30}
-                                    />
-                                    <Tooltip
-                                        animationDuration={100}
-                                        cursor={{ fill: "var(--color-nexus-surface-hover)" }}
-                                        contentStyle={{
-                                            backgroundColor: "var(--color-nexus-surface)",
-                                            borderColor: "var(--color-nexus-primary)",
-                                            borderRadius: "0",
-                                            color: "var(--color-nexus-text-primary)",
-                                            fontFamily: "var(--font-mono)",
-                                            fontSize: "12px"
-                                        }}
-                                        formatter={(value) =>
-                                            value != null ? [`${(Number(value) * 100).toFixed(2)}%`, "Return"] : ["--", "Return"]
-                                        }
-                                        labelStyle={{ color: "var(--color-nexus-text-secondary)", marginBottom: "0.5rem" }}
-                                    />
-                                    <Bar dataKey="return" fill="var(--color-nexus-primary)" radius={[0, 0, 0, 0]} />
+                                    <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `${(Number(value) * 100).toFixed(0)}%`} />
+                                    <Tooltip formatter={(value) => (value != null ? [`${(Number(value) * 100).toFixed(2)}%`, "Return"] : ["--", "Return"])} />
+                                    <Bar dataKey="return" fill="var(--color-nexus-primary)" />
                                 </BarChart>
                             </ResponsiveContainer>
-                        </div>
+                        </LazyChart>
                     )}
-                </BentoItem>
+                </article>
 
-                {/* ATTRIBUTION & MACRO - Span 12 (Bottom strip) */}
-                <BentoItem span={6} title="Attribution & Drivers" rowSpan={2}>
+                <article className="nexus-card p-6 min-h-[320px]">
+                    <h3 className="nexus-heading-3 font-semibold text-[var(--color-nexus-text-primary)] mb-4">Attribution</h3>
                     {!hasAttribution ? (
                         <div className="text-sm text-[var(--color-nexus-text-secondary)]">No attribution data available.</div>
+                    ) : lightAttributionSeries.length > 0 ? (
+                        <div className="space-y-4">
+                            <LazyChart heightClassName="h-[180px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={lightAttributionSeries}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-nexus-border)" vertical={false} />
+                                        <XAxis dataKey="date" hide />
+                                        <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `${(Number(value) * 100).toFixed(0)}%`} />
+                                        <Tooltip formatter={(value) => (value != null ? [`${(Number(value) * 100).toFixed(2)}%`, "Return"] : ["--", "Return"])} />
+                                        <Area type="monotone" dataKey="allocation" stackId="1" stroke="var(--color-nexus-primary)" fill="var(--color-nexus-primary)" fillOpacity={0.65} />
+                                        <Area type="monotone" dataKey="selection" stackId="1" stroke="var(--color-nexus-success)" fill="var(--color-nexus-success)" fillOpacity={0.65} />
+                                        <Area type="monotone" dataKey="interaction" stackId="1" stroke="var(--color-nexus-accent)" fill="var(--color-nexus-accent)" fillOpacity={0.65} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </LazyChart>
+                            <div className="grid grid-cols-3 gap-3 text-xs">
+                                <div>
+                                    <div className="text-[var(--color-nexus-text-muted)]">Allocation</div>
+                                    <div className="font-mono text-[var(--color-nexus-text-primary)]">{attribution_summary.allocation != null ? `${(attribution_summary.allocation * 100).toFixed(2)}%` : "--"}</div>
+                                </div>
+                                <div>
+                                    <div className="text-[var(--color-nexus-text-muted)]">Selection</div>
+                                    <div className="font-mono text-[var(--color-nexus-text-primary)]">{attribution_summary.selection != null ? `${(attribution_summary.selection * 100).toFixed(2)}%` : "--"}</div>
+                                </div>
+                                <div>
+                                    <div className="text-[var(--color-nexus-text-muted)]">Interaction</div>
+                                    <div className="font-mono text-[var(--color-nexus-text-primary)]">{attribution_summary.interaction != null ? `${(attribution_summary.interaction * 100).toFixed(2)}%` : "--"}</div>
+                                </div>
+                            </div>
+                        </div>
                     ) : (
-                        <div className="space-y-4 h-full flex flex-col">
-                            {attribution_timeseries && attribution_timeseries.length > 0 ? (
-                                <div className="flex-1 min-h-0">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={attribution_timeseries}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-nexus-border)" vertical={false} />
-                                            <XAxis dataKey="date" hide />
-                                            <YAxis
-                                                stroke="var(--color-nexus-text-muted)"
-                                                style={{ fontSize: "10px", fontFamily: "var(--font-mono)" }}
-                                                tickFormatter={(value) => `${(Number(value) * 100).toFixed(0)}%`}
-                                                tickLine={false} axisLine={false} dx={-10}
-                                                width={30}
-                                            />
-                                            <Tooltip
-                                                animationDuration={100}
-                                                contentStyle={{
-                                                    backgroundColor: "var(--color-nexus-surface)",
-                                                    borderColor: "var(--color-nexus-primary)",
-                                                    borderRadius: "0",
-                                                    color: "var(--color-nexus-text-primary)",
-                                                    fontFamily: "var(--font-mono)",
-                                                    fontSize: "12px"
-                                                }}
-                                                formatter={(value) =>
-                                                    value != null ? [`${(Number(value) * 100).toFixed(2)}%`, "Return"] : ["--", "Return"]
-                                                }
-                                                labelStyle={{ color: "var(--color-nexus-text-secondary)", marginBottom: "0.5rem" }}
-                                            />
-                                            <Area type="monotone" dataKey="allocation" stackId="1" stroke="var(--color-nexus-primary)" fill="var(--color-nexus-primary)" fillOpacity={0.6} name="Allocation" />
-                                            <Area type="monotone" dataKey="selection" stackId="1" stroke="var(--color-nexus-success)" fill="var(--color-nexus-success)" fillOpacity={0.6} name="Selection" />
-                                            <Area type="monotone" dataKey="interaction" stackId="1" stroke="var(--color-nexus-accent)" fill="var(--color-nexus-accent)" fillOpacity={0.6} name="Interaction" />
-                                        </AreaChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            ) : null}
-
-                            <div className="grid grid-cols-3 gap-2 text-xs mt-auto">
-                                <div>
-                                    <span className="block text-[var(--color-nexus-text-muted)]">Allocation</span>
-                                    <span className="font-mono text-[var(--color-nexus-text-primary)]">
-                                        {attribution_summary.allocation !== null ? `${(attribution_summary.allocation * 100).toFixed(2)}%` : "--"}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="block text-[var(--color-nexus-text-muted)]">Selection</span>
-                                    <span className="font-mono text-[var(--color-nexus-text-primary)]">
-                                        {attribution_summary.selection !== null ? `${(attribution_summary.selection * 100).toFixed(2)}%` : "--"}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="block text-[var(--color-nexus-text-muted)]">Interaction</span>
-                                    <span className="font-mono text-[var(--color-nexus-text-primary)]">
-                                        {attribution_summary.interaction !== null ? `${(attribution_summary.interaction * 100).toFixed(2)}%` : "--"}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
+                        <div className="text-sm text-[var(--color-nexus-text-secondary)]">No attribution time series available.</div>
                     )}
-                </BentoItem>
+                </article>
+            </section>
 
-                <BentoItem span={6} title="Macro Context" rowSpan={2}>
-                    {macroStatus === "unavailable" ? (
-                        <div className="text-sm text-[var(--color-nexus-text-secondary)]">
-                            Macro context unavailable.
-                        </div>
-                    ) : !latestMacro ? (
-                        <div className="text-sm text-[var(--color-nexus-text-secondary)]">No macro regime data available.</div>
-                    ) : (
-                        <div className="grid grid-cols-3 gap-4 h-full">
-                            <div className="flex flex-col h-full">
-                                <div className="text-[var(--color-nexus-text-secondary)] text-[10px] uppercase tracking-wider mb-1">Inflation</div>
-                                <div className="text-xl font-bold text-[var(--color-nexus-text-primary)] font-mono">
-                                    {latestMacro.inflation_yoy != null ? `${(latestMacro.inflation_yoy * 100).toFixed(2)}%` : "--"}
+            {attributionBars.length > 0 && (
+                <section className="nexus-card p-6">
+                    <h3 className="nexus-heading-3 font-semibold text-[var(--color-nexus-text-primary)] mb-4">Top Attribution Drivers</h3>
+                    <div className="grid gap-3 md:grid-cols-2">
+                        {attributionBars.map((row) => (
+                            <article key={row.ticker} className="border border-[var(--color-nexus-border)] p-4 bg-[var(--color-nexus-surface-hover)]/25">
+                                <div className="text-sm font-semibold text-[var(--color-nexus-text-primary)] mb-2">{row.ticker}</div>
+                                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                                    <div className="text-[var(--color-nexus-text-secondary)]">Alloc: {(row.allocation * 100).toFixed(2)}%</div>
+                                    <div className="text-[var(--color-nexus-text-secondary)]">Select: {(row.selection * 100).toFixed(2)}%</div>
                                 </div>
-                                <div className="flex-1 min-h-[40px] mt-2">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={macro_regimes}>
-                                            <Line type="monotone" dataKey="inflation_yoy" stroke="var(--color-nexus-warning)" strokeWidth={1.5} dot={false} />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
-                            <div className="flex flex-col h-full border-l border-r border-[var(--color-nexus-border)] px-4">
-                                <div className="text-[var(--color-nexus-text-secondary)] text-[10px] uppercase tracking-wider mb-1">Rates</div>
-                                <div className="text-xl font-bold text-[var(--color-nexus-text-primary)] font-mono">
-                                    {latestMacro.fed_funds != null ? `${latestMacro.fed_funds.toFixed(2)}%` : "--"}
-                                </div>
-                                <div className="flex-1 min-h-[40px] mt-2">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={macro_regimes}>
-                                            <Line type="monotone" dataKey="fed_funds" stroke="var(--color-nexus-text-primary)" strokeWidth={1.5} dot={false} />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
-                            <div className="flex flex-col h-full">
-                                <div className="text-[var(--color-nexus-text-secondary)] text-[10px] uppercase tracking-wider mb-1">VIX</div>
-                                <div className="text-xl font-bold text-[var(--color-nexus-text-primary)] font-mono">
-                                    {latestMacro.vix != null ? latestMacro.vix.toFixed(1) : "--"}
-                                </div>
-                                <div className="flex-1 min-h-[40px] mt-2">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={macro_regimes}>
-                                            <Line type="monotone" dataKey="vix" stroke="var(--color-nexus-primary)" strokeWidth={1.5} dot={false} />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </BentoItem>
-            </BentoGrid>
+                            </article>
+                        ))}
+                    </div>
+                </section>
+            )}
         </div>
     );
 }

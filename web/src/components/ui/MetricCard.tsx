@@ -89,7 +89,7 @@ export function MetricCard({
                     )}
                 </div>
 
-                <div className="text-3xl font-mono font-bold text-[var(--color-nexus-text-primary)] tracking-tight">
+                <div className="nexus-number font-mono font-bold text-[var(--color-nexus-text-primary)] tracking-tight">
                     {showValue}
                 </div>
 

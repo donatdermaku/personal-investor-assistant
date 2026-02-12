@@ -45,6 +45,16 @@
 :root {
   --background: var(--color-nexus-bg);
   --foreground: var(--color-nexus-text-primary);
+  --spacing-xs: 8px;
+  --spacing-sm: 16px;
+  --spacing-md: 24px;
+  --spacing-lg: 32px;
+  --spacing-xl: 48px;
+  --app-gutter: var(--spacing-md);
+  --card-padding: var(--spacing-md);
+  --grid-gap: 24px;
+  --sidebar-w: 220px;
+  --mission-w: 360px;
 }
 
 body {
@@ -60,6 +70,7 @@ body {
   @apply bg-[var(--color-nexus-surface)] border border-[var(--color-nexus-border)];
   box-shadow: var(--shadow-surface);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 0;
 }
 
 .nexus-card:hover {
@@ -128,4 +139,168 @@ body {
   background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+/* App shell and spacing system */
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.app-content {
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--app-gutter);
+  padding-bottom: calc(var(--spacing-xl) + var(--spacing-lg));
+}
+
+.app-content-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.nexus-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.nexus-grid {
+  display: grid;
+  gap: var(--grid-gap);
+}
+
+.nexus-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: var(--grid-gap);
+}
+
+.nexus-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: var(--grid-gap);
+}
+
+.nexus-two-up {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: var(--grid-gap);
+}
+
+.nexus-heading-1 {
+  font-size: 36px;
+  line-height: 1.1;
+}
+
+.nexus-heading-2 {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.nexus-heading-3 {
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.nexus-panel-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.nexus-touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.nexus-number {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.05;
+  font-size: clamp(1.2rem, 2.1vw, 2rem);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.nexus-inline-number {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+@container (max-width: 540px) {
+  .metric-value-responsive {
+    font-size: 1.5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .nexus-metrics-grid.metrics-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .nexus-metrics-grid.metrics-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .nexus-chart-grid.charts-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .nexus-two-up {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --sidebar-w: 180px;
+  }
+  .app-shell {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  }
+  .app-content {
+    padding: var(--spacing-lg);
+  }
+}
+
+@media (min-width: 1200px) {
+  :root {
+    --sidebar-w: 200px;
+    --mission-w: 320px;
+  }
+  .app-shell {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--mission-w);
+  }
+  .app-content {
+    padding-bottom: var(--spacing-lg);
+  }
+  .nexus-metrics-grid.metrics-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --sidebar-w: 220px;
+    --mission-w: 360px;
+    --app-gutter: var(--spacing-lg);
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --app-gutter: var(--spacing-sm);
+    --card-padding: var(--spacing-sm);
+    --grid-gap: 20px;
+  }
+  .app-content {
+    padding-bottom: 108px;
+  }
+  .nexus-heading-1 {
+    font-size: 30px;
+  }
 }

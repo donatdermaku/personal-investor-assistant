@@ -29,28 +29,21 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
+    return (
     <html lang="en" className={`${outfit.variable} ${spaceGrotesk.variable}`}>
-      <body className="antialiased bg-[var(--color-nexus-bg)] text-[var(--color-nexus-text-primary)] selection:bg-[var(--color-nexus-primary)] selection:text-black overflow-hidden h-screen">
+      <body className="antialiased bg-[var(--color-nexus-bg)] text-[var(--color-nexus-text-primary)] selection:bg-[var(--color-nexus-primary)] selection:text-black overflow-x-hidden min-h-screen">
         <NexusProvider>
           <AmbientBackground />
-
-          <div className="flex h-screen overflow-hidden">
-            {/* Zone 1: Sidebar (Fixed Left) */}
+          <div className="app-shell relative z-10">
             <Sidebar />
-
-            {/* Zone 2: Main Content (Fluid Center) */}
-            <main className="flex-1 overflow-y-auto relative z-10">
-              <div className="max-w-7xl mx-auto p-6 lg:p-8 pb-24 lg:pb-8">
+            <main className="app-content">
+              <div className="app-content-inner">
                 <TopBar />
                 {children}
               </div>
             </main>
-
-            {/* Zone 3: Mission Control (Fixed Right) */}
             <MissionControl />
           </div>
-
         </NexusProvider>
       </body>
     </html>

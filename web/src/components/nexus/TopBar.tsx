@@ -1,6 +1,7 @@
 "use client";
 
 import { useNexus } from "@/components/nexus/NexusProvider";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 function formatTimestamp(value: string | null) {
     if (!value) return "--";
@@ -18,7 +19,6 @@ export function TopBar() {
         benchmark,
         setBenchmark,
         status,
-        loadingMessage,
         loadingProgress,
         lastFetched,
         backendOk,
@@ -26,13 +26,24 @@ export function TopBar() {
         openRunCreator,
         contextPanelOpen,
         toggleContextPanel,
+        toggleNav,
     } = useNexus();
+    const isDesktopMission = useMediaQuery("(min-width: 1200px)");
+    const showMissionButton = !isDesktopMission;
 
     return (
-        <div className="mb-12 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 border-b border-[var(--color-nexus-border)] pb-6">
+        <div className="mb-8 md:mb-10 flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 border-b border-[var(--color-nexus-border)] pb-6 relative">
             <div className="flex flex-col gap-1">
                 <div className="text-label mb-1">System Status</div>
                 <div className="flex items-center gap-4">
+                    <button
+                        type="button"
+                        onClick={toggleNav}
+                        className="nexus-touch-target inline-flex items-center justify-center border border-[var(--color-nexus-border)] px-2.5 text-[var(--color-nexus-text-secondary)] hover:text-[var(--color-nexus-primary)] hover:border-[var(--color-nexus-primary)] transition-colors lg:hidden"
+                        aria-label="Open navigation"
+                    >
+                        ☰
+                    </button>
                     <div className="flex items-center gap-2">
                         <div className={`w-1.5 h-1.5 rounded-full ${backendOk ? "bg-[var(--color-nexus-success)] shadow-[0_0_10px_var(--color-nexus-success)]" : "bg-[var(--color-nexus-danger)]"}`} />
                         <span className="text-sm font-mono text-[var(--color-nexus-text-primary)]">
@@ -46,7 +57,7 @@ export function TopBar() {
                 </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-6">
+            <div className="flex flex-wrap items-center gap-4 md:gap-6">
 
                 {/* Mode Switcher */}
                 <div className="flex items-center bg-[var(--color-nexus-surface)] rounded-sm p-1 border border-[var(--color-nexus-border)]">
@@ -72,7 +83,7 @@ export function TopBar() {
                     </button>
                 </div>
 
-                <div className="h-8 w-[1px] bg-[var(--color-nexus-border)] hidden lg:block" />
+                <div className="h-8 w-[1px] bg-[var(--color-nexus-border)] hidden xl:block" />
 
                 {/* Controls */}
                 <div className="flex items-center gap-4">
@@ -115,19 +126,21 @@ export function TopBar() {
                     NEW RUN
                 </button>
 
-                <button
-                    type="button"
-                    onClick={toggleContextPanel}
-                    className={`
-                        border px-4 py-2 text-xs font-mono uppercase tracking-widest transition-all duration-300
-                        ${contextPanelOpen
-                            ? "border-[var(--color-nexus-primary)] bg-[var(--color-nexus-primary)] text-black"
-                            : "border-[var(--color-nexus-border)] text-[var(--color-nexus-text-secondary)] hover:text-[var(--color-nexus-primary)] hover:border-[var(--color-nexus-primary)]"
-                        }
-                    `}
-                >
-                    MISSION CONTROL
-                </button>
+                {showMissionButton && (
+                    <button
+                        type="button"
+                        onClick={toggleContextPanel}
+                        className={`
+                            border px-4 py-2 text-xs font-mono uppercase tracking-widest transition-all duration-300 hidden md:inline-flex
+                            ${contextPanelOpen
+                                ? "border-[var(--color-nexus-primary)] bg-[var(--color-nexus-primary)] text-black"
+                                : "border-[var(--color-nexus-border)] text-[var(--color-nexus-text-secondary)] hover:text-[var(--color-nexus-primary)] hover:border-[var(--color-nexus-primary)]"
+                            }
+                        `}
+                    >
+                        MISSION CONTROL
+                    </button>
+                )}
             </div>
 
             {status === "loading" && (
