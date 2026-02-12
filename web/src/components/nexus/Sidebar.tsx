@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useNexus } from "@/components/nexus/NexusProvider";
 
 const NAV_ITEMS = [
     { label: "Overview", href: "/overview" },
@@ -12,49 +13,89 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
     const pathname = usePathname();
+    const { navOpen, closeNav } = useNexus();
+
+    const navLinks = (onNavigate?: () => void) => (
+        <>
+            {NAV_ITEMS.map((item) => {
+                const isActive = pathname === item.href;
+                return (
+                    <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={onNavigate}
+                        className={`group flex items-center justify-between px-4 py-3 text-sm transition-all duration-300 nexus-touch-target ${isActive
+                            ? "text-[var(--color-nexus-primary)]"
+                            : "text-[var(--color-nexus-text-secondary)] hover:text-[var(--color-nexus-text-primary)]"
+                            }`}
+                    >
+                        <span className={`font-medium ${isActive ? "tracking-wide" : ""}`}>
+                            {item.label}
+                        </span>
+                        {isActive && (
+                            <div className="w-1.5 h-1.5 bg-[var(--color-nexus-primary)] rounded-full shadow-[var(--shadow-glow)]" />
+                        )}
+                    </Link>
+                );
+            })}
+        </>
+    );
 
     return (
         <>
-            <aside className="hidden lg:flex w-64 bg-gradient-to-b from-[#0B1220] via-[#1E3A8A] to-[#2563EB] h-screen flex-col fixed left-0 top-0">
-                <div className="p-6 border-b border-white/10">
-                    <h1 className="text-white font-bold text-lg">Nexus</h1>
-                    <p className="text-xs text-white/70 uppercase tracking-wider">Analytics Platform</p>
+            <aside className="hidden lg:flex flex-col bg-[var(--color-nexus-surface)]/90 border-r border-[var(--color-nexus-border)] min-h-screen sticky top-0">
+                <div className="p-6 xl:p-8 pb-4">
+                    <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-[var(--color-nexus-primary)] shadow-[var(--shadow-glow)]" />
+                        <h1 className="text-[var(--color-nexus-text-primary)] font-sans font-bold text-xl tracking-tight">NEXUS</h1>
+                    </div>
+                    <p className="text-[var(--color-nexus-text-muted)] text-[10px] uppercase tracking-[0.2em] mt-2 ml-4">Private Perspective</p>
                 </div>
 
-                <nav className="flex-1 p-4 space-y-1">
-                    {NAV_ITEMS.map((item) => {
-                        const isActive = pathname === item.href;
-                        return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
-                                    ? "bg-[#E8F0FF] text-[#1E40AF] shadow-sm"
-                                    : "text-white/80 hover:bg-white/10 hover:text-white"
-                                    }`}
-                            >
-                                {item.label}
-                            </Link>
-                        );
-                    })}
+                <nav className="flex-1 px-4 py-8 space-y-2">
+                    {navLinks()}
                 </nav>
 
-                <div className="p-4 border-t border-white/10">
-                    <div className="text-xs text-white/60">
-                        v2.0.0 (Web Shell)
+                <div className="p-6 xl:p-8 border-t border-[var(--color-nexus-border)]">
+                    <div className="flex items-center gap-2 text-[var(--color-nexus-text-muted)] text-xs font-mono">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500/20 border border-emerald-500/50" />
+                        v2.0.0
                     </div>
                 </div>
             </aside>
 
-            <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[#E5E7EB] px-4 py-2">
-                <div className="grid grid-cols-4 gap-2 text-center text-xs font-medium text-gray-500">
+            <div
+                className={`fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300 lg:hidden ${navOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+                onClick={closeNav}
+            />
+            <aside
+                className={`fixed inset-y-0 left-0 w-[280px] max-w-[85vw] z-50 bg-[var(--color-nexus-surface)] border-r border-[var(--color-nexus-border)] p-6 flex flex-col transform transition-transform duration-300 lg:hidden ${navOpen ? "translate-x-0" : "-translate-x-full"}`}
+            >
+                <div className="flex items-center justify-between pb-4 border-b border-[var(--color-nexus-border)]">
+                    <h2 className="text-sm uppercase tracking-widest text-[var(--color-nexus-text-secondary)]">Navigation</h2>
+                    <button
+                        type="button"
+                        onClick={closeNav}
+                        className="nexus-touch-target text-[var(--color-nexus-text-secondary)] hover:text-[var(--color-nexus-primary)]"
+                    >
+                        Close
+                    </button>
+                </div>
+                <nav className="flex-1 pt-6 space-y-2">
+                    {navLinks(closeNav)}
+                </nav>
+            </aside>
+
+            <nav className="fixed bottom-0 left-0 right-0 bg-[var(--color-nexus-surface)] border-t border-[var(--color-nexus-border)] px-4 py-3 z-50 md:hidden">
+                <div className="flex justify-between items-center">
                     {NAV_ITEMS.map((item) => {
                         const isActive = pathname === item.href;
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className={isActive ? "text-[#0F172A]" : "text-gray-500"}
+                                className={`text-xs uppercase tracking-wider font-medium transition-colors px-2 py-1.5 nexus-touch-target inline-flex items-center justify-center ${isActive ? "text-[var(--color-nexus-primary)]" : "text-[var(--color-nexus-text-secondary)]"
+                                    }`}
                             >
                                 {item.label}
                             </Link>

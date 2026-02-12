@@ -1,16 +1,26 @@
 "use client";
 
-import { MetricCard } from "@/components/ui/MetricCard";
-import { definitionTooltip } from "@/lib/definitions";
 import { useNexus } from "@/components/nexus/NexusProvider";
 import { EmptyState } from "@/components/nexus/EmptyState";
-import { SkeletonCard, SkeletonBlock } from "@/components/nexus/Skeleton";
+import { SkeletonBlock } from "@/components/nexus/Skeleton";
 import { SectionContext } from "@/components/nexus/SectionContext";
-import { getMetricReasons, getMetricStatus } from "@/lib/coverageLogic";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LazyChart } from "@/components/nexus/LazyChart";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { downsampleSeries } from "@/lib/chartPerformance";
+import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+
+const COLORS = [
+    "var(--color-nexus-primary)",
+    "var(--color-nexus-secondary)",
+    "var(--color-nexus-accent)",
+    "var(--color-nexus-success)",
+    "var(--color-nexus-warning)",
+    "var(--color-nexus-danger)",
+];
 
 export default function RiskPage() {
     const { state, status, error, mode, setMode, openRunCreator } = useNexus();
+    const isPhone = useMediaQuery("(max-width: 767px)");
 
     if (status === "error") {
         return (
@@ -36,50 +46,36 @@ export default function RiskPage() {
 
     if (status === "loading" || !state) {
         return (
-            <div className="space-y-8">
+            <div className="nexus-page">
                 <div>
-                    <SkeletonBlock className="h-8 w-40" />
-                    <SkeletonBlock className="mt-2 h-4 w-56" />
+                    <SkeletonBlock className="h-8 w-40 bg-[var(--color-nexus-surface)]" />
+                    <SkeletonBlock className="mt-2 h-4 w-56 bg-[var(--color-nexus-surface)]" />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <SkeletonCard />
-                    <SkeletonCard />
-                    <SkeletonCard />
-                    <SkeletonCard />
-                </div>
-                <div className="bg-white border border-gray-200 rounded-lg p-6">
-                    <SkeletonBlock className="h-5 w-32" />
-                    <SkeletonBlock className="mt-4 h-28 w-full" />
+                <div className="nexus-metrics-grid metrics-4">
+                    <SkeletonBlock className="h-28 bg-[var(--color-nexus-surface)]" />
+                    <SkeletonBlock className="h-28 bg-[var(--color-nexus-surface)]" />
+                    <SkeletonBlock className="h-28 bg-[var(--color-nexus-surface)]" />
+                    <SkeletonBlock className="h-28 bg-[var(--color-nexus-surface)]" />
                 </div>
             </div>
         );
     }
 
-    const {
-        risk,
-        summary,
-        performance,
-        definitions,
-        risk_contribution,
-        rolling_metrics,
-        manifest,
-        coverage_summary,
-        correlation_matrix,
-    } = state;
-    const currentDrawdown = performance.length > 0 ? performance[performance.length - 1]?.drawdown ?? null : null;
+    const { risk, summary, rolling_metrics, risk_contribution, correlation_matrix } = state;
     const topRisk = risk_contribution?.contributions?.slice(0, 6) ?? [];
-    const metricStatus = (kpiKey: string) => getMetricStatus(kpiKey, coverage_summary ?? null);
-    const metricReasons = (kpiKey: string) => getMetricReasons(kpiKey, coverage_summary ?? null);
-    const metricCoverage = (kpiKey: string) => (metricStatus(kpiKey) === "insufficient" ? "insufficient" : undefined);
-    const metricReasonCodes = (kpiKey: string) =>
-        metricStatus(kpiKey) === "insufficient" ? metricReasons(kpiKey) : undefined;
-    const asOf = summary.last_date || manifest.timestamp;
+    const lightRolling = downsampleSeries(rolling_metrics ?? [], isPhone ? 120 : 260);
+    const getCorrelationColor = (value: number) => {
+        if (value === 1) return "bg-[var(--color-nexus-primary)]/20 text-[var(--color-nexus-primary)]";
+        if (value > 0.7) return "bg-[var(--color-nexus-danger)]/30 text-[var(--color-nexus-danger)]";
+        if (value > 0.4) return "bg-[var(--color-nexus-danger)]/10 text-[var(--color-nexus-text-primary)]";
+        return "bg-transparent text-[var(--color-nexus-text-secondary)]";
+    };
 
     return (
-        <div className="space-y-8">
+        <div className="nexus-page animate-in fade-in duration-500">
             <div>
-                <h2 className="text-3xl font-bold text-[#0F172A] mb-2">Risk</h2>
-                <p className="text-gray-600">
+                <h2 className="nexus-heading-1 font-sans font-bold text-[var(--color-nexus-text-primary)] mb-2 tracking-tight">Risk Radar</h2>
+                <p className="text-[var(--color-nexus-text-secondary)] text-base">
                     {mode === "demo" ? "Demo risk metrics and analysis" : "Portfolio risk metrics and analysis"}
                 </p>
             </div>
@@ -95,213 +91,136 @@ export default function RiskPage() {
                         label: "Why it matters",
                         text: "Explains the variability and tail exposure behind the return profile.",
                     },
-                    {
-                        label: "When it misleads",
-                        text: "Short histories and cash-only positions can make risk statistics appear muted.",
-                    },
-                    {
-                        label: "Assumptions",
-                        text: "Risk metrics use daily returns and require sufficient history for stability.",
-                    },
                 ]}
             />
 
-            {summary.errors && summary.errors.length > 0 && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    Some inputs are missing or incomplete for this run. Risk metrics may be limited.
-                </div>
-            )}
-
-            {/* Risk Metrics Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <MetricCard
-                    label="VaR (95%)"
-                    value={risk.var_95 !== null ? `${(risk.var_95 * 100).toFixed(2)}%` : "--"}
-                    tooltip={definitionTooltip(definitions, "var_daily")}
-                    subtext="Daily"
-                    coverageStatus={metricCoverage("var_95")}
-                    asOf={asOf}
-                    reasonCodes={metricReasonCodes("var_95")}
-                />
-                <MetricCard
-                    label="CVaR (95%)"
-                    value={risk.cvar_95 !== null ? `${(risk.cvar_95 * 100).toFixed(2)}%` : "--"}
-                    tooltip={definitionTooltip(definitions, "cvar_daily")}
-                    subtext="Daily"
-                    coverageStatus={metricCoverage("cvar_95")}
-                    asOf={asOf}
-                    reasonCodes={metricReasonCodes("cvar_95")}
-                />
-                <MetricCard
-                    label="Volatility"
-                    value={risk.volatility !== null ? `${(risk.volatility * 100).toFixed(2)}%` : "--"}
-                    tooltip={definitionTooltip(definitions, "rolling_volatility")}
-                    coverageStatus={metricCoverage("volatility")}
-                    asOf={asOf}
-                    reasonCodes={metricReasonCodes("volatility")}
-                />
-                <MetricCard
-                    label="Sharpe Ratio"
-                    value={risk.sharpe !== null ? risk.sharpe.toFixed(2) : "--"}
-                    tooltip={definitionTooltip(definitions, "sharpe_rolling")}
-                    coverageStatus={metricCoverage("sharpe")}
-                    asOf={asOf}
-                    reasonCodes={metricReasonCodes("sharpe")}
-                />
-            </div>
-
-            {/* Drawdown */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-[#0F172A] mb-4">Drawdown Analysis</h3>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <div className="text-sm text-gray-500 mb-1">Max Drawdown</div>
-                        <div className="text-2xl font-bold text-[#0F172A]">
-                            {summary.max_drawdown !== null ? `${(summary.max_drawdown * 100).toFixed(2)}%` : "--"}
-                        </div>
+            <section className="nexus-metrics-grid metrics-4">
+                <article className="nexus-card p-6">
+                    <div className="text-label mb-3">VaR (95%)</div>
+                    <div className="nexus-number font-mono font-bold text-[var(--color-nexus-text-primary)]">
+                        {risk.var_95 !== null ? `${(risk.var_95 * 100).toFixed(2)}%` : "--"}
                     </div>
-                    <div>
-                        <div className="text-sm text-gray-500 mb-1">Current Drawdown</div>
-                        <div className="text-2xl font-bold text-[#0F172A]">
-                            {currentDrawdown !== null && currentDrawdown !== undefined
-                                ? `${(currentDrawdown * 100).toFixed(2)}%`
-                                : "--"}
-                        </div>
-                        <div className="text-xs text-gray-400 mt-1">Latest observation</div>
+                </article>
+                <article className="nexus-card p-6">
+                    <div className="text-label mb-3">CVaR (95%)</div>
+                    <div className="nexus-number font-mono font-bold text-[var(--color-nexus-text-primary)]">
+                        {risk.cvar_95 !== null ? `${(risk.cvar_95 * 100).toFixed(2)}%` : "--"}
                     </div>
-                </div>
-            </div>
+                </article>
+                <article className="nexus-card p-6">
+                    <div className="text-label mb-3">Volatility</div>
+                    <div className="nexus-number font-mono font-bold text-[var(--color-nexus-text-primary)]">
+                        {risk.volatility !== null ? `${(risk.volatility * 100).toFixed(2)}%` : "--"}
+                    </div>
+                </article>
+                <article className="nexus-card p-6">
+                    <div className="text-label mb-3">Max Drawdown</div>
+                    <div className="nexus-number font-mono font-bold text-[var(--color-nexus-danger)]">
+                        {summary.max_drawdown !== null ? `${(summary.max_drawdown * 100).toFixed(2)}%` : "--"}
+                    </div>
+                </article>
+            </section>
 
-            <details className="bg-white border border-gray-200 rounded-lg p-6">
-                <summary className="cursor-pointer text-lg font-semibold text-[#0F172A] mb-4">Correlation Matrix</summary>
+            <section className="nexus-card p-6">
+                <h3 className="nexus-heading-3 font-semibold text-[var(--color-nexus-text-primary)] mb-4">Correlation Matrix</h3>
                 {!correlation_matrix || correlation_matrix.status === "unavailable" ? (
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-[var(--color-nexus-text-secondary)]">
                         Correlation matrix unavailable. {correlation_matrix?.reasons?.join(", ") || "Insufficient history."}
                     </div>
                 ) : (
-                    <div className="space-y-3 text-sm">
-                        {correlation_matrix.reasons && correlation_matrix.reasons.length > 0 && (
-                            <div className="text-xs text-gray-500">Notes: {correlation_matrix.reasons.join(", ")}</div>
-                        )}
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full border border-gray-200 text-xs">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="p-2 text-left font-semibold text-gray-500">Asset</th>
-                                        {correlation_matrix.assets_included.map((ticker) => (
-                                            <th key={ticker} className="p-2 text-left font-semibold text-gray-500">
-                                                {ticker}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {correlation_matrix.assets_included.map((row) => (
-                                        <tr key={row} className="border-t border-gray-200">
-                                            <td className="p-2 font-semibold text-gray-600">{row}</td>
-                                            {correlation_matrix.assets_included.map((col) => (
-                                                <td key={`${row}-${col}`} className="p-2 text-gray-600">
-                                                    {correlation_matrix.matrix?.[row]?.[col]?.toFixed(2) ?? "--"}
-                                                </td>
-                                            ))}
-                                        </tr>
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[640px] border-collapse text-xs font-mono">
+                            <thead>
+                                <tr>
+                                    <th className="p-2 text-left font-semibold text-[var(--color-nexus-text-secondary)]" />
+                                    {correlation_matrix.assets_included.map((ticker) => (
+                                        <th key={ticker} className="p-2 text-center font-semibold text-[var(--color-nexus-text-secondary)]">
+                                            {ticker}
+                                        </th>
                                     ))}
-                                </tbody>
-                            </table>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {correlation_matrix.assets_included.map((row) => (
+                                    <tr key={row}>
+                                        <td className="p-2 font-semibold text-[var(--color-nexus-text-primary)] text-right pr-3">{row}</td>
+                                        {correlation_matrix.assets_included.map((col) => {
+                                            const val = correlation_matrix.matrix?.[row]?.[col];
+                                            return (
+                                                <td key={`${row}-${col}`} className="p-1">
+                                                    <div className={`w-full h-10 flex items-center justify-center ${getCorrelationColor(val ?? 0)}`}>
+                                                        {val?.toFixed(2) ?? "--"}
+                                                    </div>
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </section>
+
+            <section className="grid gap-[var(--grid-gap)] min-[1200px]:grid-cols-3">
+                <article className="nexus-card p-6 min-h-[320px] min-[1200px]:col-span-2">
+                    <h3 className="nexus-heading-3 font-semibold text-[var(--color-nexus-text-primary)] mb-4">Rolling Volatility</h3>
+                    {!rolling_metrics || rolling_metrics.length === 0 ? (
+                        <div className="text-sm text-[var(--color-nexus-text-secondary)]">No rolling risk metrics available.</div>
+                    ) : (
+                        <LazyChart heightClassName="h-[260px] min-[1200px]:h-[320px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={lightRolling}>
+                                    <defs>
+                                        <linearGradient id="rollingVol" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="var(--color-nexus-warning)" stopOpacity={0.2} />
+                                            <stop offset="95%" stopColor="var(--color-nexus-warning)" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-nexus-border)" vertical={false} />
+                                    <XAxis dataKey="date" hide />
+                                    <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `${(Number(value) * 100).toFixed(0)}%`} />
+                                    <Tooltip formatter={(value) => (value != null ? [`${(Number(value) * 100).toFixed(2)}%`, "Volatility"] : ["--", "Volatility"])} />
+                                    <Area type="monotone" dataKey="rolling_volatility" stroke="var(--color-nexus-warning)" strokeWidth={2} fill="url(#rollingVol)" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </LazyChart>
+                    )}
+                </article>
+
+                <article className="nexus-card p-6 min-h-[320px]">
+                    <h3 className="nexus-heading-3 font-semibold text-[var(--color-nexus-text-primary)] mb-4">Risk Contribution</h3>
+                    {topRisk.length === 0 ? (
+                        <div className="text-sm text-[var(--color-nexus-text-secondary)]">No risk contribution data available.</div>
+                    ) : (
+                        <div className="space-y-4">
+                            <LazyChart heightClassName="h-[180px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie data={topRisk} dataKey="volatility_pct" nameKey="ticker" cx="50%" cy="50%" innerRadius={45} outerRadius={72}>
+                                            {topRisk.map((_, index) => (
+                                                <Cell key={`risk-contrib-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={(value) => [`${(Number(value) * 100).toFixed(1)}%`, "Volatility"]} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </LazyChart>
+                            <div className="space-y-2">
+                                {topRisk.map((item, index) => (
+                                    <div key={item.ticker} className="flex items-center justify-between text-xs">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                                            <span className="text-[var(--color-nexus-text-secondary)]">{item.ticker}</span>
+                                        </div>
+                                        <span className="font-mono text-[var(--color-nexus-text-primary)]">{(item.volatility_pct * 100).toFixed(1)}%</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        {correlation_matrix.assets_excluded.length > 0 && (
-                            <div className="text-xs text-gray-500">
-                                Excluded: {correlation_matrix.assets_excluded.map((row) => `${row.ticker} (${row.reason})`).join(", ")}
-                            </div>
-                        )}
-                    </div>
-                )}
-            </details>
-
-            <details className="bg-white border border-gray-200 rounded-lg p-6">
-                <summary className="cursor-pointer text-lg font-semibold text-[#0F172A] mb-4">Risk Contribution</summary>
-                {topRisk.length === 0 ? (
-                    <div className="text-sm text-gray-500">No risk contribution data available.</div>
-                ) : (
-                    <div className="divide-y divide-gray-200 text-sm">
-                        {topRisk.map((row) => (
-                            <div key={row.ticker} className="py-2 flex items-center justify-between">
-                                <span className="font-medium text-gray-700">{row.ticker}</span>
-                                <span className="text-gray-500">
-                                    {(row.volatility_pct * 100).toFixed(1)}% of volatility
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </details>
-
-            <details className="bg-white border border-gray-200 rounded-lg p-6">
-                <summary className="cursor-pointer text-lg font-semibold text-[#0F172A] mb-4">Rolling Risk</summary>
-                {!rolling_metrics || rolling_metrics.length === 0 ? (
-                    <div className="text-sm text-gray-500">No rolling risk metrics available.</div>
-                ) : (
-                    <ResponsiveContainer width="100%" height={240}>
-                        <LineChart data={rolling_metrics}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#E3E7EE" />
-                            <XAxis dataKey="date" stroke="#64748B" style={{ fontSize: "12px" }} />
-                            <YAxis
-                                yAxisId="left"
-                                stroke="#64748B"
-                                style={{ fontSize: "12px" }}
-                                tickFormatter={(value) => `${(Number(value) * 100).toFixed(0)}%`}
-                            />
-                            <YAxis
-                                yAxisId="right"
-                                orientation="right"
-                                stroke="#94A3B8"
-                                style={{ fontSize: "12px" }}
-                                tickFormatter={(value) => Number(value).toFixed(1)}
-                            />
-                            <Tooltip
-                                contentStyle={{
-                                    backgroundColor: "white",
-                                    border: "1px solid #E3E7EE",
-                                    borderRadius: "0.5rem",
-                                }}
-                                formatter={(value, name) => {
-                                    if (name === "Rolling Sharpe") {
-                                        return value != null ? [Number(value).toFixed(2), name] : ["--", name];
-                                    }
-                                    return value != null ? [`${(Number(value) * 100).toFixed(2)}%`, name] : ["--", name];
-                                }}
-                            />
-                            <Line
-                                yAxisId="left"
-                                type="monotone"
-                                dataKey="rolling_volatility"
-                                stroke="#2563EB"
-                                strokeWidth={2}
-                                dot={false}
-                                name="Rolling Volatility"
-                            />
-                            <Line
-                                yAxisId="right"
-                                type="monotone"
-                                dataKey="rolling_sharpe"
-                                stroke="#16A34A"
-                                strokeWidth={2}
-                                dot={false}
-                                name="Rolling Sharpe"
-                            />
-                            <Line
-                                yAxisId="left"
-                                type="monotone"
-                                dataKey="rolling_drawdown"
-                                stroke="#F97316"
-                                strokeWidth={2}
-                                dot={false}
-                                name="Rolling Drawdown"
-                            />
-                        </LineChart>
-                    </ResponsiveContainer>
-                )}
-            </details>
+                    )}
+                </article>
+            </section>
         </div>
     );
 }

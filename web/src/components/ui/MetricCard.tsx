@@ -40,27 +40,29 @@ export function MetricCard({
     }
 
     const safeValue = value === null || value === undefined ? "--" : value;
-    // Don't hide if coverage is "available_low_coverage", only if "insufficient"
     const showValue = shouldHide ? "--" : safeValue;
     const asOfLabel = formatAsOf(asOf);
+
+    // Badge logic adapted for Dark Mode
     const badgeLabel = coverageStatus === "full"
-        ? "Full coverage"
+        ? "Full Coverage"
         : coverageStatus === "partial"
-            ? "Partial coverage"
+            ? "Partial"
             : coverageStatus === "insufficient"
                 ? "Insufficient"
                 : coverageStatus === "available_low_coverage"
                     ? "Warning"
                     : null;
+
     const badgeClass = coverageStatus === "full"
-        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+        ? "border-[var(--color-nexus-success)] text-[var(--color-nexus-success)] bg-[var(--color-nexus-success)]/10"
         : coverageStatus === "partial"
-            ? "border-amber-200 bg-amber-50 text-amber-700"
+            ? "border-[var(--color-nexus-warning)] text-[var(--color-nexus-warning)] bg-[var(--color-nexus-warning)]/10"
             : coverageStatus === "insufficient"
-                ? "border-gray-200 bg-gray-100 text-gray-500"
+                ? "border-[var(--color-nexus-border)] text-[var(--color-nexus-text-muted)] bg-[var(--color-nexus-surface-hover)]"
                 : coverageStatus === "available_low_coverage"
-                    ? "border-yellow-200 bg-yellow-50 text-yellow-700"
-                    : "border-[#E8F0FF] bg-[#E8F0FF] text-[#1E40AF]";
+                    ? "border-[var(--color-nexus-warning)] text-[var(--color-nexus-warning)]"
+                    : "border-[var(--color-nexus-primary)] text-[var(--color-nexus-primary)] bg-[var(--color-nexus-primary)]/10";
 
     const reasonLabel =
         shouldHide && reasonCodes && reasonCodes.length > 0
@@ -69,32 +71,38 @@ export function MetricCard({
 
     return (
         <div
-            className={`nexus-card border-l-4 border-[#E8F0FF] transition-all ${coverageStatus === "insufficient" ? "opacity-70" : "hover:border-[#2563EB] hover:shadow-md"
-                }`}
+            className={`nexus-card relative overflow-hidden transition-all group ${coverageStatus === "insufficient" ? "opacity-50" : "hover:border-[var(--color-nexus-primary)]"}`}
             title={tooltip}
         >
-            <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                    {label}
+            {/* Hover Glow Effect */}
+            <div className="absolute -inset-px bg-gradient-to-r from-[var(--color-nexus-primary)] to-[var(--color-nexus-accent)] opacity-0 group-hover:opacity-10 pointer-events-none transition-opacity duration-500" />
+
+            <div className="relative p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <div className="text-label">
+                        {label}
+                    </div>
+                    {badgeLabel && (
+                        <div className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider font-mono ${badgeClass}`}>
+                            {badgeLabel}
+                        </div>
+                    )}
                 </div>
-                {badgeLabel && (
-                    <div className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${badgeClass}`}>
-                        {badgeLabel}
+
+                <div className="nexus-number font-mono font-bold text-[var(--color-nexus-text-primary)] tracking-tight">
+                    {showValue}
+                </div>
+
+                {(subtext || asOfLabel || reasonLabel) && (
+                    <div className="text-xs font-mono text-[var(--color-nexus-text-secondary)] mt-2 flex flex-wrap gap-1">
+                        {subtext && <span>{subtext}</span>}
+                        {subtext && asOfLabel && <span className="opacity-50">·</span>}
+                        {asOfLabel && <span>{asOfLabel}</span>}
+                        {(subtext || asOfLabel) && reasonLabel && <span className="opacity-50">·</span>}
+                        {reasonLabel && <span className="text-[var(--color-nexus-danger)]">{reasonLabel}</span>}
                     </div>
                 )}
             </div>
-            <div className="text-2xl font-bold text-[#0F172A]">
-                {showValue}
-            </div>
-            {(subtext || asOfLabel || reasonLabel) && (
-                <div className="text-xs text-gray-400 mt-1">
-                    {subtext}
-                    {subtext && asOfLabel ? " · " : ""}
-                    {asOfLabel ? `As of ${asOfLabel}` : ""}
-                    {(subtext || asOfLabel) && reasonLabel ? " · " : ""}
-                    {reasonLabel ?? ""}
-                </div>
-            )}
         </div>
     );
 }

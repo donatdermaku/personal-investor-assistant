@@ -1,47 +1,318 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-  --font-mono: "SF Mono", "Roboto Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  
-  --color-nexus-primary: #0F172A; /* Slate 900 */
-  --color-nexus-accent: #3B82F6;  /* Blue 500 */
-  --color-nexus-bg: #F3F4F6;      /* Gray 50 */
-  --color-nexus-border: #E5E7EB;  /* Gray 200 */
-  
-  --radius-card: 0.75rem;
-  --radius-soft: 0.5rem;
-  --shadow-soft: 0 10px 20px rgba(15, 23, 42, 0.08);
-  --space-2xs: 0.25rem;
-  --space-xs: 0.5rem;
-  --space-sm: 0.75rem;
-  --space-md: 1rem;
-  --space-lg: 1.5rem;
-  --space-xl: 2rem;
+  --font-sans: var(--font-outfit), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: var(--font-space-grotesk), "SF Mono", "Roboto Mono", Menlo, Monaco, Consolas, monospace;
+
+  /* Project Nexus - Dark Mode Palette */
+  --color-nexus-bg: #0A0A0A;
+  /* Almost black, void-like */
+  --color-nexus-surface: #121212;
+  /* Subtle elevation */
+  --color-nexus-surface-hover: #1A1A1A;
+
+  --color-nexus-primary: #D4AF37;
+  /* Metallic Gold */
+  --color-nexus-secondary: #C0C0C0;
+  /* Silver/Steel */
+  --color-nexus-accent: #CD7F32;
+  /* Bronze */
+
+  --color-nexus-text-primary: #EDEDED;
+  --color-nexus-text-secondary: #A1A1AA;
+  --color-nexus-text-muted: #52525B;
+
+  --color-nexus-border: #27272A;
+  --color-nexus-border-light: #3F3F46;
+
+  --color-nexus-success: #10B981;
+  /* Emerald */
+  --color-nexus-danger: #EF4444;
+  /* Red */
+  --color-nexus-warning: #F59E0B;
+  /* Amber */
+
+  /* Spacing & Radius */
+  --radius-card: 0px;
+  /* Brutalist/Sharp */
+  --radius-sm: 2px;
+  --radius-full: 9999px;
+
+  --shadow-glow: 0 0 20px rgba(212, 175, 55, 0.15);
+  --shadow-surface: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 :root {
   --background: var(--color-nexus-bg);
-  --foreground: var(--color-nexus-primary);
+  --foreground: var(--color-nexus-text-primary);
+  --spacing-xs: 8px;
+  --spacing-sm: 16px;
+  --spacing-md: 24px;
+  --spacing-lg: 32px;
+  --spacing-xl: 48px;
+  --app-gutter: var(--spacing-md);
+  --card-padding: var(--spacing-md);
+  --grid-gap: 24px;
+  --sidebar-w: 220px;
+  --mission-w: 360px;
 }
 
 body {
-  background:
-    radial-gradient(circle at 0% 0%, rgba(59, 130, 246, 0.08), transparent 35%),
-    radial-gradient(circle at 100% 100%, rgba(15, 23, 42, 0.06), transparent 35%),
-    var(--background);
+  background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Utility for card style */
+/*
+ * Z-Index Scale
+ * ──────────────────────────────────
+ *  10  – Sidebar / bottom nav
+ *  20  – TopBar
+ *  40  – Mobile FAB (Mission button)
+ *  50  – Overlay backdrop (drawer/modal)
+ *  60  – Drawer / slide-over panels
+ *  70  – Toast notifications
+ *  80  – Modal dialogs (RunCreationModal)
+ */
+
+/* Nexus Component Utilities */
 .nexus-card {
-  @apply bg-white p-6 rounded-[var(--radius-card)] border border-[var(--color-nexus-border)];
-  box-shadow: var(--shadow-soft);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  @apply bg-[var(--color-nexus-surface)] border border-[var(--color-nexus-border)];
+  box-shadow: var(--shadow-surface);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 0;
 }
 
 .nexus-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1);
+  @apply border-[var(--color-nexus-primary)] shadow-[var(--shadow-glow)];
+  transform: translateY(-2px);
+}
+
+/* Typography Utilities */
+.text-label {
+  @apply text-[var(--color-nexus-text-secondary)] text-xs uppercase tracking-widest font-mono;
+}
+
+.text-value {
+  @apply text-[var(--color-nexus-text-primary)] font-mono font-medium;
+}
+
+.text-gradient-gold {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-[var(--color-nexus-primary)] to-[var(--color-nexus-accent)];
+}
+
+/* Animations */
+@keyframes aurora {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+
+  33% {
+    transform: translate(20px, -20px) scale(1.1);
+    opacity: 0.5;
+  }
+
+  66% {
+    transform: translate(-10px, 10px) scale(0.9);
+    opacity: 0.3;
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+}
+
+@keyframes pulse-slow {
+
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-aurora {
+  animation: aurora 10s infinite alternate ease-in-out;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 6s infinite ease-in-out;
+}
+
+.bg-grid-pattern {
+  background-size: 40px 40px;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+/* App shell and spacing system */
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.app-content {
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--app-gutter);
+  padding-bottom: calc(var(--spacing-xl) + var(--spacing-lg));
+}
+
+.app-content-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.nexus-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.nexus-grid {
+  display: grid;
+  gap: var(--grid-gap);
+}
+
+.nexus-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: var(--grid-gap);
+}
+
+.nexus-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: var(--grid-gap);
+}
+
+.nexus-two-up {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: var(--grid-gap);
+}
+
+.nexus-heading-1 {
+  font-size: 36px;
+  line-height: 1.1;
+}
+
+.nexus-heading-2 {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.nexus-heading-3 {
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.nexus-panel-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.nexus-touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.nexus-number {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.05;
+  font-size: clamp(1.2rem, 2.1vw, 2rem);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.nexus-inline-number {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+@container (max-width: 540px) {
+  .metric-value-responsive {
+    font-size: 1.5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .nexus-metrics-grid.metrics-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .nexus-metrics-grid.metrics-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .nexus-chart-grid.charts-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .nexus-two-up {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --sidebar-w: 180px;
+  }
+  .app-shell {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  }
+  .app-content {
+    padding: var(--spacing-lg);
+  }
+}
+
+@media (min-width: 1200px) {
+  :root {
+    --sidebar-w: 200px;
+    --mission-w: 320px;
+  }
+  .app-shell {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--mission-w);
+  }
+  .app-content {
+    padding-bottom: var(--spacing-lg);
+  }
+  .nexus-metrics-grid.metrics-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --sidebar-w: 220px;
+    --mission-w: 360px;
+    --app-gutter: var(--spacing-lg);
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --app-gutter: var(--spacing-sm);
+    --card-padding: var(--spacing-sm);
+    --grid-gap: 20px;
+  }
+  .app-content {
+    padding-bottom: 108px;
+  }
+  .nexus-heading-1 {
+    font-size: 30px;
+  }
 }

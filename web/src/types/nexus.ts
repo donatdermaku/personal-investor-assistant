@@ -7,6 +7,7 @@ export interface RunManifest {
     code_version?: string | null;
     coverage_summary?: CoverageSummaryDetailed | Record<string, CoverageSummary>;
     meta?: Record<string, unknown>;
+    new_run_created?: boolean;
 }
 
 export interface RunListItem {
@@ -77,6 +78,7 @@ export interface RiskMetrics {
     cvar_95: number | null;
     volatility: number | null;
     sharpe: number | null;
+    beta: number | null;
 }
 
 export interface AttributionSummary {
@@ -197,9 +199,13 @@ export interface DataContractsPayload {
 
 export interface DiagnosticSignal {
     key: string;
+    /** Alternative check identifier used by some components */
+    check?: string;
     category: "risk" | "performance" | "data" | "structure";
-    severity: "low" | "medium" | "high";
+    severity: "low" | "medium" | "high" | "critical";
     summary: string;
+    /** Human-readable diagnostic message */
+    message?: string;
     evidence: string[];
     metrics_used: string[];
     as_of: string | null;

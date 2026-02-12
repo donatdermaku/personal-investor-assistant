@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { NexusState } from "@/types/nexus";
 import { createRun, getHealth, getNexusState, getRuns, NexusMode } from "@/lib/api";
 import type { RunCreateResponse, RunListItem } from "@/types/nexus";
@@ -31,6 +31,12 @@ interface NexusContextValue {
     loadingProgress: number;
     state: NexusState | null;
     refresh: () => void;
+    contextPanelOpen: boolean;
+    toggleContextPanel: () => void;
+    closeContextPanel: () => void;
+    navOpen: boolean;
+    toggleNav: () => void;
+    closeNav: () => void;
 }
 
 const NexusContext = createContext<NexusContextValue | null>(null);
@@ -64,6 +70,8 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
     const [lastFetched, setLastFetched] = useState<string | null>(null);
     const [backendOk, setBackendOk] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [contextPanelOpen, setContextPanelOpen] = useState(false);
+    const [navOpen, setNavOpen] = useState(false);
 
     /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
@@ -148,6 +156,28 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
         };
     }, [mode, portfolioId, runId, refreshKey]);
 
+    /* --- Stable callback refs (useCallback) --- */
+    const openRunCreator = useCallback(() => setRunCreatorOpen(true), []);
+    const closeRunCreator = useCallback(() => setRunCreatorOpen(false), []);
+    const clearRunCreated = useCallback(() => setLastRunCreated(null), []);
+    const refresh = useCallback(() => setRefreshKey((prev) => prev + 1), []);
+    const toggleContextPanel = useCallback(() => setContextPanelOpen((prev) => !prev), []);
+    const closeContextPanel = useCallback(() => setContextPanelOpen(false), []);
+    const toggleNav = useCallback(() => setNavOpen((prev) => !prev), []);
+    const closeNav = useCallback(() => setNavOpen(false), []);
+
+    const handleCreateRun = useCallback(
+        async ({ runType, file }: { runType: "demo" | "uploaded"; file?: File | null }) => {
+            const result = await createRun({ runType, file, portfolioId });
+            setLastRunCreated(result);
+            setRunId(result.run_id);
+            setRunCreatorOpen(false);
+            setRefreshKey((prev) => prev + 1);
+            return result;
+        },
+        [portfolioId]
+    );
+
     const value = useMemo(
         () => ({
             mode,
@@ -160,18 +190,11 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
             setRunId,
             runs,
             runCreatorOpen,
-            openRunCreator: () => setRunCreatorOpen(true),
-            closeRunCreator: () => setRunCreatorOpen(false),
-            createRun: async ({ runType, file }: { runType: "demo" | "uploaded"; file?: File | null }) => {
-                const result = await createRun({ runType, file, portfolioId });
-                setLastRunCreated(result);
-                setRunId(result.run_id);
-                setRunCreatorOpen(false);
-                setRefreshKey((prev) => prev + 1);
-                return result;
-            },
+            openRunCreator,
+            closeRunCreator,
+            createRun: handleCreateRun,
             lastRunCreated,
-            clearRunCreated: () => setLastRunCreated(null),
+            clearRunCreated,
             status,
             lastFetched,
             backendOk,
@@ -179,7 +202,13 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
             loadingMessage,
             loadingProgress,
             state,
-            refresh: () => setRefreshKey((prev) => prev + 1),
+            refresh,
+            contextPanelOpen,
+            toggleContextPanel,
+            closeContextPanel,
+            navOpen,
+            toggleNav,
+            closeNav,
         }),
         [
             mode,
@@ -188,7 +217,11 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
             runId,
             runs,
             runCreatorOpen,
+            openRunCreator,
+            closeRunCreator,
+            handleCreateRun,
             lastRunCreated,
+            clearRunCreated,
             status,
             lastFetched,
             backendOk,
@@ -196,6 +229,13 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
             loadingMessage,
             loadingProgress,
             state,
+            refresh,
+            contextPanelOpen,
+            toggleContextPanel,
+            closeContextPanel,
+            navOpen,
+            toggleNav,
+            closeNav,
         ]
     );
 
