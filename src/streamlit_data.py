@@ -273,11 +273,23 @@ def get_prices(market_state: str, tickers: list[str] | None = None) -> tuple[pd.
 
 # Removed streamlit caching decorator
 def get_benchmark_prices(ticker: str) -> tuple[pd.DataFrame, CoverageMeta]:
-    prices, meta = get_prices("closed")
-    if not prices.empty and "ticker" in prices.columns and ticker in prices["ticker"].values:
-        bench = prices[prices["ticker"] == ticker].copy()
-        return bench, _coverage_from_df(bench, tickers=[ticker])
-    return pd.DataFrame(), _meta_empty("missing_benchmark", f"Benchmark data missing for {ticker}", total=1)
+    """Fetch benchmark prices directly from the market data store."""
+    store = MarketDataStore.default()
+    try:
+        data = store.get_prices(
+            ticker,
+            start=FIXED_EARLIEST_DATE,
+            end=datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"),
+        )
+        if data.empty:
+            return pd.DataFrame(), _meta_empty(
+                "missing_benchmark", f"Benchmark data missing for {ticker}", total=1,
+            )
+        return data, _coverage_from_df(data, tickers=[ticker])
+    except MarketDataError:
+        return pd.DataFrame(), _meta_empty(
+            "missing_benchmark", f"Benchmark data missing for {ticker}", total=1,
+        )
 
 
 # Removed streamlit caching decorator

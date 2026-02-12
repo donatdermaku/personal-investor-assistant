@@ -130,8 +130,8 @@ class DataManager:
 
     def save_portfolio_inputs(self, portfolio_id: int, trades: pd.DataFrame | None, snapshot: pd.DataFrame | None):
         """
-        Save inputs to DB (and file if hybrid). 
-        Accepts DataFrames with UI column names.
+        Save inputs to the appropriate backend based on STORAGE_MODE.
+        In hybrid mode, DB is the source of truth — no redundant file writes.
         """
         # Save Trades
         if trades is not None:
@@ -154,11 +154,9 @@ class DataManager:
                 records = t_df.to_dict(orient="records")
                 repo.replace_trades(portfolio_id, records)
             
-            if STORAGE_MODE in ("files", "hybrid"):
+            if STORAGE_MODE == "files":
                 path = ROOT / "data" / "user_uploads" / "transactions.csv"
                 path.parent.mkdir(parents=True, exist_ok=True)
-                # Save as CSV expected by legacy
-                # legacy expects 'quantity'
                 trades.to_csv(path, index=False)
 
         # Save Snapshot
@@ -170,13 +168,13 @@ class DataManager:
             if "cost_basis" not in s_df.columns:
                 s_df["cost_basis"] = 0.0
                 
-            s_df["as_of_date"] = datetime.utcnow() # Snapshots usually implied 'now'
+            s_df["as_of_date"] = datetime.utcnow()
             
             if STORAGE_MODE in ("db", "hybrid"):
                 records = s_df.to_dict(orient="records")
                 repo.replace_snapshot(portfolio_id, records)
                 
-            if STORAGE_MODE in ("files", "hybrid"):
+            if STORAGE_MODE == "files":
                 path = ROOT / "data" / "user_uploads" / "holdings.csv"
                 path.parent.mkdir(parents=True, exist_ok=True)
                 snapshot.to_csv(path, index=False)

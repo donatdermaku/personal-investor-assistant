@@ -19,6 +19,7 @@ from src.streamlit_data import (
 )
 from storage.datamanager import data_manager
 from storage import repo
+from storage.db import session_scope
 
 # Define standard export paths relative to ROOT/data
 EXPORTS_DIR_ENV = os.getenv("NEXUS_EXPORT_DIR", "data/exports")
@@ -55,8 +56,8 @@ def compute_app_state(
     
     # 3. Initialize Run (if saving)
     run_id = run_id or str(uuid.uuid4())
+    
     if save_run:
-        # We don't have hash yet, will update later
         repo.create_run(run_id, portfolio_id, None, None, run_type=run_type)
     
     # 4. Load User Data (Watchlist)

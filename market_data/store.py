@@ -3,16 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
+import logging
 import pandas as pd
 import numpy as np
-from pandas.tseries.offsets import BDay
 
 from market_data.contracts import MarketDataError, validate_price_frame, validate_price_series_frame
 from market_data.yahoo import fetch_prices, fetch_dividends_and_splits
 from market_data.persistent_cache import get_or_refresh_frame
 from src.utils_io import ROOT
+
+logger = logging.getLogger(__name__)
 
 # Fixed earliest date for max-history fetching - ensures cache always has full history
 FIXED_EARLIEST_DATE = "2010-01-01"
@@ -28,170 +30,100 @@ class MarketDataStore:
         base.mkdir(parents=True, exist_ok=True)
         return cls(cache_dir=base)
 
-    def _prices_path(self, ticker: str) -> Path:
-        return self.cache_dir / "prices" / f"{ticker}.parquet"
-
-    def _dividends_path(self, ticker: str) -> Path:
-        return self.cache_dir / "dividends" / f"{ticker}.parquet"
-
-    def _splits_path(self, ticker: str) -> Path:
-        return self.cache_dir / "splits" / f"{ticker}.parquet"
-
-    def _ensure_dirs(self) -> None:
-        (self.cache_dir / "prices").mkdir(parents=True, exist_ok=True)
-        (self.cache_dir / "dividends").mkdir(parents=True, exist_ok=True)
-        (self.cache_dir / "splits").mkdir(parents=True, exist_ok=True)
-
-    def _is_price_cache_fresh(
-        self, df: pd.DataFrame, required_start: str | None = None
-    ) -> bool:
-        """Check if cached price data is fresh and covers the required date range.
-        
-        Args:
-            df: Cached price DataFrame
-            required_start: Required start date (defaults to FIXED_EARLIEST_DATE)
-            
-        Returns:
-            True if cache covers from required_start to yesterday, False otherwise
-        """
-        if df.empty or "date" not in df.columns:
-            return False
-        
-        dates = pd.to_datetime(df["date"], errors="coerce")
-        first_date = dates.min()
-        last_date = dates.max()
-        
-        if pd.isna(first_date) or pd.isna(last_date):
-            return False
-        
-        # Check end date: must cover at least yesterday
-        target_end = (datetime.utcnow().date() - BDay(1)).date()
-        if last_date.date() < target_end:
-            return False
-        
-        # Check start date: must cover from required_start (or FIXED_EARLIEST_DATE)
-        target_start = pd.to_datetime(required_start or FIXED_EARLIEST_DATE).date()
-        if first_date.date() > target_start:
-            return False
-        
-        return True
+    # ── Cache TTL constants ─────────────────────────
+    PRICE_TTL = 21_600       # 6 hours
+    DIVIDEND_TTL = 604_800   # 7 days
+    SPLIT_TTL = 604_800      # 7 days
 
     def get_prices(self, ticker: str, start: str, end: str) -> pd.DataFrame:
-        import logging
-        logger = logging.getLogger(__name__)
+        """Fetch price data via the unified persistent cache (single layer).
+
+        Cache freshness is controlled entirely by ``PRICE_TTL`` inside
+        ``get_or_refresh_frame`` — no secondary date-range check.
+        """
         if ticker.upper() == "CASH":
             raise MarketDataError(
                 error_code="MARKET_DATA_SKIP",
                 message="CASH ticker is not eligible for market data.",
                 details={"ticker": ticker},
             )
-        self._ensure_dirs()
-        cache_path = self._prices_path(ticker)
-        cached = pd.DataFrame()
-        if cache_path.exists():
-            try:
-                cached = pd.read_parquet(cache_path)
-            except Exception as exc:
-                logger.warning("CACHE_READ_FAILED ticker=%s error=%s", ticker, exc)
-                cached = pd.DataFrame()
-        
-        # Use FIXED_EARLIEST_DATE for fetching to ensure full history coverage
-        # Pass the requested start to freshness check for validation
-        if cached.empty or not self._is_price_cache_fresh(cached, required_start=start):
-            logger.debug("CACHE_MISS ticker=%s fetching from Yahoo", ticker)
-            try:
-                cache_result = get_or_refresh_frame(
-                    source="yahoo",
-                    key=ticker,
-                    ttl_seconds=21600,
-                    fetch_fn=lambda: fetch_prices(ticker, FIXED_EARLIEST_DATE, end),
-                    asof_date=end,
-                    allow_refresh=True,
-                )
-                cached = cache_result.frame
-            except Exception as exc:
-                logger.error("CACHE_FETCH_FAILED ticker=%s error=%s", ticker, exc)
-                raise MarketDataError(
-                    error_code="MARKET_DATA_FETCH_FAILED",
-                    message=f"Failed to fetch market data for {ticker}.",
-                    details={"ticker": ticker, "error": str(exc)},
-                )
-            
-            # Validate immediately after fetching - before caching
-            if cached.empty:
-                raise MarketDataError(
-                    error_code="MARKET_DATA_FETCH_EMPTY",
-                    message=f"Yahoo Finance returned no data for {ticker}",
-                    details={"ticker": ticker, "start": FIXED_EARLIEST_DATE, "end": end},
-                    hint="Verify ticker symbol is valid and has trading history in the requested range.",
-                )
-            
-            if "date" not in cached.columns:
-                raise MarketDataError(
-                    error_code="MARKET_DATA_MALFORMED",
-                    message=f"Fetched data for {ticker} is missing date column",
-                    details={
-                        "ticker": ticker,
-                        "columns_received": list(cached.columns),
-                        "shape": cached.shape,
-                        "start": FIXED_EARLIEST_DATE,
-                        "end": end
-                    },
-                    hint="This may indicate a Yahoo Finance API change or network issue. Check logs for raw response.",
-                )
-            
-            # Validate before caching to prevent poisoned cache
-            if not cached.empty:
-                from market_data.rate_limiter import validate_price_cache
-                is_valid, reasons = validate_price_cache(
-                    cached, 
-                    required_start=start,
-                    required_end=end,
-                    min_rows=50,  # Proportional logic handles validation better now
-                )
-                if is_valid:
-                    cached.to_parquet(cache_path, index=False)
-                else:
-                    logger.warning(
-                        f"Cache validation failed for {ticker}, not caching: {reasons}"
+
+        # ── Single-layer fetch via persistent cache ──────────
+        try:
+            cache_result = get_or_refresh_frame(
+                source="yahoo",
+                key=ticker,
+                ttl_seconds=self.PRICE_TTL,
+                fetch_fn=lambda: fetch_prices(ticker, FIXED_EARLIEST_DATE, end),
+                asof_date=end,
+                allow_refresh=True,
+            )
+            cached = cache_result.frame
+            logger.debug(
+                "CACHE_HIT ticker=%s status=%s", ticker, cache_result.status,
+            )
+        except MarketDataError:
+            raise
+        except Exception as exc:
+            logger.error("CACHE_FETCH_FAILED ticker=%s error=%s", ticker, exc)
+            raise MarketDataError(
+                error_code="MARKET_DATA_FETCH_FAILED",
+                message=f"Failed to fetch market data for {ticker}.",
+                details={"ticker": ticker, "error": str(exc)},
+            )
+
+        # ── Post-fetch validation ────────────────────────────
+        if cached.empty:
+            raise MarketDataError(
+                error_code="MARKET_DATA_FETCH_EMPTY",
+                message=f"Yahoo Finance returned no data for {ticker}",
+                details={"ticker": ticker, "start": FIXED_EARLIEST_DATE, "end": end},
+                hint="Verify ticker symbol is valid and has trading history.",
+            )
+
+        if "date" not in cached.columns:
+            raise MarketDataError(
+                error_code="MARKET_DATA_MALFORMED",
+                message=f"Fetched data for {ticker} is missing date column",
+                details={
+                    "ticker": ticker,
+                    "columns_received": list(cached.columns),
+                    "shape": cached.shape,
+                },
+                hint="Yahoo Finance API may have changed. Check logs.",
+            )
+
+        # Validate data quality (but don't gate caching — TTL handles that)
+        from market_data.rate_limiter import validate_price_cache
+        is_valid, reasons = validate_price_cache(
+            cached, required_start=start, required_end=end, min_rows=50,
+        )
+        if not is_valid:
+            logger.warning("Price validation warnings for %s: %s", ticker, reasons)
+            # If critical (end not covered), clear and retry once
+            if any("END_NOT_COVERED" in r for r in reasons):
+                logger.warning("Stale cache for %s — clearing + retrying", ticker)
+                from market_data.persistent_cache import clear_stale_cache
+                clear_stale_cache(source="yahoo", key=ticker)
+                try:
+                    retry_result = get_or_refresh_frame(
+                        source="yahoo",
+                        key=ticker,
+                        ttl_seconds=self.PRICE_TTL,
+                        fetch_fn=lambda: fetch_prices(ticker, FIXED_EARLIEST_DATE, end),
+                        asof_date=end,
+                        allow_refresh=True,
                     )
-                    # If data doesn't cover required end dates, clear cache and retry
-                    end_not_covered = any("END_NOT_COVERED" in r for r in reasons)
-                    if end_not_covered:
-                        logger.warning(f"Stale cache detected for {ticker}, clearing and retrying once...")
-                        from market_data.persistent_cache import clear_stale_cache
-                        clear_stale_cache(source="yahoo", key=ticker)
-                        
-                        # Retry once with fresh fetch
-                        try:
-                            cached = fetch_prices(ticker, FIXED_EARLIEST_DATE, end)
-                            if not cached.empty:
-                                # Re-validate
-                                is_valid_retry, reasons_retry = validate_price_cache(
-                                    cached,
-                                    required_start=start,
-                                    required_end=end,
-                                    min_rows=50,
-                                )
-                                if is_valid_retry:
-                                    cached.to_parquet(cache_path, index=False)
-                                    logger.info(f"Successfully fetched fresh data for {ticker} after cache clear")
-                                else:
-                                    # Still invalid after retry
-                                    raise MarketDataError(
-                                        error_code="MARKET_DATA_STALE",
-                                        message=f"Market data for {ticker} is stale even after refresh.",
-                                        details={"ticker": ticker, "reasons": reasons_retry},
-                                        hint="Yahoo Finance may not have recent data for this ticker.",
-                                    )
-                        except Exception as retry_exc:
-                            # Retry failed
-                            raise MarketDataError(
-                                error_code="MARKET_DATA_STALE",
-                                message=f"Market data for {ticker} is stale and refresh failed.",
-                                details={"ticker": ticker, "error": str(retry_exc)},
-                                hint="Clear cache manually or check Yahoo Finance availability.",
-                            )
+                    cached = retry_result.frame
+                except Exception as retry_exc:
+                    raise MarketDataError(
+                        error_code="MARKET_DATA_STALE",
+                        message=f"Market data for {ticker} stale after refresh.",
+                        details={"ticker": ticker, "error": str(retry_exc)},
+                        hint="Clear cache manually or check Yahoo Finance.",
+                    )
+
+        # ── Date filtering ───────────────────────────────────
         if not cached.empty and "date" in cached.columns:
             cached = cached.copy()
             cached["date"] = pd.to_datetime(cached["date"], errors="coerce").dt.date
@@ -201,6 +133,8 @@ class MarketDataStore:
             start_date = pd.to_datetime(start, errors="coerce")
             end_date = pd.to_datetime(end, errors="coerce")
             cached = cached[(date_index >= start_date) & (date_index <= end_date)]
+
+        # ── Merge dividends/splits and normalize ─────────────
         dividends = self.get_dividends(ticker, start, end)
         splits = self.get_splits(ticker, start, end)
         normalized = normalize_price_frame(cached, dividends, splits, source="yahoo")
@@ -268,34 +202,36 @@ class MarketDataStore:
         return prices_df
 
     def get_dividends(self, ticker: str, start: str, end: str) -> pd.DataFrame:
-        self._ensure_dirs()
-        path = self._dividends_path(ticker)
-        cached = pd.DataFrame()
-        if path.exists():
-            try:
-                cached = pd.read_parquet(path)
-            except Exception:
-                cached = pd.DataFrame()
-        if cached.empty:
-            dividends, _ = fetch_dividends_and_splits(ticker, start, end)
-            dividends.to_parquet(path, index=False)
-            cached = dividends
-        return cached
+        """Fetch dividends via persistent cache with 7-day TTL."""
+        try:
+            result = get_or_refresh_frame(
+                source="yahoo_dividends",
+                key=ticker,
+                ttl_seconds=self.DIVIDEND_TTL,
+                fetch_fn=lambda: fetch_dividends_and_splits(ticker, start, end)[0],
+                asof_date=end,
+                allow_refresh=True,
+            )
+            return result.frame
+        except Exception as exc:
+            logger.warning("Dividend fetch failed for %s: %s", ticker, exc)
+            return pd.DataFrame()
 
     def get_splits(self, ticker: str, start: str, end: str) -> pd.DataFrame:
-        self._ensure_dirs()
-        path = self._splits_path(ticker)
-        cached = pd.DataFrame()
-        if path.exists():
-            try:
-                cached = pd.read_parquet(path)
-            except Exception:
-                cached = pd.DataFrame()
-        if cached.empty:
-            _, splits = fetch_dividends_and_splits(ticker, start, end)
-            splits.to_parquet(path, index=False)
-            cached = splits
-        return cached
+        """Fetch splits via persistent cache with 7-day TTL."""
+        try:
+            result = get_or_refresh_frame(
+                source="yahoo_splits",
+                key=ticker,
+                ttl_seconds=self.SPLIT_TTL,
+                fetch_fn=lambda: fetch_dividends_and_splits(ticker, start, end)[1],
+                asof_date=end,
+                allow_refresh=True,
+            )
+            return result.frame
+        except Exception as exc:
+            logger.warning("Split fetch failed for %s: %s", ticker, exc)
+            return pd.DataFrame()
 
 
 def normalize_price_frame(
