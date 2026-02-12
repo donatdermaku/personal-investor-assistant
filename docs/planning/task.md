@@ -14,23 +14,23 @@
 - [x] Setup GitHub Actions CI (pytest + npm build on push)
 
 ## Phase 1: Value Engine ("Killer Insights")
-- [ ] **Metrics Registry Enforcement**: Create `src/analytics/metrics_registry.py` to gate API exposure
-  - [ ] Define registry structure
-  - [ ] Wire to `DEFINITIONS_REGISTRY`
-  - [ ] Add enforcement decorator/check
-- [ ] **HHI Concentration Index**: Implement `src/analytics/concentration.py`
-  - [ ] Pure function `compute_hhi(weights)`
-  - [ ] Add thresholds (Diversified <0.15, etc.)
-  - [ ] Register metric
-- [ ] **VaR Budget Comparison**: Update `src/analytics/risk.py`
-  - [ ] Implement `compare_var_budget(portfolio, benchmark, alpha)`
-  - [ ] Add to API/Report
-- [ ] **Factor Tilt Computation**: Implement `src/analytics/factors.py`
-  - [ ] `compute_factor_tilts()` based on definitions
-- [ ] **PDF Report Endpoint**:
-  - [ ] Wire `weasyprint` to `generate_html_report`
-  - [ ] Create `GET /api/reports/{id}/pdf` endpoint
-- [ ] **Verification**: Add golden tests for new metrics
+- [x] **Metrics Registry Enforcement**: Create `src/analytics/metrics_registry.py` to gate API exposure
+  - [x] Define registry structure
+  - [x] Wire to `DEFINITIONS_REGISTRY`
+  - [x] Add enforcement decorator/check
+- [x] **HHI Concentration Index**: Implement `src/analytics/concentration.py`
+  - [x] Pure function `compute_hhi(weights)`
+  - [x] Add thresholds (Diversified <0.15, etc.)
+  - [x] Register metric
+- [x] **VaR Budget Comparison**: Update `src/analytics/risk.py`
+  - [x] Implement `compare_var_budget(portfolio, benchmark, alpha)`
+  - [x] Add to API/Report
+- [x] **Factor Tilt Computation**: Implement `src/analytics/factors.py`
+  - [x] `compute_factor_tilts()` based on definitions
+- [x] **PDF Report Endpoint**:
+  - [x] Wire `weasyprint` to `generate_html_report`
+  - [x] Create `GET /api/reports/{id}/pdf` endpoint
+- [x] **Verification**: Add golden tests for new metrics
 
 ## Phase 2: Auth & Multi-Tenancy (Supabase-First)
 - [ ] **Backend Auth (FastAPI)**:

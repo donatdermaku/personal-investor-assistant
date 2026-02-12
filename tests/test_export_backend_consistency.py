@@ -28,8 +28,10 @@ from src.streamlit_export import (
     export_risk_contribution_csv,
     export_risk_contribution_json,
     export_rolling_metrics_csv,
+    export_factor_tilts_json,
     export_summary_json,
 )
+from src.analytics.factors import compute_factor_tilts
 from tests.utils import assert_close
 
 
@@ -104,6 +106,16 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
     risk_output = compute_risk_contributions(returns, weights)
     export_risk_contribution_csv(export_dir / "risk_contribution.csv", risk_output.contributions)
     export_risk_contribution_json(export_dir / "risk_contribution.json", risk_output.summary, risk_output.contributions)
+    factor_tilts = compute_factor_tilts(
+        pd.DataFrame(
+            [
+                {"ticker": "AAA", "value_pct": 75.0, "quality_pct": 55.0, "momentum_pct": 60.0, "composite_pct": 65.0},
+                {"ticker": "BBB", "value_pct": 45.0, "quality_pct": 35.0, "momentum_pct": 40.0, "composite_pct": 42.0},
+            ]
+        ),
+        weights,
+    )
+    export_factor_tilts_json(export_dir / "factor_tilts.json", factor_tilts.summary, factor_tilts.details)
 
     perf = pd.read_csv(export_dir / "performance.csv")
     rolling = compute_rolling_metrics(perf)
@@ -246,6 +258,7 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
         correlation_loaded = api_server._load_correlation_matrix(run_id)
         bench_summary = api_server._load_benchmark_comparison(run_id)
         bench_timeseries = api_server._load_benchmark_timeseries(run_id)
+        factor_tilts_loaded = api_server._load_factor_tilts(run_id)
     finally:
         api_server.EXPORTS_DIR = original_exports
 
@@ -291,3 +304,4 @@ def test_backend_export_consistency(tmp_path: Path) -> None:
     assert correlation_loaded.get("status") == "sufficient"
     assert_close(bench_summary.get("tracking_error"), comparison.summary.get("tracking_error"), tol=1e-6)
     assert len(bench_timeseries) == len(comparison.timeseries)
+    assert factor_tilts_loaded.get("summary", {}).get("status") == "ok"

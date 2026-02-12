@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from src.analytics.risk import compare_var_budget
 
 @dataclass
 class BenchmarkComparisonOutput:
@@ -76,6 +77,7 @@ def compute_benchmark_comparison(
         "benchmark_volatility": vol_b,
         "correlation": corr,
         "tracking_error_implied": implied_te,
+        "var_budget": compare_var_budget(aligned["portfolio"], aligned["benchmark"], alpha=0.05),
         "status": "ok",
         "reasons": [],
     }

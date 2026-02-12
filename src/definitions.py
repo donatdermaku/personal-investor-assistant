@@ -53,6 +53,12 @@ DEFINITIONS_REGISTRY = {
         "assumptions": "Uses empirical distribution of daily returns.",
         "warnings": "NaN when returns are missing.",
     },
+    "hhi_concentration": {
+        "title": "HHI Concentration Index",
+        "definition_md": "HHI = sum(w_i^2), where w_i are normalized portfolio weights.",
+        "assumptions": "Uses latest positive portfolio weights and normalizes to 1.",
+        "warnings": "Unavailable when weights are missing or non-positive.",
+    },
     "factor_tilts": {
         "title": "Factor Tilts",
         "definition_md": "Tilt = mean(portfolio factor pct) - mean(universe factor pct).",
@@ -100,6 +106,12 @@ DEFINITIONS_REGISTRY = {
         "definition_md": "Correlation of portfolio and benchmark daily returns.",
         "assumptions": "Uses overlapping daily returns.",
         "warnings": "Unavailable with insufficient data.",
+    },
+    "var_budget_comparison": {
+        "title": "VaR Budget Comparison",
+        "definition_md": "Compares portfolio absolute VaR to benchmark absolute VaR at the same alpha.",
+        "assumptions": "Uses overlapping daily returns for portfolio and benchmark.",
+        "warnings": "Unavailable when benchmark VaR is zero or overlap is insufficient.",
     },
     "correlation_matrix": {
         "title": "Correlation Matrix",

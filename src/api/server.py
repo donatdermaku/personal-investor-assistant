@@ -28,9 +28,14 @@ from storage.db import session_scope
 from storage.models import Portfolio
 from src.utils_io import ROOT
 from src.utils_memory import log_rss
-from src.definitions import DEFINITIONS_REGISTRY
+from src.analytics.metrics_registry import (
+    assert_metric_artifact_aliases_registered,
+    assert_run_metric_payload_keys_registered,
+    get_exposed_definitions,
+)
 from src.pipeline import compute_app_state, save_artifacts
 from src.portfolio import validate_ledger
+from src.streamlit_export import html_to_pdf_bytes
 from market_data.store import MarketDataStore
 from market_data.yahoo import fetch_prices
 from market_data.fred import get_cached_series
@@ -401,6 +406,39 @@ def _load_benchmark_timeseries(run_id: str) -> list[dict]:
     if use_supabase():
         return _load_supabase_csv(run_id, "benchmark_timeseries.csv")
     return []
+
+
+def _load_concentration_summary(run_id: str) -> dict:
+    path = EXPORTS_DIR / run_id / "concentration_summary.json"
+    if path.exists():
+        return _load_json(path)
+    if use_supabase():
+        return _load_supabase_json(run_id, "concentration_summary.json")
+    return {}
+
+
+def _load_factor_tilts(run_id: str) -> dict:
+    path = EXPORTS_DIR / run_id / "factor_tilts.json"
+    if path.exists():
+        return _load_json(path)
+    if use_supabase():
+        return _load_supabase_json(run_id, "factor_tilts.json")
+    return {}
+
+
+def _load_report_html(run_id: str) -> str:
+    report_path = EXPORTS_DIR / run_id / "report.html"
+    if report_path.exists():
+        return report_path.read_text(encoding="utf-8")
+    if use_supabase():
+        try:
+            data, _ = repo.get_artifact_bytes(run_id, "report.html")
+            return data.decode("utf-8")
+        except FileNotFoundError:
+            pass
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to load report HTML: {exc}")
+    raise HTTPException(status_code=404, detail="Report not found. Run compute to generate report.html.")
 
 
 def _load_diagnostics(run_id: str) -> dict:
@@ -1065,6 +1103,8 @@ def get_run(run_id: str):
     except HTTPException:
         benchmark_comparison = {}
     benchmark_timeseries = _load_benchmark_timeseries(run_id)
+    concentration_summary = _load_concentration_summary(run_id)
+    factor_tilts = _load_factor_tilts(run_id)
     diagnostics_payload = _load_diagnostics(run_id)
     correlation_matrix = _load_correlation_matrix(run_id)
     coverage_summary = _load_coverage_summary(run_id)
@@ -1077,16 +1117,7 @@ def get_run(run_id: str):
         for row in performance
         if row.get("date") is not None and row.get("value") is not None
     ]
-    return {
-        "manifest": manifest,
-        "summary": summary,
-        "coverage_summary": coverage_summary,
-        "risk_free_series": risk_free_series,
-        "corporate_actions": corporate_actions,
-        "data_contracts": data_contracts,
-        "equity_curve": equity_curve,
-        "performance": performance,
-        "monthly_returns": monthly_returns,
+    metric_payload = {
         "risk": risk,
         "attribution_summary": attribution_summary,
         "attribution_timeseries": attribution_timeseries,
@@ -1109,13 +1140,50 @@ def get_run(run_id: str):
         },
         "benchmark_comparison": benchmark_comparison,
         "benchmark_timeseries": benchmark_timeseries,
+        "concentration": concentration_summary,
+        "factor_tilts": factor_tilts,
         "diagnostics": diagnostics_payload.get("diagnostics", []),
         "correlation_matrix": correlation_matrix,
+    }
+    assert_run_metric_payload_keys_registered(metric_payload.keys())
+
+    return {
+        "manifest": manifest,
+        "summary": summary,
+        "coverage_summary": coverage_summary,
+        "risk_free_series": risk_free_series,
+        "corporate_actions": corporate_actions,
+        "data_contracts": data_contracts,
+        "equity_curve": equity_curve,
+        "performance": performance,
+        "monthly_returns": monthly_returns,
+        **metric_payload,
     }
 
 @app.get("/run/{run_id}")
 def run_alias(run_id: str):
     return get_run(run_id)
+
+
+@app.get("/api/reports/{run_id}/pdf")
+def get_report_pdf(run_id: str):
+    _validate_run_id(run_id)
+    html = _load_report_html(run_id)
+    try:
+        pdf_bytes = html_to_pdf_bytes(html, base_url=str((EXPORTS_DIR / run_id).resolve()))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    filename = f"report_{run_id}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+@app.get("/api/v1/reports/{run_id}/pdf")
+def get_report_pdf_alias_v1(run_id: str):
+    return get_report_pdf(run_id)
 
 @app.get("/api/v1/portfolio/{portfolio_id}")
 def get_portfolio(portfolio_id: str):
@@ -1135,8 +1203,9 @@ def get_definitions():
     cached = _ttl_cache.get("definitions_registry", DEFINITIONS_CACHE_TTL_SECONDS)
     if cached is not None:
         return cached
-    _ttl_cache.set("definitions_registry", DEFINITIONS_REGISTRY)
-    return DEFINITIONS_REGISTRY
+    payload = get_exposed_definitions()
+    _ttl_cache.set("definitions_registry", payload)
+    return payload
 
 @app.get("/definitions")
 def definitions_alias():
@@ -1236,9 +1305,29 @@ def export_artifact(run_id: str, artifact: str):
         "rolling-metrics": "rolling_metrics.csv",
         "benchmark-comparison": "benchmark_comparison.json",
         "benchmark-timeseries": "benchmark_timeseries.csv",
+        "concentration-summary": "concentration_summary.json",
+        "factor-tilts": "factor_tilts.json",
         "diagnostics": "diagnostics.json",
         "correlation-matrix": "correlation_matrix.json",
     }
+    assert_metric_artifact_aliases_registered(
+        {
+            "attribution-summary",
+            "attribution-timeseries",
+            "risk-contribution",
+            "risk-contribution-json",
+            "macro-regimes",
+            "macro-regime-summary",
+            "macro-context",
+            "rolling-metrics",
+            "benchmark-comparison",
+            "benchmark-timeseries",
+            "concentration-summary",
+            "factor-tilts",
+            "diagnostics",
+            "correlation-matrix",
+        }
+    )
     filename = allowed.get(artifact)
     if not filename:
         raise HTTPException(status_code=404, detail="Unknown artifact")

@@ -1,21 +1,26 @@
 # Agent Handoff Context
 
 > **Date:** 2026-02-12
-> **Status:** Phase 0 Cleanup completed on branch `phase0-foundation-cleanup`. Ready for Phase 1 Value Engine.
+> **Status:** Phase 0 completed and Phase 1 Value Engine completed on branch `phase1-value-engine`.
 
 ## Current State
-We completed the immediate Phase 0 cleanup tasks after the code audit and revised implementation plan:
+We completed Phase 0 cleanup and the first half of Phase 1:
 - Fixed duplicate `options` block in `cloudbuild.yaml`.
 - Added `.gitignore` rules for loose root CSV patterns.
 - Simplified `storage/datamanager.py` from `db/files/hybrid` to `local/supabase` with strict mode separation.
 - Added GitHub Actions CI workflow for backend (`pytest`) and frontend (`lint + build`) on push/PR.
+- Added `src/analytics/metrics_registry.py` and gated `/api/v1/definitions` to registered metrics only.
+- Added HHI concentration analytics in `src/analytics/concentration.py`, including thresholds and API/export wiring (`concentration_summary.json`).
+- Added VaR budget comparison in `src/analytics/risk.py` and wired it into benchmark comparison summary payloads returned by API/report artifacts.
+- Added Factor Tilt analytics in `src/analytics/factors.py` and wired `factor_tilts.json` into exports and API payload (`get_run` + export route).
+- Added PDF report rendering with WeasyPrint and endpoint `GET /api/reports/{run_id}/pdf` (plus `/api/v1/reports/{run_id}/pdf` alias).
+- Added golden verification coverage for new value-engine outputs (HHI concentration, factor tilts, VaR budget comparison) in `tests/test_golden_value_engine.py`.
 
 ## Immediate Next Actions
-The next agent should continue with **Track B (Value Engine)**:
-1. Implement `metrics_registry.py` to enforce "No Silent Math".
-2. Implement HHI and/or Factor Tilt metrics in `src/analytics/`.
-3. Add VaR budget comparison and wire into API/report outputs.
-4. Add golden tests for new metrics.
+The next agent should start **Phase 2 (Auth & Multi-Tenancy)**:
+1. Add backend JWT auth dependency (`get_current_user`) in FastAPI.
+2. Remove hardcoded user context in Supabase repo and pass `user_id` end-to-end.
+3. Apply/verify RLS policies and finish frontend auth wiring.
 
 ## Key Architectural Decisions
 - **Auth:** We will use Supabase Auth (JWT) + RLS. No custom auth system.
