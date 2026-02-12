@@ -1,0 +1,20 @@
+{
+  "hhi_concentration": {
+    "hhi": 0.52,
+    "classification": "concentrated",
+    "effective_positions": 1.923076923076923,
+    "top_weight": 0.6
+  },
+  "factor_tilts": {
+    "value": 20.66666666666667,
+    "quality": 13.0,
+    "momentum": 4.666666666666664,
+    "composite": 14.333333333333329
+  },
+  "var_budget": {
+    "portfolio_var": -0.018000000000000002,
+    "benchmark_var": -0.023,
+    "utilization_ratio": 0.782608695652174,
+    "within_budget": true
+  }
+}

@@ -12,6 +12,63 @@ class RiskContributionOutput:
     summary: dict
 
 
+def compare_var_budget(
+    portfolio_returns: pd.Series,
+    benchmark_returns: pd.Series,
+    alpha: float = 0.05,
+) -> dict:
+    """
+    Compare portfolio tail loss against benchmark VaR budget.
+
+    Returns absolute-loss VaR values and whether the portfolio stays within
+    benchmark risk budget.
+    """
+    if portfolio_returns.empty or benchmark_returns.empty:
+        return {"status": "unavailable", "reason": "MISSING_RETURNS"}
+
+    aligned = pd.concat(
+        [
+            pd.to_numeric(portfolio_returns, errors="coerce").rename("portfolio"),
+            pd.to_numeric(benchmark_returns, errors="coerce").rename("benchmark"),
+        ],
+        axis=1,
+        join="inner",
+    ).replace([np.inf, -np.inf], np.nan).dropna()
+
+    if aligned.empty:
+        return {"status": "unavailable", "reason": "NO_OVERLAP"}
+
+    alpha = float(alpha)
+    if alpha <= 0 or alpha >= 1:
+        raise ValueError("alpha must be in (0, 1)")
+
+    portfolio_var = float(np.quantile(aligned["portfolio"], alpha))
+    benchmark_var = float(np.quantile(aligned["benchmark"], alpha))
+    portfolio_var_abs = abs(portfolio_var)
+    benchmark_var_abs = abs(benchmark_var)
+
+    utilization = None
+    within_budget = None
+    delta_abs = None
+    if benchmark_var_abs > 0:
+        utilization = float(portfolio_var_abs / benchmark_var_abs)
+        within_budget = bool(portfolio_var_abs <= benchmark_var_abs)
+        delta_abs = float(portfolio_var_abs - benchmark_var_abs)
+
+    return {
+        "status": "ok",
+        "alpha": alpha,
+        "observations": int(aligned.shape[0]),
+        "portfolio_var": portfolio_var,
+        "benchmark_var": benchmark_var,
+        "portfolio_var_abs": portfolio_var_abs,
+        "benchmark_var_abs": benchmark_var_abs,
+        "utilization_ratio": utilization,
+        "within_budget": within_budget,
+        "delta_abs": delta_abs,
+    }
+
+
 def compute_risk_contributions(
     returns: pd.DataFrame,
     weights: pd.Series,

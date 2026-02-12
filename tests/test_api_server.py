@@ -2,6 +2,7 @@ import importlib
 import os
 
 from fastapi.testclient import TestClient
+from fastapi import HTTPException
 
 
 def _load_test_app(tmp_path, monkeypatch):
@@ -87,3 +88,30 @@ def test_rate_limit_enforced(tmp_path, monkeypatch) -> None:
     assert second.status_code == 404
     assert third.status_code == 429
     assert "retry" in str(third.json()).lower()
+
+
+def test_report_pdf_endpoint(tmp_path, monkeypatch) -> None:
+    app = _load_test_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    import src.api.server as server
+
+    monkeypatch.setattr(server, "_load_report_html", lambda run_id: "<html><body>ok</body></html>")
+    monkeypatch.setattr(server, "html_to_pdf_bytes", lambda html, base_url=None: b"%PDF-1.7\nfake")
+
+    response = client.get("/api/reports/test-run/pdf")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/pdf")
+    assert response.content.startswith(b"%PDF")
+
+
+def test_report_pdf_endpoint_not_found(tmp_path, monkeypatch) -> None:
+    app = _load_test_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    import src.api.server as server
+
+    def _raise_not_found(run_id: str):
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    monkeypatch.setattr(server, "_load_report_html", _raise_not_found)
+    response = client.get("/api/reports/test-run/pdf")
+    assert response.status_code == 404

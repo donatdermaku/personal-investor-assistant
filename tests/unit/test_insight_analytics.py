@@ -95,6 +95,8 @@ def test_benchmark_comparison_outputs() -> None:
     benchmark_prices = _prices_growth("2024-01-31", 6, "SPY", 100.0, 0.005)
     comparison = compute_benchmark_comparison(result.daily_returns, result.daily_values, benchmark_prices)
     assert comparison.summary
+    assert "var_budget" in comparison.summary
+    assert comparison.summary["var_budget"].get("status") == "ok"
     assert comparison.timeseries is not None
 
 

@@ -207,6 +207,8 @@ def save_artifacts(app_state: AppState):
         export_macro_context_json,
         export_rolling_metrics_csv,
         export_benchmark_comparison_json,
+        export_concentration_summary_json,
+        export_factor_tilts_json,
         export_benchmark_timeseries_csv,
         export_risk_free_series_csv,
         export_corporate_actions_csv,
@@ -215,6 +217,9 @@ def save_artifacts(app_state: AppState):
         export_correlation_matrix_json,
     )
     from src.analytics.attribution import compute_attribution
+    from src.analytics.concentration import build_hhi_summary
+    from src.analytics.factors import compute_factor_tilts
+    from src.analytics.metrics_registry import assert_metrics_registered
     from src.analytics.risk import compute_risk_contributions_from_cov
     from src.analytics.rolling import compute_rolling_metrics
     from src.analytics.correlation import compute_correlation_matrix_from_cov
@@ -345,6 +350,12 @@ def save_artifacts(app_state: AppState):
 
     weights = weights.reindex(tickers).fillna(0.0) if tickers else weights
 
+    assert_metrics_registered(["factor_tilts"])
+    factor_output = compute_factor_tilts(app_state.scores, weights)
+    factor_tilts_path = base_path / "factor_tilts.json"
+    export_factor_tilts_json(factor_tilts_path, factor_output.summary, factor_output.details)
+    repo.add_artifact(run_id, "factor_tilts_json", str(factor_tilts_path))
+
     cov = None
     tail_returns = None
     n_obs = 0
@@ -393,6 +404,12 @@ def save_artifacts(app_state: AppState):
     correlation_path = base_path / "correlation_matrix.json"
     export_correlation_matrix_json(correlation_path, correlation_payload)
     repo.add_artifact(run_id, "correlation_matrix_json", str(correlation_path))
+
+    assert_metrics_registered(["hhi_concentration"])
+    concentration_summary = build_hhi_summary(weights)
+    concentration_path = base_path / "concentration_summary.json"
+    export_concentration_summary_json(concentration_path, concentration_summary)
+    repo.add_artifact(run_id, "concentration_summary_json", str(concentration_path))
 
     try:
         from src.utils_memory import log_rss

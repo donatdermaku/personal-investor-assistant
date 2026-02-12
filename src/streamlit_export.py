@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import json
+from typing import Optional
 
 import numpy as np
 from typing import Iterable
@@ -168,6 +169,20 @@ def export_rolling_metrics_csv(path: Path, rolling: pd.DataFrame) -> None:
 def export_benchmark_comparison_json(path: Path, summary: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(summary, indent=2, default=_json_default), encoding="utf-8")
+
+
+def export_concentration_summary_json(path: Path, summary: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(summary, indent=2, default=_json_default), encoding="utf-8")
+
+
+def export_factor_tilts_json(path: Path, summary: dict, details: pd.DataFrame) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "summary": summary,
+        "details": details.to_dict(orient="records") if not details.empty else [],
+    }
+    path.write_text(json.dumps(payload, indent=2, default=_json_default), encoding="utf-8")
 
 
 def _json_default(value):
@@ -338,3 +353,15 @@ def save_html_report(path: Path, app_state) -> None:
     html = generate_html_report(app_state)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(html, encoding="utf-8")
+
+
+def html_to_pdf_bytes(html: str, base_url: Optional[str] = None) -> bytes:
+    """Render HTML to PDF bytes using WeasyPrint."""
+    try:
+        from weasyprint import HTML
+    except Exception as exc:
+        raise RuntimeError("PDF rendering unavailable (WeasyPrint import failed).") from exc
+    try:
+        return HTML(string=html, base_url=base_url).write_pdf()
+    except Exception as exc:
+        raise RuntimeError(f"PDF rendering failed: {exc}") from exc

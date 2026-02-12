@@ -19,6 +19,8 @@ KPI_DEPENDENCIES: dict[str, list[str]] = {
     "tracking_error": ["prices", "benchmark"],
     "benchmark_correlation": ["prices", "benchmark"],
     "benchmark_volatility": ["prices", "benchmark"],
+    "var_budget_comparison": ["prices", "benchmark"],
+    "factor_tilts": ["prices"],
     "correlation_matrix": ["prices"],
 }
 
