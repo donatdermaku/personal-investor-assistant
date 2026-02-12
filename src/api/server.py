@@ -28,7 +28,11 @@ from storage.db import session_scope
 from storage.models import Portfolio
 from src.utils_io import ROOT
 from src.utils_memory import log_rss
-from src.analytics.metrics_registry import get_exposed_definitions
+from src.analytics.metrics_registry import (
+    assert_metric_artifact_aliases_registered,
+    assert_run_metric_payload_keys_registered,
+    get_exposed_definitions,
+)
 from src.pipeline import compute_app_state, save_artifacts
 from src.portfolio import validate_ledger
 from src.streamlit_export import html_to_pdf_bytes
@@ -1113,16 +1117,7 @@ def get_run(run_id: str):
         for row in performance
         if row.get("date") is not None and row.get("value") is not None
     ]
-    return {
-        "manifest": manifest,
-        "summary": summary,
-        "coverage_summary": coverage_summary,
-        "risk_free_series": risk_free_series,
-        "corporate_actions": corporate_actions,
-        "data_contracts": data_contracts,
-        "equity_curve": equity_curve,
-        "performance": performance,
-        "monthly_returns": monthly_returns,
+    metric_payload = {
         "risk": risk,
         "attribution_summary": attribution_summary,
         "attribution_timeseries": attribution_timeseries,
@@ -1149,6 +1144,20 @@ def get_run(run_id: str):
         "factor_tilts": factor_tilts,
         "diagnostics": diagnostics_payload.get("diagnostics", []),
         "correlation_matrix": correlation_matrix,
+    }
+    assert_run_metric_payload_keys_registered(metric_payload.keys())
+
+    return {
+        "manifest": manifest,
+        "summary": summary,
+        "coverage_summary": coverage_summary,
+        "risk_free_series": risk_free_series,
+        "corporate_actions": corporate_actions,
+        "data_contracts": data_contracts,
+        "equity_curve": equity_curve,
+        "performance": performance,
+        "monthly_returns": monthly_returns,
+        **metric_payload,
     }
 
 @app.get("/run/{run_id}")
@@ -1301,6 +1310,24 @@ def export_artifact(run_id: str, artifact: str):
         "diagnostics": "diagnostics.json",
         "correlation-matrix": "correlation_matrix.json",
     }
+    assert_metric_artifact_aliases_registered(
+        {
+            "attribution-summary",
+            "attribution-timeseries",
+            "risk-contribution",
+            "risk-contribution-json",
+            "macro-regimes",
+            "macro-regime-summary",
+            "macro-context",
+            "rolling-metrics",
+            "benchmark-comparison",
+            "benchmark-timeseries",
+            "concentration-summary",
+            "factor-tilts",
+            "diagnostics",
+            "correlation-matrix",
+        }
+    )
     filename = allowed.get(artifact)
     if not filename:
         raise HTTPException(status_code=404, detail="Unknown artifact")

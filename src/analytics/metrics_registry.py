@@ -47,6 +47,43 @@ REGISTERED_METRICS = frozenset(
     }
 )
 
+REGISTERED_RUN_METRIC_PAYLOAD_KEYS = frozenset(
+    {
+        "attribution_summary",
+        "attribution_timeseries",
+        "benchmark_comparison",
+        "benchmark_timeseries",
+        "concentration",
+        "correlation_matrix",
+        "diagnostics",
+        "factor_tilts",
+        "macro",
+        "macro_regimes",
+        "risk",
+        "risk_contribution",
+        "rolling_metrics",
+    }
+)
+
+REGISTERED_METRIC_ARTIFACT_ALIASES = frozenset(
+    {
+        "attribution-summary",
+        "attribution-timeseries",
+        "benchmark-comparison",
+        "benchmark-timeseries",
+        "concentration-summary",
+        "correlation-matrix",
+        "diagnostics",
+        "factor-tilts",
+        "macro-context",
+        "macro-regime-summary",
+        "macro-regimes",
+        "risk-contribution",
+        "risk-contribution-json",
+        "rolling-metrics",
+    }
+)
+
 
 def assert_metrics_registered(metric_keys: Iterable[str]) -> None:
     """Raise ValueError if a metric is not explicitly registered."""
@@ -68,3 +105,19 @@ def get_exposed_definitions() -> dict[str, dict[str, Any]]:
 def filter_registered_metrics(metrics: Mapping[str, Any]) -> dict[str, Any]:
     """Drop keys that are not registered metrics."""
     return {key: value for key, value in metrics.items() if key in REGISTERED_METRICS}
+
+
+def assert_run_metric_payload_keys_registered(metric_keys: Iterable[str]) -> None:
+    """Raise ValueError when a run payload contains an unregistered metric section key."""
+    unknown = sorted({key for key in metric_keys if key not in REGISTERED_RUN_METRIC_PAYLOAD_KEYS})
+    if unknown:
+        joined = ", ".join(unknown)
+        raise ValueError(f"Unregistered run metric payload key(s): {joined}")
+
+
+def assert_metric_artifact_aliases_registered(aliases: Iterable[str]) -> None:
+    """Raise ValueError when metric artifact aliases are not explicitly registered."""
+    unknown = sorted({alias for alias in aliases if alias not in REGISTERED_METRIC_ARTIFACT_ALIASES})
+    if unknown:
+        joined = ", ".join(unknown)
+        raise ValueError(f"Unregistered metric artifact alias(es): {joined}")
