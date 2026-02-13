@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 import os
 import json
+import logging
 
 import pandas as pd
 
@@ -16,22 +17,48 @@ class SupabaseRepo:
     def __init__(self) -> None:
         self.bucket = os.getenv("SUPABASE_STORAGE_BUCKET", "nexus-artifacts")
 
+    def _service_context_user_id(self) -> str:
+        explicit = os.getenv("SUPABASE_SERVICE_CONTEXT_USER_ID")
+        if explicit:
+            return explicit
+        legacy = os.getenv("SUPABASE_DEFAULT_USER_ID")
+        if legacy:
+            logging.getLogger("nexus.storage_supabase").warning(
+                "SUPABASE_DEFAULT_USER_ID is deprecated; use SUPABASE_SERVICE_CONTEXT_USER_ID."
+            )
+            return legacy
+        raise RuntimeError(
+            "No service context user id configured. Set SUPABASE_SERVICE_CONTEXT_USER_ID for non-request jobs."
+        )
+
     # Portfolio
     def get_or_create_default_user(self):
         class _UserStub:
-            id = 1
+            id = ""
             username = "default"
 
-        return _UserStub()
+        user = _UserStub()
+        user.id = self._service_context_user_id()
+        return user
 
-    def get_user_id(self) -> int:
-        return 1
+    def get_user_id(self) -> str:
+        return self._service_context_user_id()
 
-    def get_default_portfolio_id(self, _user_id: int) -> int:
+    def get_default_portfolio_id(self, user_id: str | int) -> int:
+        resolved_user_id = str(user_id)
         with session_scope() as session:
-            portfolio = session.query(models.Portfolio).order_by(models.Portfolio.id.asc()).first()
+            portfolio = (
+                session.query(models.Portfolio)
+                .filter_by(user_id=resolved_user_id, name="Main Portfolio")
+                .order_by(models.Portfolio.id.asc())
+                .first()
+            )
             if not portfolio:
-                portfolio = models.Portfolio(name="Main Portfolio", base_currency="USD")
+                portfolio = models.Portfolio(
+                    user_id=resolved_user_id,
+                    name="Main Portfolio",
+                    base_currency="USD",
+                )
                 session.add(portfolio)
                 session.flush()
             return portfolio.id
@@ -138,24 +165,37 @@ class SupabaseRepo:
                 run.error_code = error_code
                 run.message = message
 
-    def get_latest_run(self):
+    def _runs_query(self, session, user_id: str | None = None):
+        query = session.query(models.Run)
+        if user_id is not None:
+            query = query.join(models.Portfolio, models.Run.portfolio_id == models.Portfolio.id).filter(
+                models.Portfolio.user_id == str(user_id)
+            )
+        return query
+
+    def get_latest_run(self, user_id: str | None = None):
         with session_scope() as session:
-            run = session.query(models.Run).filter_by(status="completed").order_by(models.Run.completed_at.desc()).first()
+            run = (
+                self._runs_query(session, user_id=user_id)
+                .filter(models.Run.status == "completed")
+                .order_by(models.Run.completed_at.desc())
+                .first()
+            )
             if run:
                 session.expunge(run)
             return run
 
-    def get_run_by_id(self, run_id: str):
+    def get_run_by_id(self, run_id: str, user_id: str | None = None):
         with session_scope() as session:
-            run = session.query(models.Run).filter_by(id=run_id).first()
+            run = self._runs_query(session, user_id=user_id).filter(models.Run.id == run_id).first()
             if run:
                 session.expunge(run)
             return run
 
-    def list_runs(self, limit: int = 50):
+    def list_runs(self, limit: int = 50, user_id: str | None = None):
         with session_scope() as session:
             runs = (
-                session.query(models.Run)
+                self._runs_query(session, user_id=user_id)
                 .order_by(models.Run.completed_at.desc().nullslast(), models.Run.created_at.desc())
                 .limit(limit)
                 .all()
@@ -190,13 +230,18 @@ class SupabaseRepo:
             )
             session.add(artifact)
 
-    def get_artifact_bytes(self, run_id: str, filename: str) -> tuple[bytes, str]:
+    def get_artifact_bytes(self, run_id: str, filename: str, user_id: str | None = None) -> tuple[bytes, str]:
         with session_scope() as session:
-            artifact = (
+            query = (
                 session.query(models.RunArtifact)
-                .filter_by(run_id=run_id, artifact_key=filename)
-                .first()
+                .join(models.Run, models.RunArtifact.run_id == models.Run.id)
+                .filter(models.RunArtifact.run_id == run_id, models.RunArtifact.artifact_key == filename)
             )
+            if user_id is not None:
+                query = query.join(models.Portfolio, models.Run.portfolio_id == models.Portfolio.id).filter(
+                    models.Portfolio.user_id == str(user_id)
+                )
+            artifact = query.first()
             if not artifact:
                 raise FileNotFoundError("Artifact not found")
             data = download_bytes(self.bucket, artifact.storage_path)

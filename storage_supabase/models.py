@@ -11,6 +11,7 @@ class Portfolio(Base):
     __tablename__ = "portfolios"
 
     id = Column(Integer, primary_key=True)
+    user_id = Column(String, index=True, nullable=False)
     name = Column(String, nullable=False, default="Main Portfolio")
     base_currency = Column(String, nullable=False, default="USD")
     created_at = Column(DateTime, default=datetime.utcnow)

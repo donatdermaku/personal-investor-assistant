@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Request
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, JSONResponse
 from typing import Optional, Any
@@ -7,6 +7,9 @@ import json
 import csv
 import math
 import io
+import base64
+import hashlib
+import hmac
 import gc
 from pathlib import Path
 import numpy as np
@@ -122,6 +125,77 @@ class TtlValueCache:
 
 
 _ttl_cache = TtlValueCache()
+
+
+def _decode_segment(segment: str) -> bytes:
+    padding = "=" * (-len(segment) % 4)
+    return base64.urlsafe_b64decode(segment + padding)
+
+
+def _decode_and_verify_hs256_jwt(token: str, secret: str) -> dict:
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise HTTPException(status_code=401, detail="Invalid bearer token format.")
+
+    header_b64, payload_b64, signature_b64 = parts
+    try:
+        header = json.loads(_decode_segment(header_b64).decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid bearer token header.")
+    if header.get("alg") != "HS256":
+        raise HTTPException(status_code=401, detail="Unsupported bearer token algorithm.")
+
+    signing_input = f"{header_b64}.{payload_b64}".encode("utf-8")
+    expected = hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    try:
+        provided = _decode_segment(signature_b64)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid bearer token signature encoding.")
+    if not hmac.compare_digest(expected, provided):
+        raise HTTPException(status_code=401, detail="Invalid bearer token signature.")
+
+    try:
+        payload = json.loads(_decode_segment(payload_b64).decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid bearer token payload.")
+
+    exp = payload.get("exp")
+    if exp is not None:
+        try:
+            if int(exp) <= int(time.time()):
+                raise HTTPException(status_code=401, detail="Bearer token expired.")
+        except ValueError:
+            raise HTTPException(status_code=401, detail="Invalid bearer token expiration.")
+
+    return payload
+
+
+def get_current_user(request: Request) -> dict:
+    """
+    Resolve authenticated user from Supabase JWT in Authorization header.
+    For non-Supabase mode, returns a local pseudo-user.
+    """
+    if not use_supabase():
+        return {"user_id": "local-dev", "auth_mode": "local"}
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing Authorization: Bearer token.")
+
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing bearer token.")
+
+    jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
+    if not jwt_secret:
+        raise HTTPException(status_code=503, detail="SUPABASE_JWT_SECRET not configured.")
+
+    payload = _decode_and_verify_hs256_jwt(token, jwt_secret)
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Bearer token missing subject.")
+
+    return {"user_id": str(user_id), "claims": payload, "auth_mode": "supabase"}
 
 def parse_allowed_origins(raw: str | None) -> list[str]:
     if raw is None or raw.strip() == "":
@@ -255,11 +329,11 @@ def _load_csv(path: Path) -> list[dict]:
             rows.append(cleaned)
     return rows
 
-def _load_manifest(run_id: str) -> dict:
+def _load_manifest(run_id: str, user_id: str | None = None) -> dict:
     manifest_path = ROOT / "data" / "cache" / "manifests" / f"{run_id}.json"
     if manifest_path.exists():
         return _load_json(manifest_path)
-    run = repo.get_run_by_id(run_id)
+    run = repo.get_run_by_id(run_id, user_id=user_id if use_supabase() else None)
     if run and run.manifest_json:
         try:
             return json.loads(run.manifest_json)
@@ -267,7 +341,7 @@ def _load_manifest(run_id: str) -> dict:
             pass
     raise HTTPException(status_code=404, detail="Manifest not found")
 
-def _load_summary(run_id: str) -> dict:
+def _load_summary(run_id: str, user_id: str | None = None) -> dict:
     summary_path = EXPORTS_DIR / run_id / f"summary_{run_id}.json"
     if summary_path.exists():
         return _load_json(summary_path)
@@ -275,164 +349,164 @@ def _load_summary(run_id: str) -> dict:
     if summary_path.exists():
         return _load_json(summary_path)
     if use_supabase():
-        return _load_supabase_json(run_id, "summary.json")
+        return _load_supabase_json(run_id, "summary.json", user_id=user_id)
     return _load_json(summary_path)
 
-def _load_performance(run_id: str) -> list[dict]:
+def _load_performance(run_id: str, user_id: str | None = None) -> list[dict]:
     perf_path = EXPORTS_DIR / run_id / "performance.csv"
     if perf_path.exists():
         return _load_csv(perf_path)
     if use_supabase():
-        return _load_supabase_csv(run_id, "performance.csv")
+        return _load_supabase_csv(run_id, "performance.csv", user_id=user_id)
     return _load_csv(perf_path)
 
-def _load_monthly_returns(run_id: str) -> list[dict]:
+def _load_monthly_returns(run_id: str, user_id: str | None = None) -> list[dict]:
     returns_path = EXPORTS_DIR / run_id / "monthly_returns.csv"
     if returns_path.exists():
         return _load_csv(returns_path)
     if use_supabase():
-        return _load_supabase_csv(run_id, "monthly_returns.csv")
+        return _load_supabase_csv(run_id, "monthly_returns.csv", user_id=user_id)
     return _load_csv(returns_path)
 
-def _load_attribution_summary(run_id: str) -> dict:
+def _load_attribution_summary(run_id: str, user_id: str | None = None) -> dict:
     path = EXPORTS_DIR / run_id / "attribution_summary.json"
     if path.exists():
         return _load_json(path)
     if use_supabase():
-        return _load_supabase_json(run_id, "attribution_summary.json")
+        return _load_supabase_json(run_id, "attribution_summary.json", user_id=user_id)
     raise HTTPException(status_code=404, detail="Attribution summary not found")
 
 
-def _load_attribution_timeseries(run_id: str) -> list[dict]:
+def _load_attribution_timeseries(run_id: str, user_id: str | None = None) -> list[dict]:
     path = EXPORTS_DIR / run_id / "attribution_timeseries.csv"
     if path.exists():
         return _load_csv(path)
     if use_supabase():
-        return _load_supabase_csv(run_id, "attribution_timeseries.csv")
+        return _load_supabase_csv(run_id, "attribution_timeseries.csv", user_id=user_id)
     return []
 
 
-def _load_risk_contribution(run_id: str) -> dict:
+def _load_risk_contribution(run_id: str, user_id: str | None = None) -> dict:
     path = EXPORTS_DIR / run_id / "risk_contribution.json"
     if path.exists():
         return _load_json(path)
     if use_supabase():
-        return _load_supabase_json(run_id, "risk_contribution.json")
+        return _load_supabase_json(run_id, "risk_contribution.json", user_id=user_id)
     raise HTTPException(status_code=404, detail="Risk contribution not found")
 
 
-def _load_macro_regimes(run_id: str) -> list[dict]:
+def _load_macro_regimes(run_id: str, user_id: str | None = None) -> list[dict]:
     path = EXPORTS_DIR / run_id / "macro_regime_flags.csv"
     if path.exists():
         return _load_csv(path)
     if use_supabase():
-        return _load_supabase_csv(run_id, "macro_regime_flags.csv")
+        return _load_supabase_csv(run_id, "macro_regime_flags.csv", user_id=user_id)
     return []
 
 
-def _load_macro_summary(run_id: str) -> dict:
+def _load_macro_summary(run_id: str, user_id: str | None = None) -> dict:
     path = EXPORTS_DIR / run_id / "macro_regime_summary.json"
     if path.exists():
         return _load_json(path)
     if use_supabase():
-        return _load_supabase_json(run_id, "macro_regime_summary.json")
+        return _load_supabase_json(run_id, "macro_regime_summary.json", user_id=user_id)
     return {}
 
 
-def _load_macro_context(run_id: str) -> dict:
+def _load_macro_context(run_id: str, user_id: str | None = None) -> dict:
     path = EXPORTS_DIR / run_id / "macro_context.json"
     if path.exists():
         return _load_json(path)
     if use_supabase():
-        return _load_supabase_json(run_id, "macro_context.json")
+        return _load_supabase_json(run_id, "macro_context.json", user_id=user_id)
     return {}
 
 
-def _load_coverage_summary(run_id: str) -> dict:
+def _load_coverage_summary(run_id: str, user_id: str | None = None) -> dict:
     path = EXPORTS_DIR / run_id / "coverage_summary.json"
     if path.exists():
         return _load_json(path)
     if use_supabase():
-        return _load_supabase_json(run_id, "coverage_summary.json")
+        return _load_supabase_json(run_id, "coverage_summary.json", user_id=user_id)
     return {}
 
-def _load_risk_free_series(run_id: str) -> list[dict]:
+def _load_risk_free_series(run_id: str, user_id: str | None = None) -> list[dict]:
     path = EXPORTS_DIR / run_id / "risk_free_series.csv"
     if path.exists():
         return _load_csv(path)
     if use_supabase():
-        return _load_supabase_csv(run_id, "risk_free_series.csv")
+        return _load_supabase_csv(run_id, "risk_free_series.csv", user_id=user_id)
     return []
 
-def _load_corporate_actions(run_id: str) -> list[dict]:
+def _load_corporate_actions(run_id: str, user_id: str | None = None) -> list[dict]:
     path = EXPORTS_DIR / run_id / "corporate_actions_events.csv"
     if path.exists():
         return _load_csv(path)
     if use_supabase():
-        return _load_supabase_csv(run_id, "corporate_actions_events.csv")
+        return _load_supabase_csv(run_id, "corporate_actions_events.csv", user_id=user_id)
     return []
 
-def _load_data_contracts(run_id: str) -> dict:
+def _load_data_contracts(run_id: str, user_id: str | None = None) -> dict:
     path = EXPORTS_DIR / run_id / "data_contracts.json"
     if path.exists():
         return _load_json(path)
     if use_supabase():
-        return _load_supabase_json(run_id, "data_contracts.json")
+        return _load_supabase_json(run_id, "data_contracts.json", user_id=user_id)
     return {}
 
 
-def _load_rolling_metrics(run_id: str) -> list[dict]:
+def _load_rolling_metrics(run_id: str, user_id: str | None = None) -> list[dict]:
     path = EXPORTS_DIR / run_id / "rolling_metrics.csv"
     if path.exists():
         return _load_csv(path)
     if use_supabase():
-        return _load_supabase_csv(run_id, "rolling_metrics.csv")
+        return _load_supabase_csv(run_id, "rolling_metrics.csv", user_id=user_id)
     return []
 
 
-def _load_benchmark_comparison(run_id: str) -> dict:
+def _load_benchmark_comparison(run_id: str, user_id: str | None = None) -> dict:
     path = EXPORTS_DIR / run_id / "benchmark_comparison.json"
     if path.exists():
         return _load_json(path)
     if use_supabase():
-        return _load_supabase_json(run_id, "benchmark_comparison.json")
+        return _load_supabase_json(run_id, "benchmark_comparison.json", user_id=user_id)
     raise HTTPException(status_code=404, detail="Benchmark comparison not found")
 
 
-def _load_benchmark_timeseries(run_id: str) -> list[dict]:
+def _load_benchmark_timeseries(run_id: str, user_id: str | None = None) -> list[dict]:
     path = EXPORTS_DIR / run_id / "benchmark_timeseries.csv"
     if path.exists():
         return _load_csv(path)
     if use_supabase():
-        return _load_supabase_csv(run_id, "benchmark_timeseries.csv")
+        return _load_supabase_csv(run_id, "benchmark_timeseries.csv", user_id=user_id)
     return []
 
 
-def _load_concentration_summary(run_id: str) -> dict:
+def _load_concentration_summary(run_id: str, user_id: str | None = None) -> dict:
     path = EXPORTS_DIR / run_id / "concentration_summary.json"
     if path.exists():
         return _load_json(path)
     if use_supabase():
-        return _load_supabase_json(run_id, "concentration_summary.json")
+        return _load_supabase_json(run_id, "concentration_summary.json", user_id=user_id)
     return {}
 
 
-def _load_factor_tilts(run_id: str) -> dict:
+def _load_factor_tilts(run_id: str, user_id: str | None = None) -> dict:
     path = EXPORTS_DIR / run_id / "factor_tilts.json"
     if path.exists():
         return _load_json(path)
     if use_supabase():
-        return _load_supabase_json(run_id, "factor_tilts.json")
+        return _load_supabase_json(run_id, "factor_tilts.json", user_id=user_id)
     return {}
 
 
-def _load_report_html(run_id: str) -> str:
+def _load_report_html(run_id: str, user_id: str | None = None) -> str:
     report_path = EXPORTS_DIR / run_id / "report.html"
     if report_path.exists():
         return report_path.read_text(encoding="utf-8")
     if use_supabase():
         try:
-            data, _ = repo.get_artifact_bytes(run_id, "report.html")
+            data, _ = repo.get_artifact_bytes(run_id, "report.html", user_id=user_id)
             return data.decode("utf-8")
         except FileNotFoundError:
             pass
@@ -441,26 +515,26 @@ def _load_report_html(run_id: str) -> str:
     raise HTTPException(status_code=404, detail="Report not found. Run compute to generate report.html.")
 
 
-def _load_diagnostics(run_id: str) -> dict:
+def _load_diagnostics(run_id: str, user_id: str | None = None) -> dict:
     path = EXPORTS_DIR / run_id / "diagnostics.json"
     if path.exists():
         return _load_json(path)
     if use_supabase():
-        return _load_supabase_json(run_id, "diagnostics.json")
+        return _load_supabase_json(run_id, "diagnostics.json", user_id=user_id)
     return {"diagnostics": [], "run_id": run_id}
 
 
-def _load_correlation_matrix(run_id: str) -> dict:
+def _load_correlation_matrix(run_id: str, user_id: str | None = None) -> dict:
     path = EXPORTS_DIR / run_id / "correlation_matrix.json"
     if path.exists():
         return _load_json(path)
     if use_supabase():
-        return _load_supabase_json(run_id, "correlation_matrix.json")
+        return _load_supabase_json(run_id, "correlation_matrix.json", user_id=user_id)
     return {"status": "unavailable", "matrix": {}}
 
-def _load_supabase_json(run_id: str, filename: str) -> dict:
+def _load_supabase_json(run_id: str, filename: str, user_id: str | None = None) -> dict:
     try:
-        data, _content_type = repo.get_artifact_bytes(run_id, filename)
+        data, _content_type = repo.get_artifact_bytes(run_id, filename, user_id=user_id)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Artifact not found")
     try:
@@ -468,9 +542,9 @@ def _load_supabase_json(run_id: str, filename: str) -> dict:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to load artifact: {exc}")
 
-def _load_supabase_csv(run_id: str, filename: str) -> list[dict]:
+def _load_supabase_csv(run_id: str, filename: str, user_id: str | None = None) -> list[dict]:
     try:
-        data, _content_type = repo.get_artifact_bytes(run_id, filename)
+        data, _content_type = repo.get_artifact_bytes(run_id, filename, user_id=user_id)
     except FileNotFoundError:
         return []
     text = data.decode("utf-8")
@@ -535,14 +609,17 @@ def _empty_summary(message: str) -> dict:
         "errors": [message],
     }
 
-def _load_portfolio(portfolio_id: int) -> dict:
+def _load_portfolio(portfolio_id: int, user_id: str | None = None) -> dict:
     if use_supabase():
         from storage_supabase.db import session_scope as supa_session_scope
         from storage_supabase import models as supa_models
 
         with supa_session_scope() as session:
             try:
-                portfolio = session.query(supa_models.Portfolio).filter_by(id=portfolio_id).first()
+                query = session.query(supa_models.Portfolio).filter_by(id=portfolio_id)
+                if user_id is not None:
+                    query = query.filter_by(user_id=str(user_id))
+                portfolio = query.first()
             except Exception:
                 raise HTTPException(status_code=404, detail="Portfolio data unavailable (database uninitialized).")
             if not portfolio:
@@ -566,6 +643,26 @@ def _load_portfolio(portfolio_id: int) -> dict:
             "currency": getattr(portfolio, "currency", None) or getattr(portfolio, "base_currency", None),
         }
 
+
+def _assert_portfolio_access(portfolio_id: int, current_user: dict) -> None:
+    if not use_supabase():
+        return
+    user_id = current_user.get("user_id")
+    _load_portfolio(portfolio_id, user_id=str(user_id) if user_id is not None else None)
+
+
+def _assert_run_access(run_id: str, current_user: dict) -> str | None:
+    if not use_supabase():
+        return None
+    user_id = current_user.get("user_id")
+    resolved_user_id = str(user_id) if user_id is not None else None
+    if resolved_user_id is None:
+        raise HTTPException(status_code=401, detail="Missing authenticated user.")
+    run = repo.get_run_by_id(run_id, user_id=resolved_user_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return resolved_user_id
+
 def _load_ui_state() -> dict:
     path = ROOT / "data" / "user_uploads" / "ui_state.json"
     if not path.exists():
@@ -575,10 +672,12 @@ def _load_ui_state() -> dict:
     except Exception:
         return {}
 
-def _resolve_portfolio_id(portfolio_id: str) -> int:
+def _resolve_portfolio_id(portfolio_id: str, user_id: str | int | None = None) -> int:
     if portfolio_id in ("default", "main", "primary"):
-        user_id = data_manager.get_current_user_id()
-        return data_manager.get_main_portfolio_id(user_id)
+        if use_supabase() and user_id is None:
+            raise HTTPException(status_code=401, detail="Missing authenticated user context.")
+        resolved_user_id = user_id if user_id is not None else data_manager.get_current_user_id()
+        return data_manager.get_main_portfolio_id(resolved_user_id)
     try:
         return int(portfolio_id)
     except ValueError:
@@ -709,11 +808,13 @@ async def create_run(
     run_type: str = Form("uploaded"),
     portfolio_id: str = Form("default"),
     file: UploadFile | None = File(None),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Create a new portfolio run from an uploaded trades CSV or demo data.
     """
-    resolved_portfolio_id = _resolve_portfolio_id(portfolio_id)
+    resolved_portfolio_id = _resolve_portfolio_id(portfolio_id, user_id=current_user.get("user_id"))
+    _assert_portfolio_access(resolved_portfolio_id, current_user)
     logger.info("RUN_START run_type=%s portfolio_id=%s file=%s", run_type, resolved_portfolio_id, bool(file))
     run_id = str(uuid.uuid4())
     run_type_clean = (run_type or "").strip().lower()
@@ -1006,12 +1107,19 @@ async def create_run_alias(
     run_type: str = Form("uploaded"),
     portfolio_id: str = Form("default"),
     file: UploadFile | None = File(None),
+    current_user: dict = Depends(get_current_user),
 ):
-    return await create_run(run_type=run_type, portfolio_id=portfolio_id, file=file)
+    return await create_run(
+        run_type=run_type,
+        portfolio_id=portfolio_id,
+        file=file,
+        current_user=current_user,
+    )
 
 @app.get("/runs")
-def list_runs():
-    runs = [run for run in repo.list_runs() if run.status == "completed"]
+def list_runs(current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user.get("user_id")) if use_supabase() else None
+    runs = [run for run in repo.list_runs(user_id=user_id) if run.status == "completed"]
     return {
         "runs": [
             {
@@ -1026,16 +1134,17 @@ def list_runs():
     }
 
 @app.get("/api/v1/runs")
-def list_runs_alias():
-    return list_runs()
+def list_runs_alias(current_user: dict = Depends(get_current_user)):
+    return list_runs(current_user=current_user)
 
 @app.get("/api/v1/run/latest")
-def get_latest_run():
+def get_latest_run(current_user: dict = Depends(get_current_user)):
     """
     Get metadata for the last completed run.
     """
     try:
-        last_run = repo.get_latest_run()
+        user_id = str(current_user.get("user_id")) if use_supabase() else None
+        last_run = repo.get_latest_run(user_id=user_id)
     except Exception:
         raise HTTPException(status_code=404, detail="No runs found (database empty or uninitialized).")
     if not last_run:
@@ -1057,60 +1166,62 @@ def get_latest_run():
     }
 
 @app.get("/latest-run")
-def latest_run_alias():
-    return get_latest_run()
+def latest_run_alias(current_user: dict = Depends(get_current_user)):
+    return get_latest_run(current_user=current_user)
 
 @app.get("/api/v1/run/{run_id}/summary")
-def get_run_summary(run_id: str):
+def get_run_summary(run_id: str, current_user: dict = Depends(get_current_user)):
     """
     Serve the precomputed JSON summary artifact.
     """
     # Security: Validate run_id format to prevent traversal (basic)
     _validate_run_id(run_id)
-    return _load_summary(run_id)
+    user_id = _assert_run_access(run_id, current_user)
+    return _load_summary(run_id, user_id=user_id)
 
 @app.get("/api/v1/run/{run_id}")
-def get_run(run_id: str):
+def get_run(run_id: str, current_user: dict = Depends(get_current_user)):
     _validate_run_id(run_id)
-    manifest = _load_manifest(run_id)
+    user_id = _assert_run_access(run_id, current_user)
+    manifest = _load_manifest(run_id, user_id=user_id)
     try:
-        summary = _load_summary(run_id)
+        summary = _load_summary(run_id, user_id=user_id)
     except HTTPException:
         summary = _empty_summary("Summary artifact not available.")
     try:
-        performance = _load_performance(run_id)
+        performance = _load_performance(run_id, user_id=user_id)
     except HTTPException:
         performance = []
     try:
-        monthly_returns = _load_monthly_returns(run_id)
+        monthly_returns = _load_monthly_returns(run_id, user_id=user_id)
     except HTTPException:
         monthly_returns = []
     try:
-        attribution_summary = _load_attribution_summary(run_id)
+        attribution_summary = _load_attribution_summary(run_id, user_id=user_id)
     except HTTPException:
         attribution_summary = {}
-    attribution_timeseries = _load_attribution_timeseries(run_id)
+    attribution_timeseries = _load_attribution_timeseries(run_id, user_id=user_id)
     try:
-        risk_contribution = _load_risk_contribution(run_id)
+        risk_contribution = _load_risk_contribution(run_id, user_id=user_id)
     except HTTPException:
         risk_contribution = {"summary": {}, "contributions": []}
-    rolling_metrics = _load_rolling_metrics(run_id)
-    macro_regimes = _load_macro_regimes(run_id)
-    macro_summary = _load_macro_summary(run_id)
-    macro_context = _load_macro_context(run_id)
+    rolling_metrics = _load_rolling_metrics(run_id, user_id=user_id)
+    macro_regimes = _load_macro_regimes(run_id, user_id=user_id)
+    macro_summary = _load_macro_summary(run_id, user_id=user_id)
+    macro_context = _load_macro_context(run_id, user_id=user_id)
     try:
-        benchmark_comparison = _load_benchmark_comparison(run_id)
+        benchmark_comparison = _load_benchmark_comparison(run_id, user_id=user_id)
     except HTTPException:
         benchmark_comparison = {}
-    benchmark_timeseries = _load_benchmark_timeseries(run_id)
-    concentration_summary = _load_concentration_summary(run_id)
-    factor_tilts = _load_factor_tilts(run_id)
-    diagnostics_payload = _load_diagnostics(run_id)
-    correlation_matrix = _load_correlation_matrix(run_id)
-    coverage_summary = _load_coverage_summary(run_id)
-    risk_free_series = _load_risk_free_series(run_id)
-    corporate_actions = _load_corporate_actions(run_id)
-    data_contracts = _load_data_contracts(run_id)
+    benchmark_timeseries = _load_benchmark_timeseries(run_id, user_id=user_id)
+    concentration_summary = _load_concentration_summary(run_id, user_id=user_id)
+    factor_tilts = _load_factor_tilts(run_id, user_id=user_id)
+    diagnostics_payload = _load_diagnostics(run_id, user_id=user_id)
+    correlation_matrix = _load_correlation_matrix(run_id, user_id=user_id)
+    coverage_summary = _load_coverage_summary(run_id, user_id=user_id)
+    risk_free_series = _load_risk_free_series(run_id, user_id=user_id)
+    corporate_actions = _load_corporate_actions(run_id, user_id=user_id)
+    data_contracts = _load_data_contracts(run_id, user_id=user_id)
     risk = _compute_risk_metrics(performance, risk_free_series)
     equity_curve = [
         {"date": row.get("date"), "value": row.get("value")}
@@ -1161,14 +1272,15 @@ def get_run(run_id: str):
     }
 
 @app.get("/run/{run_id}")
-def run_alias(run_id: str):
-    return get_run(run_id)
+def run_alias(run_id: str, current_user: dict = Depends(get_current_user)):
+    return get_run(run_id, current_user=current_user)
 
 
 @app.get("/api/reports/{run_id}/pdf")
-def get_report_pdf(run_id: str):
+def get_report_pdf(run_id: str, current_user: dict = Depends(get_current_user)):
     _validate_run_id(run_id)
-    html = _load_report_html(run_id)
+    user_id = _assert_run_access(run_id, current_user)
+    html = _load_report_html(run_id, user_id=user_id)
     try:
         pdf_bytes = html_to_pdf_bytes(html, base_url=str((EXPORTS_DIR / run_id).resolve()))
     except RuntimeError as exc:
@@ -1182,21 +1294,22 @@ def get_report_pdf(run_id: str):
 
 
 @app.get("/api/v1/reports/{run_id}/pdf")
-def get_report_pdf_alias_v1(run_id: str):
-    return get_report_pdf(run_id)
+def get_report_pdf_alias_v1(run_id: str, current_user: dict = Depends(get_current_user)):
+    return get_report_pdf(run_id, current_user=current_user)
 
 @app.get("/api/v1/portfolio/{portfolio_id}")
-def get_portfolio(portfolio_id: str):
-    resolved_id = _resolve_portfolio_id(portfolio_id)
-    portfolio = _load_portfolio(resolved_id)
+def get_portfolio(portfolio_id: str, current_user: dict = Depends(get_current_user)):
+    resolved_id = _resolve_portfolio_id(portfolio_id, user_id=current_user.get("user_id"))
+    auth_user_id = current_user.get("user_id")
+    portfolio = _load_portfolio(resolved_id, user_id=str(auth_user_id) if auth_user_id is not None else None)
     holdings = _attach_prices(_load_holdings(resolved_id))
     ui_state = _load_ui_state()
     portfolio["benchmark"] = ui_state.get("benchmark")
     return {"portfolio": portfolio, "holdings": holdings}
 
 @app.get("/portfolio/{portfolio_id}")
-def portfolio_alias(portfolio_id: str):
-    return get_portfolio(portfolio_id)
+def portfolio_alias(portfolio_id: str, current_user: dict = Depends(get_current_user)):
+    return get_portfolio(portfolio_id, current_user=current_user)
 
 @app.get("/api/v1/definitions")
 def get_definitions():
@@ -1281,8 +1394,9 @@ def warmup(payload: dict | None = None, x_admin_key: str | None = Header(default
 
 
 @app.get("/api/v1/run/{run_id}/export/{artifact}")
-def export_artifact(run_id: str, artifact: str):
+def export_artifact(run_id: str, artifact: str, current_user: dict = Depends(get_current_user)):
     _validate_run_id(run_id)
+    user_id = _assert_run_access(run_id, current_user)
     allowed = {
         "summary": "summary.json",
         "performance": "performance.csv",
@@ -1333,7 +1447,7 @@ def export_artifact(run_id: str, artifact: str):
         raise HTTPException(status_code=404, detail="Unknown artifact")
     if use_supabase():
         try:
-            data, content_type = repo.get_artifact_bytes(run_id, filename)
+            data, content_type = repo.get_artifact_bytes(run_id, filename, user_id=user_id)
             return Response(content=data, media_type=content_type)
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Artifact not found. Run compute to generate exports.")
@@ -1346,8 +1460,8 @@ def export_artifact(run_id: str, artifact: str):
     return FileResponse(artifact_path)
 
 @app.get("/run/{run_id}/export/{artifact}")
-def export_artifact_alias(run_id: str, artifact: str):
-    return export_artifact(run_id, artifact)
+def export_artifact_alias(run_id: str, artifact: str, current_user: dict = Depends(get_current_user)):
+    return export_artifact(run_id, artifact, current_user=current_user)
 
 if __name__ == "__main__":
     import uvicorn

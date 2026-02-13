@@ -16,10 +16,21 @@ import {
     MOCK_PORTFOLIO,
     MOCK_SUMMARY,
 } from "@/lib/mock-data";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export type NexusMode = "live" | "demo";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+    if (typeof window === "undefined") return {};
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return {};
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return {};
+    return { Authorization: `Bearer ${token}` };
+}
 
 type ApiErrorPayload = {
     detail?: string | {
@@ -68,7 +79,8 @@ async function resolveErrorMessage(res: Response): Promise<string> {
 }
 
 async function fetchJson<T>(url: string, allow404 = false): Promise<T | null> {
-    const res = await fetch(url, { cache: "no-store" });
+    const headers = await getAuthHeaders();
+    const res = await fetch(url, { cache: "no-store", headers });
     if (res.status === 404 && allow404) {
         return null;
     }
@@ -82,7 +94,8 @@ async function fetchJson<T>(url: string, allow404 = false): Promise<T | null> {
 export async function getHealth(): Promise<boolean> {
     if (!API_BASE) return false;
     try {
-        const res = await fetch(`${API_BASE}/health`, { cache: "no-store" });
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_BASE}/health`, { cache: "no-store", headers });
         return res.ok;
     } catch {
         return false;
@@ -149,6 +162,7 @@ export async function createRun(params: {
     }
     const res = await fetch(`${API_BASE}/run`, {
         method: "POST",
+        headers: await getAuthHeaders(),
         body: formData,
     });
     if (!res.ok) {
@@ -301,7 +315,9 @@ export async function downloadExport(runId: string, artifact: string): Promise<v
     if (!API_BASE) {
         throw new Error("Backend URL is not configured.");
     }
-    const res = await fetch(`${API_BASE}/run/${runId}/export/${artifact}`);
+    const res = await fetch(`${API_BASE}/run/${runId}/export/${artifact}`, {
+        headers: await getAuthHeaders(),
+    });
     if (!res.ok) {
         const message = await resolveErrorMessage(res);
         throw new Error(message);

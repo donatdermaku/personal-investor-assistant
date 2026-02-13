@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
+from typing import Any
 
 from contextlib import contextmanager
 from storage.models import User, Portfolio, Trade, HoldingsSnapshot, WatchlistItem, Run, Artifact
@@ -47,7 +48,7 @@ class LocalRepoBackend:
                 session.commit()
             return user.id
 
-    def get_default_portfolio_id(self, user_id: int) -> int:
+    def get_default_portfolio_id(self, user_id: int | str) -> int:
         with session_scope() as session:
             port = session.query(Portfolio).filter_by(user_id=user_id, name="Main Portfolio").first()
             if not port:
@@ -151,21 +152,21 @@ class LocalRepoBackend:
             if session is not None:
                 s.flush()
 
-    def get_latest_run(self):
+    def get_latest_run(self, user_id: str | None = None):
         with session_scope() as session:
             run = session.query(Run).filter_by(status="completed").order_by(Run.completed_at.desc()).first()
             if run:
                 session.expunge(run)
             return run
 
-    def get_run_by_id(self, run_id: str):
+    def get_run_by_id(self, run_id: str, user_id: str | None = None):
         with session_scope() as session:
             run = session.query(Run).filter_by(id=run_id).first()
             if run:
                 session.expunge(run)
             return run
 
-    def list_runs(self, limit: int = 50):
+    def list_runs(self, limit: int = 50, user_id: str | None = None):
         with session_scope() as session:
             runs = (
                 session.query(Run)
@@ -177,7 +178,7 @@ class LocalRepoBackend:
                 session.expunge(run)
             return runs
 
-    def get_artifact_bytes(self, run_id: str, filename: str):
+    def get_artifact_bytes(self, run_id: str, filename: str, user_id: str | None = None):
         raise FileNotFoundError("Artifact bytes not available in local repo.")
 
 
@@ -200,11 +201,11 @@ def get_or_create_default_user() -> User:
     return _backend.get_or_create_default_user()
 
 
-def get_user_id() -> int:
+def get_user_id() -> Any:
     return _backend.get_user_id()
 
 
-def get_default_portfolio_id(user_id: int) -> int:
+def get_default_portfolio_id(user_id: int | str) -> int:
     return _backend.get_default_portfolio_id(user_id)
 
 
@@ -249,17 +250,17 @@ def add_artifact(run_id: str, artifact_type: str, path: str, session=None):
 
 
 class Repo:
-    def get_latest_run(self):
-        return _backend.get_latest_run()
+    def get_latest_run(self, user_id: str | None = None):
+        return _backend.get_latest_run(user_id=user_id)
 
-    def get_run_by_id(self, run_id: str):
-        return _backend.get_run_by_id(run_id)
+    def get_run_by_id(self, run_id: str, user_id: str | None = None):
+        return _backend.get_run_by_id(run_id, user_id=user_id)
 
-    def list_runs(self, limit: int = 50):
-        return _backend.list_runs(limit)
+    def list_runs(self, limit: int = 50, user_id: str | None = None):
+        return _backend.list_runs(limit, user_id=user_id)
 
-    def get_artifact_bytes(self, run_id: str, filename: str):
-        return _backend.get_artifact_bytes(run_id, filename)
+    def get_artifact_bytes(self, run_id: str, filename: str, user_id: str | None = None):
+        return _backend.get_artifact_bytes(run_id, filename, user_id=user_id)
 
     def update_run_failed(self, run_id: str, error_code: str | None = None, message: str | None = None):
         return _backend.update_run_failed(run_id, error_code, message)

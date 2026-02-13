@@ -1,5 +1,12 @@
 import importlib
 import os
+import base64
+import hashlib
+import hmac
+import json
+import time
+from datetime import datetime, timezone
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 from fastapi import HTTPException
@@ -95,7 +102,7 @@ def test_report_pdf_endpoint(tmp_path, monkeypatch) -> None:
     client = TestClient(app)
     import src.api.server as server
 
-    monkeypatch.setattr(server, "_load_report_html", lambda run_id: "<html><body>ok</body></html>")
+    monkeypatch.setattr(server, "_load_report_html", lambda run_id, user_id=None: "<html><body>ok</body></html>")
     monkeypatch.setattr(server, "html_to_pdf_bytes", lambda html, base_url=None: b"%PDF-1.7\nfake")
 
     response = client.get("/api/reports/test-run/pdf")
@@ -109,9 +116,149 @@ def test_report_pdf_endpoint_not_found(tmp_path, monkeypatch) -> None:
     client = TestClient(app)
     import src.api.server as server
 
-    def _raise_not_found(run_id: str):
+    def _raise_not_found(run_id: str, user_id: str | None = None):
         raise HTTPException(status_code=404, detail="Report not found")
 
     monkeypatch.setattr(server, "_load_report_html", _raise_not_found)
     response = client.get("/api/reports/test-run/pdf")
     assert response.status_code == 404
+
+
+def _make_hs256_jwt(payload: dict, secret: str, alg: str = "HS256") -> str:
+    header = {"alg": alg, "typ": "JWT"}
+    header_b64 = base64.urlsafe_b64encode(json.dumps(header).encode("utf-8")).decode("utf-8").rstrip("=")
+    payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("utf-8").rstrip("=")
+    signing_input = f"{header_b64}.{payload_b64}".encode("utf-8")
+    signature = hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    signature_b64 = base64.urlsafe_b64encode(signature).decode("utf-8").rstrip("=")
+    return f"{header_b64}.{payload_b64}.{signature_b64}"
+
+
+def test_decode_and_verify_hs256_jwt_valid_token() -> None:
+    from src.api.server import _decode_and_verify_hs256_jwt
+
+    secret = "test-secret"
+    payload = {"sub": "user-123", "exp": int(time.time()) + 3600}
+    token = _make_hs256_jwt(payload, secret)
+    decoded = _decode_and_verify_hs256_jwt(token, secret)
+    assert decoded["sub"] == "user-123"
+
+
+def test_decode_and_verify_hs256_jwt_invalid_signature() -> None:
+    from src.api.server import _decode_and_verify_hs256_jwt
+
+    secret = "test-secret"
+    payload = {"sub": "user-123", "exp": int(time.time()) + 3600}
+    token = _make_hs256_jwt(payload, "other-secret")
+    try:
+        _decode_and_verify_hs256_jwt(token, secret)
+    except HTTPException as exc:
+        assert exc.status_code == 401
+    else:
+        raise AssertionError("Expected HTTPException for invalid JWT signature.")
+
+
+def test_decode_and_verify_hs256_jwt_rejects_non_hs256_header() -> None:
+    from src.api.server import _decode_and_verify_hs256_jwt
+
+    secret = "test-secret"
+    payload = {"sub": "user-123", "exp": int(time.time()) + 3600}
+    token = _make_hs256_jwt(payload, secret, alg="RS256")
+    try:
+        _decode_and_verify_hs256_jwt(token, secret)
+    except HTTPException as exc:
+        assert exc.status_code == 401
+        assert "algorithm" in exc.detail.lower()
+    else:
+        raise AssertionError("Expected HTTPException for unsupported JWT algorithm.")
+
+
+def test_supabase_endpoints_require_bearer_token(tmp_path, monkeypatch) -> None:
+    app = _load_test_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    import src.api.server as server
+
+    monkeypatch.setattr(server, "use_supabase", lambda: True)
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+
+    response = client.get("/api/v1/runs")
+    assert response.status_code == 401
+    assert "bearer" in response.json().get("detail", "").lower()
+
+
+def test_list_runs_scoped_by_authenticated_user(tmp_path, monkeypatch) -> None:
+    app = _load_test_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    import src.api.server as server
+
+    monkeypatch.setattr(server, "use_supabase", lambda: True)
+    secret = "test-secret"
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", secret)
+    token = _make_hs256_jwt({"sub": "user-42", "exp": int(time.time()) + 600}, secret)
+
+    captured_user_id = {"value": None}
+
+    def _fake_list_runs(limit: int = 50, user_id: str | None = None):
+        captured_user_id["value"] = user_id
+        return [
+            SimpleNamespace(
+                id="run-abc",
+                status="completed",
+                completed_at=datetime.now(timezone.utc),
+            )
+        ]
+
+    monkeypatch.setattr(server.repo, "list_runs", _fake_list_runs)
+    response = client.get("/api/v1/runs", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert captured_user_id["value"] == "user-42"
+    payload = response.json()
+    assert payload["runs"][0]["run_id"] == "run-abc"
+
+
+def test_run_summary_denies_access_when_not_owned(tmp_path, monkeypatch) -> None:
+    app = _load_test_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    import src.api.server as server
+
+    monkeypatch.setattr(server, "use_supabase", lambda: True)
+    secret = "test-secret"
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", secret)
+    token = _make_hs256_jwt({"sub": "user-1", "exp": int(time.time()) + 600}, secret)
+
+    monkeypatch.setattr(server.repo, "get_run_by_id", lambda run_id, user_id=None: None)
+    response = client.get("/api/v1/run/run-123/summary", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 404
+    assert response.json().get("detail") == "Run not found"
+
+
+def test_export_artifact_passes_user_scope_to_repo(tmp_path, monkeypatch) -> None:
+    app = _load_test_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    import src.api.server as server
+
+    monkeypatch.setattr(server, "use_supabase", lambda: True)
+    secret = "test-secret"
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", secret)
+    token = _make_hs256_jwt({"sub": "user-9", "exp": int(time.time()) + 600}, secret)
+
+    monkeypatch.setattr(server.repo, "get_run_by_id", lambda run_id, user_id=None: SimpleNamespace(id=run_id))
+    captured = {"user_id": None, "filename": None}
+
+    def _fake_get_artifact_bytes(run_id: str, filename: str, user_id: str | None = None):
+        captured["user_id"] = user_id
+        captured["filename"] = filename
+        return b"{}", "application/json"
+
+    monkeypatch.setattr(server.repo, "get_artifact_bytes", _fake_get_artifact_bytes)
+
+    response = client.get(
+        "/api/v1/run/run-xyz/export/summary-json",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert captured["user_id"] == "user-9"
+    assert captured["filename"] == "summary.json"
