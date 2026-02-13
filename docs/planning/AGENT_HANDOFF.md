@@ -1,10 +1,10 @@
 # Agent Handoff Context
 
 > **Date:** 2026-02-12
-> **Status:** Phase 0 and Phase 1 completed. Phase 2 mostly completed on branch `phase2-auth-multitenancy` (RLS apply/verify still pending).
+> **Status:** Phase 0 and Phase 1 completed, Phase 2 mostly completed, and Phase 3 started on branch `phase3-beta-polish`.
 
 ## Current State
-We completed Phase 0 cleanup, completed Phase 1, and advanced Phase 2 auth/multi-tenancy:
+We completed Phase 0 cleanup, completed Phase 1, advanced Phase 2 auth/multi-tenancy, and started Phase 3 beta polish:
 - Fixed duplicate `options` block in `cloudbuild.yaml`.
 - Added `.gitignore` rules for loose root CSV patterns.
 - Simplified `storage/datamanager.py` from `db/files/hybrid` to `local/supabase` with strict mode separation.
@@ -39,11 +39,27 @@ We completed Phase 0 cleanup, completed Phase 1, and advanced Phase 2 auth/multi
   - User-scoped run listing propagation
   - Run ownership denial path
   - User-scoped artifact export propagation
+- Added Phase 3 landing/onboarding flow:
+  - Public landing page with beta signup UX at `/` (`web/src/app/page.tsx`)
+  - Protected onboarding route at `/onboarding` with portfolio creation + CSV upload flow (`web/src/app/onboarding/page.tsx`)
+  - New backend endpoint `POST /api/v1/portfolios` for creating user portfolios (`src/api/server.py`)
+  - Frontend API wiring for portfolio creation (`web/src/lib/api.ts`)
+  - CSV onboarding validation utilities + unit tests (`web/src/lib/onboarding.ts`, `web/src/lib/__tests__/onboarding.test.ts`)
+  - Middleware protection extended to `/onboarding` (`web/src/middleware.ts`)
+  - Backend tests for new portfolio endpoint auth and success path (`tests/test_api_server.py`)
+- Added remaining Phase 3 hardening (pre-smoke-test):
+  - User-based rate limiting in API middleware (falls back to IP when user cannot be derived) (`src/api/server.py`)
+  - Production-aware CORS resolution (`NEXUS_ENV=production` + empty-default allowlist when not explicitly configured) (`src/api/server.py`)
+  - Cloud Run error monitoring primitives:
+    - structured `ERROR_EVENT` logging for unhandled exceptions and HTTP 5xx
+    - admin inspection endpoint `GET /admin/error-events`
+    - runbook doc with log queries (`docs/CLOUD_RUN_ERROR_MONITORING.md`)
+  - Deployment docs/config updated for `NEXUS_ENV=production` (`docs/DEPLOYMENT.md`, `render.yaml`)
 
 ## Immediate Next Actions
-The next agent should finish the remaining **Phase 2** operational step:
+The next agent should focus on remaining **Phase 2 + Phase 3** operational work:
 1. Apply/verify Supabase RLS policies for `portfolios`, `transactions`, `runs`, and `run_artifacts` using `docs/planning/supabase_rls_policies.sql`.
-2. Validate end-to-end Supabase auth flow in deployed environment with real JWTs and RLS enabled.
+2. Run smoke test plan for 50 beta users after deployment.
 
 ## Key Architectural Decisions
 - **Auth:** We will use Supabase Auth (JWT) + RLS. No custom auth system.

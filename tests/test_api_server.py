@@ -39,7 +39,7 @@ def _load_test_app(tmp_path, monkeypatch):
 
 
 def test_parse_allowed_origins() -> None:
-    from src.api.server import parse_allowed_origins
+    from src.api.server import parse_allowed_origins, resolve_allowed_origins
 
     assert parse_allowed_origins(None) == ["http://localhost:3000"]
     assert parse_allowed_origins("") == ["http://localhost:3000"]
@@ -49,6 +49,8 @@ def test_parse_allowed_origins() -> None:
         "http://localhost:3000",
         "https://app.example.com",
     ]
+    assert resolve_allowed_origins(None, "production") == []
+    assert resolve_allowed_origins("https://app.example.com", "production") == ["https://app.example.com"]
 
 
 def test_health_endpoint(tmp_path, monkeypatch) -> None:
@@ -95,6 +97,30 @@ def test_rate_limit_enforced(tmp_path, monkeypatch) -> None:
     assert second.status_code == 404
     assert third.status_code == 429
     assert "retry" in str(third.json()).lower()
+
+
+def test_rate_limit_is_user_scoped_in_supabase_mode(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("NEXUS_RATE_LIMIT_ENABLED", "1")
+    monkeypatch.setenv("NEXUS_RATE_LIMIT_PER_WINDOW", "1")
+    monkeypatch.setenv("NEXUS_RATE_LIMIT_WINDOW_SECONDS", "60")
+    app = _load_test_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    import src.api.server as server
+
+    monkeypatch.setattr(server, "use_supabase", lambda: True)
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    monkeypatch.setattr(server.repo, "list_runs", lambda limit=50, user_id=None: [])
+
+    token_a = _make_hs256_jwt({"sub": "user-a", "exp": int(time.time()) + 600}, "test-secret")
+    token_b = _make_hs256_jwt({"sub": "user-b", "exp": int(time.time()) + 600}, "test-secret")
+
+    first_a = client.get("/api/v1/runs", headers={"Authorization": f"Bearer {token_a}"})
+    second_a = client.get("/api/v1/runs", headers={"Authorization": f"Bearer {token_a}"})
+    first_b = client.get("/api/v1/runs", headers={"Authorization": f"Bearer {token_b}"})
+
+    assert first_a.status_code == 200
+    assert second_a.status_code == 429
+    assert first_b.status_code == 200
 
 
 def test_report_pdf_endpoint(tmp_path, monkeypatch) -> None:
@@ -262,3 +288,54 @@ def test_export_artifact_passes_user_scope_to_repo(tmp_path, monkeypatch) -> Non
     assert response.status_code == 200
     assert captured["user_id"] == "user-9"
     assert captured["filename"] == "summary.json"
+
+
+def test_create_portfolio_endpoint_local_mode(tmp_path, monkeypatch) -> None:
+    app = _load_test_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    response = client.post("/api/v1/portfolios", json={"name": "Retirement", "currency": "USD"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["portfolio"]["id"] > 0
+    assert payload["portfolio"]["name"] == "Retirement"
+    assert payload["portfolio"]["currency"] == "USD"
+
+
+def test_create_portfolio_requires_auth_in_supabase_mode(tmp_path, monkeypatch) -> None:
+    app = _load_test_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    import src.api.server as server
+
+    monkeypatch.setattr(server, "use_supabase", lambda: True)
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+
+    response = client.post("/api/v1/portfolios", json={"name": "Growth"})
+    assert response.status_code == 401
+
+
+def test_admin_error_events_requires_admin_key(tmp_path, monkeypatch) -> None:
+    app = _load_test_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    response = client.get("/admin/error-events")
+    assert response.status_code == 403
+
+
+def test_admin_error_events_returns_recent_entries(tmp_path, monkeypatch) -> None:
+    app = _load_test_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    import src.api.server as server
+
+    monkeypatch.setenv("ADMIN_WARMUP_KEY", "secret")
+    server._record_error_event(
+        request=SimpleNamespace(url=SimpleNamespace(path="/api/v1/run/bad"), method="GET"),
+        status=500,
+        error_code="TEST_FAILURE",
+        message="simulated failure",
+    )
+    response = client.get("/admin/error-events?limit=5", headers={"x-admin-key": "secret"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["count"] >= 1
+    assert payload["events"][0]["error_code"] in {"TEST_FAILURE", "HTTP_5XX", "UNHANDLED_EXCEPTION"}

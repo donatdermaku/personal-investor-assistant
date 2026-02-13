@@ -12,6 +12,7 @@ This guide covers the free-tier deployment for the Nexus Analytics Platform back
 ### Required environment variables
 - `NEXUS_DB_PATH=/var/data/user.db`
 - `NEXUS_EXPORT_DIR=/var/data/exports`
+- `NEXUS_ENV=production`
 - `NEXUS_ALLOWED_ORIGINS=https://<your-vercel-app>.vercel.app`
 - `STORAGE_MODE=supabase`
 - `SUPABASE_DB_URL=postgresql://...`
@@ -22,6 +23,7 @@ This guide covers the free-tier deployment for the Nexus Analytics Platform back
 
 Security note:
 - In `STORAGE_MODE=supabase`, HTTP requests must present a valid bearer token; there is no request-path fallback user.
+- In `NEXUS_ENV=production`, if `NEXUS_ALLOWED_ORIGINS` is not set, CORS allowlist is empty by default.
 
 ### Persistent disk
 - In Render, attach a persistent disk and mount it at `/var/data`.
