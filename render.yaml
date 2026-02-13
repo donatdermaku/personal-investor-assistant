@@ -7,11 +7,21 @@ services:
     startCommand: gunicorn src.api.server:app --worker-class uvicorn.workers.UvicornWorker --timeout 120 --bind 0.0.0.0:$PORT
     envVars:
       - key: STORAGE_MODE
-        value: hybrid
+        value: supabase
       - key: NEXUS_DB_PATH
         value: /var/data/user.db
       - key: NEXUS_EXPORT_DIR
         value: /var/data/exports
       - key: NEXUS_ALLOWED_ORIGINS
         value: https://your-vercel-project.vercel.app
+      - key: SUPABASE_DB_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: SUPABASE_SERVICE_CONTEXT_USER_ID
+        sync: false
     # Render persistent disk should be mounted at /var/data in the dashboard.

@@ -1,6 +1,7 @@
 import os
 import logging
 from datetime import datetime
+from typing import Any
 import pandas as pd
 
 from storage import repo, db
@@ -54,12 +55,12 @@ class DataManager:
         return STORAGE_MODE == "supabase"
 
     # --- User Identity ---
-    def get_current_user_id(self) -> int:
+    def get_current_user_id(self) -> Any:
         if self._uses_local_files():
             return 0  # Mock ID
         return repo.get_user_id()
 
-    def get_main_portfolio_id(self, user_id: int) -> int:
+    def get_main_portfolio_id(self, user_id: int | str) -> int:
         if self._uses_local_files():
             return 0
         return repo.get_default_portfolio_id(user_id)

@@ -2,7 +2,7 @@
 
 > **Goal:** Validated "Zero-Cost" Beta Launch (50 users)  
 > **Constraint:** $0 incremental spend. Supabase-first architecture.  
-> **Status:** Phase 0 (Cleanup) completed. Phase 1 (Value Engine) in progress.
+> **Status:** Phase 0 (Cleanup) and Phase 1 (Value Engine) completed. Phase 2 (Auth & Multi-Tenancy) nearly complete; RLS apply/verify remains.
 
 ## Phase 0: Foundation Cleanup
 - [x] Golden Test Harness (7 scenarios implemented)
@@ -33,22 +33,25 @@
 - [x] **Verification**: Add golden tests for new metrics
 
 ## Phase 2: Auth & Multi-Tenancy (Supabase-First)
-- [ ] **Backend Auth (FastAPI)**:
-  - [ ] Add `get_current_user` dependency (JWT validation)
-  - [ ] Extract user_id from Supabase token
-- [ ] **Repo Layer Update**:
-  - [ ] Update `SupabaseRepo` to accept `user_id` context
-  - [ ] Remove hardcoded `user_id=1`
+- [x] **Backend Auth (FastAPI)**:
+  - [x] Add `get_current_user` dependency (JWT validation)
+  - [x] Extract user_id from Supabase token
+  - [x] Enforce JWT header algorithm guard (`alg=HS256`)
+- [x] **Repo Layer Update**:
+  - [x] Update `SupabaseRepo` to accept `user_id` context
+  - [x] Remove hardcoded `user_id=1`
 - [ ] **Database RLS**:
   - [ ] Apply RLS policies to `portfolios`, `transactions`, `runs`
-- [ ] **Frontend Auth (Next.js)**:
-  - [ ] Install `@supabase/ssr`
-  - [ ] Create `/login` page
-  - [ ] Add Auth middleware for protected routes
-  - [ ] Pass JWT in API calls
-- [ ] **Data Isolation**:
-  - [ ] Audit all Supabase models for `user_id`
-  - [ ] Switch production config to `STORAGE_MODE=supabase`
+  - [x] Add policy SQL script: `docs/planning/supabase_rls_policies.sql`
+- [x] **Frontend Auth (Next.js)**:
+  - [x] Install `@supabase/ssr`
+  - [x] Create `/login` page
+  - [x] Add Auth middleware for protected routes
+  - [x] Pass JWT in API calls
+- [x] **Data Isolation**:
+  - [x] Audit all Supabase models/access paths for user scoping (portfolio and run/artifact reads now user-scoped in API/repo)
+  - [x] Switch production config to `STORAGE_MODE=supabase`
+  - [x] Restrict service-context fallback to explicit internal env (`SUPABASE_SERVICE_CONTEXT_USER_ID`)
 
 ## Phase 3: Beta Polish
 - [ ] Landing Page (Simple "Sign up for Beta")

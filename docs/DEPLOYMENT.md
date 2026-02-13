@@ -13,11 +13,19 @@ This guide covers the free-tier deployment for the Nexus Analytics Platform back
 - `NEXUS_DB_PATH=/var/data/user.db`
 - `NEXUS_EXPORT_DIR=/var/data/exports`
 - `NEXUS_ALLOWED_ORIGINS=https://<your-vercel-app>.vercel.app`
-- `STORAGE_MODE=hybrid`
+- `STORAGE_MODE=supabase`
+- `SUPABASE_DB_URL=postgresql://...`
+- `SUPABASE_URL=https://<project>.supabase.co`
+- `SUPABASE_SERVICE_ROLE_KEY=<service-role-key>`
+- `SUPABASE_JWT_SECRET=<jwt-secret>`
+- `SUPABASE_SERVICE_CONTEXT_USER_ID=<internal-only-user-id>` (optional; only for non-HTTP/background service context)
+
+Security note:
+- In `STORAGE_MODE=supabase`, HTTP requests must present a valid bearer token; there is no request-path fallback user.
 
 ### Persistent disk
 - In Render, attach a persistent disk and mount it at `/var/data`.
-- The DB and exports will be stored under that mount.
+- The exports and local cache will be stored under that mount.
 
 ### Verify backend
 ```bash
