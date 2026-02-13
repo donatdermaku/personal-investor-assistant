@@ -1,7 +1,7 @@
 # Agent Handoff Context
 
-> **Date:** 2026-02-12
-> **Status:** Phase 0 and Phase 1 completed, Phase 2 mostly completed, and Phase 3 started on branch `phase3-beta-polish`.
+> **Date:** 2026-02-13
+> **Status:** Phase 0, Phase 1, and Phase 2 completed. Phase 3 implementation completed except smoke test execution.
 
 ## Current State
 We completed Phase 0 cleanup, completed Phase 1, advanced Phase 2 auth/multi-tenancy, and started Phase 3 beta polish:
@@ -28,6 +28,7 @@ We completed Phase 0 cleanup, completed Phase 1, advanced Phase 2 auth/multi-ten
   - route-protecting middleware added (`web/src/middleware.ts`)
   - bearer token pass-through added in web API client (`web/src/lib/api.ts`)
 - Added Supabase RLS policy script for manual application in dashboard SQL editor: `docs/planning/supabase_rls_policies.sql`.
+- Confirmed RLS enabled for `portfolios`, `transactions`, `runs`, and `run_artifacts` in Supabase production project.
 - Updated deployment defaults to Supabase mode:
   - `render.yaml` now uses `STORAGE_MODE=supabase` and includes required Supabase env var placeholders.
   - `docs/DEPLOYMENT.md` now documents Supabase production auth/database env vars.
@@ -55,11 +56,15 @@ We completed Phase 0 cleanup, completed Phase 1, advanced Phase 2 auth/multi-ten
     - admin inspection endpoint `GET /admin/error-events`
     - runbook doc with log queries (`docs/CLOUD_RUN_ERROR_MONITORING.md`)
   - Deployment docs/config updated for `NEXUS_ENV=production` (`docs/DEPLOYMENT.md`, `render.yaml`)
+- Production hotfixes after deploy validation:
+  - Docker image fixed to include `storage_supabase` package (resolved Cloud Run `ModuleNotFoundError: storage_supabase` startup crash).
+  - `/ops/health` fixed to support both run model field variants (`id` and `run_id`) to prevent 500 errors in mixed local/supabase model paths (`src/api/server.py`).
+  - Added regression test coverage for `/ops/health` latest-run ID fallback (`tests/test_api_server.py`).
 
 ## Immediate Next Actions
 The next agent should focus on remaining **Phase 2 + Phase 3** operational work:
-1. Apply/verify Supabase RLS policies for `portfolios`, `transactions`, `runs`, and `run_artifacts` using `docs/planning/supabase_rls_policies.sql`.
-2. Run smoke test plan for 50 beta users after deployment.
+1. Run smoke test plan for 50 beta users against current Cloud Run revision.
+2. If smoke passes, monitor `/admin/error-events` and Cloud Run logs during initial onboarding window.
 
 ## Key Architectural Decisions
 - **Auth:** We will use Supabase Auth (JWT) + RLS. No custom auth system.

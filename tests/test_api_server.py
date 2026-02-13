@@ -82,6 +82,27 @@ def test_ops_health_endpoint(tmp_path, monkeypatch) -> None:
     assert "rate_limit" in payload
 
 
+def test_ops_health_uses_latest_run_id_fallback(tmp_path, monkeypatch) -> None:
+    app = _load_test_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    import src.api.server as server
+
+    monkeypatch.setattr(
+        server.repo,
+        "get_latest_run",
+        lambda: SimpleNamespace(
+            id="run-from-id-field",
+            status="completed",
+            created_at=datetime.now(timezone.utc),
+        ),
+    )
+
+    response = client.get("/ops/health")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["latest_run"]["run_id"] == "run-from-id-field"
+
+
 def test_rate_limit_enforced(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("NEXUS_RATE_LIMIT_ENABLED", "1")
     monkeypatch.setenv("NEXUS_RATE_LIMIT_PER_WINDOW", "2")

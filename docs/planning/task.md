@@ -2,7 +2,7 @@
 
 > **Goal:** Validated "Zero-Cost" Beta Launch (50 users)  
 > **Constraint:** $0 incremental spend. Supabase-first architecture.  
-> **Status:** Phase 0 (Cleanup), Phase 1 (Value Engine), and most of Phase 2 completed. Phase 3 started (landing + onboarding implemented).
+> **Status:** Phase 0 (Cleanup), Phase 1 (Value Engine), and Phase 2 completed. Phase 3 in progress (smoke test remaining).
 
 ## Phase 0: Foundation Cleanup
 - [x] Golden Test Harness (7 scenarios implemented)
@@ -40,8 +40,8 @@
 - [x] **Repo Layer Update**:
   - [x] Update `SupabaseRepo` to accept `user_id` context
   - [x] Remove hardcoded `user_id=1`
-- [ ] **Database RLS**:
-  - [ ] Apply RLS policies to `portfolios`, `transactions`, `runs`
+- [x] **Database RLS**:
+  - [x] Apply RLS policies to `portfolios`, `transactions`, `runs`, `run_artifacts`
   - [x] Add policy SQL script: `docs/planning/supabase_rls_policies.sql`
 - [x] **Frontend Auth (Next.js)**:
   - [x] Install `@supabase/ssr`
@@ -59,6 +59,8 @@
 - [x] Cloud Run Error Monitoring (Log queries)
 - [x] Production CORS Update
 - [x] User-based Rate Limiting
+- [x] Cloud Run Supabase import/deploy hotfix (`storage_supabase` copied in Docker image)
+- [x] Ops health endpoint hotfix for mixed run model IDs (`id` vs `run_id`)
 - [ ] Smoke Test (50 users)
 
 ## Reference Documents

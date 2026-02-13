@@ -887,10 +887,11 @@ def ops_health(full: bool = False):
 
     latest_run = None
     if latest:
+        latest_run_id = getattr(latest, "run_id", None) or getattr(latest, "id", None)
         latest_run = {
-            "run_id": latest.run_id,
-            "status": latest.status,
-            "timestamp": latest.created_at.isoformat() if latest.created_at else None,
+            "run_id": latest_run_id,
+            "status": getattr(latest, "status", None),
+            "timestamp": latest.created_at.isoformat() if getattr(latest, "created_at", None) else None,
         }
 
     return {
