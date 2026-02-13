@@ -24,13 +24,27 @@ function LoginPageContent() {
       return;
     }
     setLoading(true);
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (signInError) {
-      setError(signInError.message);
-      return;
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        setError(signInError.message);
+        return;
+      }
+      if (!data.session) {
+        setError("Sign-in did not return a session. Please verify your email and try again.");
+        return;
+      }
+
+      const safeNextPath = nextPath.startsWith("/") ? nextPath : "/overview";
+      router.replace(safeNextPath);
+      router.refresh();
+      // Fallback for cases where middleware/session state race blocks client navigation.
+      window.location.assign(safeNextPath);
+    } catch {
+      setError("Sign-in request failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    router.replace(nextPath);
   };
 
   return (
