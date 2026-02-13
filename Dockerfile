@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY src/ ./src/
 COPY storage/ ./storage/
+COPY storage_supabase/ ./storage_supabase/
 COPY market_data/ ./market_data/
 
 # Run as non-root user
