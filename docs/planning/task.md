@@ -62,6 +62,7 @@
 - [x] Cloud Run Supabase import/deploy hotfix (`storage_supabase` copied in Docker image)
 - [x] Ops health endpoint hotfix for mixed run model IDs (`id` vs `run_id`)
 - [x] Frontend auth loop fixes (`/login`/`/onboarding` routes, Supabase callback exchange, confirmation redirect wiring)
+- [x] Backend JWT verification compatibility for non-HS256 Supabase tokens (fallback validation via Supabase Auth user endpoint)
 - [ ] Smoke Test (50 users)
 
 ## Reference Documents

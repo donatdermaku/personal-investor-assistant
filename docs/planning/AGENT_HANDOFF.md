@@ -65,6 +65,11 @@ We completed Phase 0 cleanup, completed Phase 1, advanced Phase 2 auth/multi-ten
     - Added root `app` wrappers for `/login`, `/onboarding`, and `/auth/callback` to prevent route 404s in deployments using `web/app`
     - Updated signup flow to set `emailRedirectTo=/auth/callback?next=/onboarding`
     - Updated `/login` page to show callback errors and satisfy Next.js Suspense requirement for `useSearchParams`
+  - Fixed backend Supabase JWT compatibility for non-HS256 projects:
+    - Added token verification strategy that preserves HS256 local verification when applicable.
+    - Added secure fallback verification for non-HS256 bearer tokens via Supabase Auth `/auth/v1/user`.
+    - Rate-limit user key extraction now shares verified payload via request state to avoid duplicate token verification in the same request.
+    - Added regression test for non-HS256 token path in API auth (`tests/test_api_server.py`).
 
 ## Immediate Next Actions
 The next agent should focus on remaining **Phase 2 + Phase 3** operational work:
