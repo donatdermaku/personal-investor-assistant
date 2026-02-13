@@ -20,6 +20,7 @@ import time
 import threading
 import sys
 import resource
+import requests
 
 
 import os
@@ -173,6 +174,67 @@ def _decode_and_verify_hs256_jwt(token: str, secret: str) -> dict:
     return payload
 
 
+def _decode_token_header(token: str) -> dict[str, Any]:
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise HTTPException(status_code=401, detail="Invalid bearer token format.")
+    header_b64 = parts[0]
+    try:
+        return json.loads(_decode_segment(header_b64).decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid bearer token header.")
+
+
+def _verify_token_with_supabase_auth(token: str) -> dict:
+    supabase_url = os.getenv("SUPABASE_URL")
+    api_key = os.getenv("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Supabase auth verification requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY/SUPABASE_ANON_KEY.",
+        )
+
+    user_url = f"{supabase_url.rstrip('/')}/auth/v1/user"
+    try:
+        resp = requests.get(
+            user_url,
+            headers={"Authorization": f"Bearer {token}", "apikey": api_key},
+            timeout=5,
+        )
+    except requests.RequestException:
+        raise HTTPException(status_code=503, detail="Supabase auth verification unavailable.")
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid bearer token.")
+
+    try:
+        user_payload = resp.json()
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid Supabase auth response.")
+
+    user_id = user_payload.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Bearer token missing subject.")
+
+    return {
+        "sub": str(user_id),
+        "email": user_payload.get("email"),
+        "aud": user_payload.get("aud"),
+        "iss": user_payload.get("iss"),
+    }
+
+
+def _decode_and_verify_supabase_jwt(token: str) -> dict:
+    header = _decode_token_header(token)
+    alg = str(header.get("alg", "")).upper()
+    if alg == "HS256":
+        jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
+        if not jwt_secret:
+            raise HTTPException(status_code=503, detail="SUPABASE_JWT_SECRET not configured.")
+        return _decode_and_verify_hs256_jwt(token, jwt_secret)
+    return _verify_token_with_supabase_auth(token)
+
+
 def get_current_user(request: Request) -> dict:
     """
     Resolve authenticated user from Supabase JWT in Authorization header.
@@ -189,11 +251,10 @@ def get_current_user(request: Request) -> dict:
     if not token:
         raise HTTPException(status_code=401, detail="Missing bearer token.")
 
-    jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
-    if not jwt_secret:
-        raise HTTPException(status_code=503, detail="SUPABASE_JWT_SECRET not configured.")
-
-    payload = _decode_and_verify_hs256_jwt(token, jwt_secret)
+    payload = getattr(request.state, "bearer_payload", None)
+    if not payload:
+        payload = _decode_and_verify_supabase_jwt(token)
+        request.state.bearer_payload = payload
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Bearer token missing subject.")
@@ -240,11 +301,10 @@ def _extract_user_rate_limit_key(request: Request) -> str | None:
     token = auth_header.split(" ", 1)[1].strip()
     if not token:
         return None
-    jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
-    if not jwt_secret:
-        return None
+
     try:
-        payload = _decode_and_verify_hs256_jwt(token, jwt_secret)
+        payload = _decode_and_verify_supabase_jwt(token)
+        request.state.bearer_payload = payload
     except HTTPException:
         return None
     user_id = payload.get("sub")

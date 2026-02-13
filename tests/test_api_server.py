@@ -181,6 +181,14 @@ def _make_hs256_jwt(payload: dict, secret: str, alg: str = "HS256") -> str:
     return f"{header_b64}.{payload_b64}.{signature_b64}"
 
 
+def _make_dummy_jwt(payload: dict, alg: str = "RS256") -> str:
+    header = {"alg": alg, "typ": "JWT"}
+    header_b64 = base64.urlsafe_b64encode(json.dumps(header).encode("utf-8")).decode("utf-8").rstrip("=")
+    payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("utf-8").rstrip("=")
+    signature_b64 = base64.urlsafe_b64encode(b"sig").decode("utf-8").rstrip("=")
+    return f"{header_b64}.{payload_b64}.{signature_b64}"
+
+
 def test_decode_and_verify_hs256_jwt_valid_token() -> None:
     from src.api.server import _decode_and_verify_hs256_jwt
 
@@ -262,6 +270,38 @@ def test_list_runs_scoped_by_authenticated_user(tmp_path, monkeypatch) -> None:
     assert captured_user_id["value"] == "user-42"
     payload = response.json()
     assert payload["runs"][0]["run_id"] == "run-abc"
+
+
+def test_list_runs_scoped_by_authenticated_user_with_non_hs256_token(tmp_path, monkeypatch) -> None:
+    app = _load_test_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    import src.api.server as server
+
+    monkeypatch.setattr(server, "use_supabase", lambda: True)
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
+
+    class _Resp:
+        status_code = 200
+
+        @staticmethod
+        def json() -> dict:
+            return {"id": "user-rs256", "email": "user@example.com"}
+
+    monkeypatch.setattr(server.requests, "get", lambda *args, **kwargs: _Resp())
+    token = _make_dummy_jwt({"sub": "ignored-by-remote-check"}, alg="RS256")
+
+    captured_user_id = {"value": None}
+
+    def _fake_list_runs(limit: int = 50, user_id: str | None = None):
+        captured_user_id["value"] = user_id
+        return []
+
+    monkeypatch.setattr(server.repo, "list_runs", _fake_list_runs)
+    response = client.get("/api/v1/runs", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert captured_user_id["value"] == "user-rs256"
 
 
 def test_run_summary_denies_access_when_not_owned(tmp_path, monkeypatch) -> None:
