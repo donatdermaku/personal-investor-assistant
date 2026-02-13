@@ -26,7 +26,13 @@ export default function HomePage() {
       return;
     }
     setLoading(true);
-    const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+    const emailRedirectTo =
+      typeof window !== "undefined" ? `${window.location.origin}/auth/callback?next=/onboarding` : undefined;
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo },
+    });
     setLoading(false);
     if (signUpError) {
       setError(signUpError.message);

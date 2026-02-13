@@ -61,6 +61,7 @@
 - [x] User-based Rate Limiting
 - [x] Cloud Run Supabase import/deploy hotfix (`storage_supabase` copied in Docker image)
 - [x] Ops health endpoint hotfix for mixed run model IDs (`id` vs `run_id`)
+- [x] Frontend auth loop fixes (`/login`/`/onboarding` routes, Supabase callback exchange, confirmation redirect wiring)
 - [ ] Smoke Test (50 users)
 
 ## Reference Documents
