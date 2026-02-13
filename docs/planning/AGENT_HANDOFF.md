@@ -60,6 +60,11 @@ We completed Phase 0 cleanup, completed Phase 1, advanced Phase 2 auth/multi-ten
   - Docker image fixed to include `storage_supabase` package (resolved Cloud Run `ModuleNotFoundError: storage_supabase` startup crash).
   - `/ops/health` fixed to support both run model field variants (`id` and `run_id`) to prevent 500 errors in mixed local/supabase model paths (`src/api/server.py`).
   - Added regression test coverage for `/ops/health` latest-run ID fallback (`tests/test_api_server.py`).
+  - Fixed frontend auth loop for email confirmation + sign-in navigation:
+    - Added Supabase auth callback route with code exchange (`web/src/app/auth/callback/route.ts`)
+    - Added root `app` wrappers for `/login`, `/onboarding`, and `/auth/callback` to prevent route 404s in deployments using `web/app`
+    - Updated signup flow to set `emailRedirectTo=/auth/callback?next=/onboarding`
+    - Updated `/login` page to show callback errors and satisfy Next.js Suspense requirement for `useSearchParams`
 
 ## Immediate Next Actions
 The next agent should focus on remaining **Phase 2 + Phase 3** operational work:

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
@@ -12,7 +12,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const nextPath = searchParams.get("next") || "/overview";
+  const nextPath = useMemo(() => searchParams.get("next") || "/overview", [searchParams]);
+  const callbackError = useMemo(() => searchParams.get("error"), [searchParams]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -52,7 +53,9 @@ export default function LoginPage() {
           placeholder="Password"
           className="w-full border border-[var(--color-nexus-border)] bg-black/20 px-3 py-2 text-sm"
         />
-        {error && <p className="text-xs text-[var(--color-nexus-danger)]">{error}</p>}
+        {(error || callbackError) && (
+          <p className="text-xs text-[var(--color-nexus-danger)]">{error || callbackError}</p>
+        )}
         <button
           type="submit"
           disabled={loading}
@@ -61,6 +64,21 @@ export default function LoginPage() {
           {loading ? "Signing in..." : "Sign in"}
         </button>
       </form>
+      <button
+        type="button"
+        onClick={() => router.push("/")}
+        className="mt-3 w-full border border-[var(--color-nexus-border)] px-3 py-2 text-sm"
+      >
+        Create new account
+      </button>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-md p-6 text-sm">Loading...</div>}>
+      <LoginPageContent />
+    </Suspense>
   );
 }
