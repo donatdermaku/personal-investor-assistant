@@ -70,6 +70,10 @@ We completed Phase 0 cleanup, completed Phase 1, advanced Phase 2 auth/multi-ten
     - Added secure fallback verification for non-HS256 bearer tokens via Supabase Auth `/auth/v1/user`.
     - Rate-limit user key extraction now shares verified payload via request state to avoid duplicate token verification in the same request.
     - Added regression test for non-HS256 token path in API auth (`tests/test_api_server.py`).
+  - Fixed Supabase repo adapter mismatch for run pipeline:
+    - `storage/repo.py` forwards optional `session=` kwarg for run lifecycle methods.
+    - `storage_supabase/repo.py` now accepts optional `session` kwargs on `create_run`, `update_run_complete`, `update_run_failed`, and `add_artifact` for interface parity.
+    - Prevents runtime crash: `TypeError: SupabaseRepo.create_run() got an unexpected keyword argument 'session'`.
 
 ## Immediate Next Actions
 The next agent should focus on remaining **Phase 2 + Phase 3** operational work:

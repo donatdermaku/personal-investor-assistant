@@ -135,7 +135,15 @@ class SupabaseRepo:
             ]
 
     # Runs
-    def create_run(self, run_id: str, portfolio_id: int, input_hash: str | None, config_hash: str | None, run_type: str | None = None):
+    def create_run(
+        self,
+        run_id: str,
+        portfolio_id: int,
+        input_hash: str | None,
+        config_hash: str | None,
+        run_type: str | None = None,
+        session=None,
+    ):
         with session_scope() as session:
             run = models.Run(
                 id=run_id,
@@ -146,7 +154,7 @@ class SupabaseRepo:
             )
             session.add(run)
 
-    def update_run_complete(self, run_id: str, manifest_json: str, run_type: str | None = None):
+    def update_run_complete(self, run_id: str, manifest_json: str, run_type: str | None = None, session=None):
         with session_scope() as session:
             run = session.query(models.Run).filter_by(id=run_id).first()
             if run:
@@ -156,7 +164,7 @@ class SupabaseRepo:
                 if run_type:
                     run.run_type = run_type
 
-    def update_run_failed(self, run_id: str, error_code: str | None = None, message: str | None = None):
+    def update_run_failed(self, run_id: str, error_code: str | None = None, message: str | None = None, session=None):
         with session_scope() as session:
             run = session.query(models.Run).filter_by(id=run_id).first()
             if run:
@@ -205,7 +213,7 @@ class SupabaseRepo:
             return runs
 
     # Artifacts
-    def add_artifact(self, run_id: str, artifact_type: str, path: str):
+    def add_artifact(self, run_id: str, artifact_type: str, path: str, session=None):
         file_path = Path(path)
         if not file_path.exists():
             return
