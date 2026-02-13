@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import gc
 from pathlib import Path
+from collections import deque
 import numpy as np
 import uuid
 from datetime import datetime, timezone
@@ -96,6 +97,7 @@ _rate_limiter = SlidingWindowRateLimiter(RATE_LIMIT_PER_WINDOW, RATE_LIMIT_WINDO
 TIMING_LOG_ENABLED = _read_bool_env("NEXUS_TIMING_LOG_ENABLED", True)
 DEFINITIONS_CACHE_TTL_SECONDS = int(os.getenv("NEXUS_DEFINITIONS_CACHE_TTL_SECONDS", "300"))
 OPS_CACHE_STATS_TTL_SECONDS = int(os.getenv("NEXUS_OPS_CACHE_STATS_TTL_SECONDS", "30"))
+ERROR_EVENTS_MAX = int(os.getenv("NEXUS_ERROR_EVENTS_MAX", "200"))
 
 
 class TtlValueCache:
@@ -125,6 +127,7 @@ class TtlValueCache:
 
 
 _ttl_cache = TtlValueCache()
+_error_events: deque[dict[str, Any]] = deque(maxlen=max(10, ERROR_EVENTS_MAX))
 
 
 def _decode_segment(segment: str) -> bytes:
@@ -212,7 +215,72 @@ def parse_allowed_origins(raw: str | None) -> list[str]:
         origins.append(cleaned)
     return origins
 
-origins = parse_allowed_origins(os.getenv("NEXUS_ALLOWED_ORIGINS"))
+
+def resolve_allowed_origins(raw: str | None, env_name: str | None) -> list[str]:
+    env_norm = (env_name or "development").strip().lower()
+    if env_norm == "production" and (raw is None or raw.strip() == ""):
+        logger.warning(
+            "NEXUS_ALLOWED_ORIGINS is empty in production; CORS allowlist defaults to empty."
+        )
+        return []
+    return parse_allowed_origins(raw)
+
+
+def _admin_key_valid(x_admin_key: str | None) -> bool:
+    admin_key = os.getenv("ADMIN_WARMUP_KEY")
+    return bool(admin_key and x_admin_key == admin_key)
+
+
+def _extract_user_rate_limit_key(request: Request) -> str | None:
+    if not use_supabase():
+        return None
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return None
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        return None
+    jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
+    if not jwt_secret:
+        return None
+    try:
+        payload = _decode_and_verify_hs256_jwt(token, jwt_secret)
+    except HTTPException:
+        return None
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+    return f"user:{user_id}"
+
+
+def _rate_limit_key(request: Request) -> str:
+    user_key = _extract_user_rate_limit_key(request)
+    if user_key:
+        return user_key
+    client_host = request.client.host if request.client else "unknown"
+    return f"ip:{client_host}"
+
+
+def _record_error_event(
+    *,
+    request: Request,
+    status: int,
+    error_code: str,
+    message: str,
+) -> None:
+    event = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "path": request.url.path,
+        "method": request.method,
+        "status": int(status),
+        "error_code": error_code,
+        "message": (message or "")[:500],
+    }
+    _error_events.append(event)
+    logger.error("ERROR_EVENT %s", json.dumps(event, sort_keys=True))
+
+
+origins = resolve_allowed_origins(os.getenv("NEXUS_ALLOWED_ORIGINS"), os.getenv("NEXUS_ENV"))
 logger.info("CORS allowed origins: %s", ", ".join(origins) if origins else "(none)")
 
 app.add_middleware(
@@ -228,9 +296,10 @@ app.add_middleware(
 async def security_and_rate_limit_middleware(request: Request, call_next):
     started = time.perf_counter()
     path = request.url.path
+    limiter_key = _rate_limit_key(request)
+    limiter_scope = "user" if limiter_key.startswith("user:") else "ip"
     if RATE_LIMIT_ENABLED and path not in RATE_LIMIT_EXEMPT_PATHS:
-        client_host = request.client.host if request.client else "unknown"
-        allowed, retry_after, remaining = _rate_limiter.allow(client_host, time.time())
+        allowed, retry_after, remaining = _rate_limiter.allow(limiter_key, time.time())
         if not allowed:
             response = JSONResponse(
                 status_code=429,
@@ -246,6 +315,7 @@ async def security_and_rate_limit_middleware(request: Request, call_next):
             response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_PER_WINDOW)
             response.headers["X-RateLimit-Remaining"] = str(remaining)
             response.headers["X-RateLimit-Window"] = str(RATE_LIMIT_WINDOW_SECONDS)
+            response.headers["X-RateLimit-Scope"] = limiter_scope
             response.headers["X-Content-Type-Options"] = "nosniff"
             response.headers["X-Frame-Options"] = "DENY"
             response.headers["Referrer-Policy"] = "no-referrer"
@@ -254,7 +324,16 @@ async def security_and_rate_limit_middleware(request: Request, call_next):
     else:
         remaining = RATE_LIMIT_PER_WINDOW
 
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        _record_error_event(
+            request=request,
+            status=500,
+            error_code="UNHANDLED_EXCEPTION",
+            message=str(exc),
+        )
+        raise
     duration_ms = (time.perf_counter() - started) * 1000
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -263,7 +342,15 @@ async def security_and_rate_limit_middleware(request: Request, call_next):
     response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_PER_WINDOW)
     response.headers["X-RateLimit-Remaining"] = str(remaining)
     response.headers["X-RateLimit-Window"] = str(RATE_LIMIT_WINDOW_SECONDS)
+    response.headers["X-RateLimit-Scope"] = limiter_scope
     response.headers["X-Process-Time-Ms"] = f"{duration_ms:.2f}"
+    if response.status_code >= 500:
+        _record_error_event(
+            request=request,
+            status=response.status_code,
+            error_code="HTTP_5XX",
+            message=f"HTTP {response.status_code}",
+        )
     if TIMING_LOG_ENABLED:
         logger.info(
             "HTTP_REQUEST method=%s path=%s status=%s duration_ms=%.2f",
@@ -683,6 +770,22 @@ def _resolve_portfolio_id(portfolio_id: str, user_id: str | int | None = None) -
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid portfolio id")
 
+
+def _validate_portfolio_name(name: str) -> str:
+    cleaned = (name or "").strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="Portfolio name is required.")
+    if len(cleaned) > 80:
+        raise HTTPException(status_code=400, detail="Portfolio name must be 80 characters or fewer.")
+    return cleaned
+
+
+def _validate_currency(code: str | None) -> str:
+    cleaned = (code or "USD").strip().upper()
+    if len(cleaned) != 3 or not cleaned.isalpha():
+        raise HTTPException(status_code=400, detail="Currency must be a 3-letter ISO code (e.g., USD).")
+    return cleaned
+
 def _load_holdings(portfolio_id: int) -> list[dict]:
     snapshot = data_manager.load_snapshot(portfolio_id)
     holdings: list[dict] = []
@@ -990,8 +1093,7 @@ def get_cache_status(x_admin_key: str | None = Header(default=None)):
     """
     Diagnostic endpoint to check cache index health and local storage size.
     """
-    admin_key = os.getenv("ADMIN_WARMUP_KEY")
-    if not admin_key or x_admin_key != admin_key:
+    if not _admin_key_valid(x_admin_key):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     # 1. Check Supabase / DB Connection and Index Count
@@ -1045,8 +1147,7 @@ def clear_cache(x_admin_key: str | None = Header(default=None)):
     Use when Yahoo Finance data is returning old/stale dates.
     Clears both local filesystem and Supabase storage.
     """
-    admin_key = os.getenv("ADMIN_WARMUP_KEY")
-    if not admin_key or x_admin_key != admin_key:
+    if not _admin_key_valid(x_admin_key):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     result = {
@@ -1101,6 +1202,29 @@ def clear_cache(x_admin_key: str | None = Header(default=None)):
     
     logger.info("CACHE_CLEARED result=%s", result)
     return result
+
+
+@app.get("/admin/error-events")
+def get_error_events(
+    x_admin_key: str | None = Header(default=None),
+    status_min: int = 500,
+    limit: int = 20,
+):
+    if not _admin_key_valid(x_admin_key):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    resolved_limit = max(1, min(int(limit), 200))
+    resolved_status_min = max(100, int(status_min))
+    filtered = [
+        event
+        for event in reversed(list(_error_events))
+        if int(event.get("status", 0)) >= resolved_status_min
+    ][:resolved_limit]
+    return {
+        "events": filtered,
+        "count": len(filtered),
+        "buffer_size": len(_error_events),
+        "max_buffer_size": max(10, ERROR_EVENTS_MAX),
+    }
 
 @app.post("/api/v1/run")
 async def create_run_alias(
@@ -1311,6 +1435,51 @@ def get_portfolio(portfolio_id: str, current_user: dict = Depends(get_current_us
 def portfolio_alias(portfolio_id: str, current_user: dict = Depends(get_current_user)):
     return get_portfolio(portfolio_id, current_user=current_user)
 
+
+@app.post("/api/v1/portfolios")
+def create_portfolio(payload: dict, current_user: dict = Depends(get_current_user)):
+    name = _validate_portfolio_name(str(payload.get("name", "")))
+    currency = _validate_currency(payload.get("currency"))
+
+    if use_supabase():
+        from storage_supabase.db import session_scope as supa_session_scope
+        from storage_supabase import models as supa_models
+
+        user_id = current_user.get("user_id")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Missing authenticated user context.")
+        with supa_session_scope() as session:
+            portfolio = supa_models.Portfolio(
+                user_id=str(user_id),
+                name=name,
+                base_currency=currency,
+            )
+            session.add(portfolio)
+            session.flush()
+            return {
+                "portfolio": {
+                    "id": portfolio.id,
+                    "name": portfolio.name,
+                    "currency": portfolio.base_currency,
+                }
+            }
+
+    with session_scope() as session:
+        portfolio = Portfolio(
+            user_id=0,
+            name=name,
+            currency=currency,
+        )
+        session.add(portfolio)
+        session.flush()
+        return {
+            "portfolio": {
+                "id": portfolio.id,
+                "name": portfolio.name,
+                "currency": getattr(portfolio, "currency", currency),
+            }
+        }
+
 @app.get("/api/v1/definitions")
 def get_definitions():
     cached = _ttl_cache.get("definitions_registry", DEFINITIONS_CACHE_TTL_SECONDS)
@@ -1345,8 +1514,7 @@ def _store_warmup_report(report: dict) -> None:
 
 @app.post("/admin/warmup")
 def warmup(payload: dict | None = None, x_admin_key: str | None = Header(default=None)):
-    admin_key = os.getenv("ADMIN_WARMUP_KEY")
-    if not admin_key or x_admin_key != admin_key:
+    if not _admin_key_valid(x_admin_key):
         raise HTTPException(status_code=403, detail="Unauthorized")
     payload = payload or {}
     benchmarks = payload.get("benchmarks") or ["SPY"]

@@ -2,7 +2,7 @@
 
 > **Goal:** Validated "Zero-Cost" Beta Launch (50 users)  
 > **Constraint:** $0 incremental spend. Supabase-first architecture.  
-> **Status:** Phase 0 (Cleanup) and Phase 1 (Value Engine) completed. Phase 2 (Auth & Multi-Tenancy) nearly complete; RLS apply/verify remains.
+> **Status:** Phase 0 (Cleanup), Phase 1 (Value Engine), and most of Phase 2 completed. Phase 3 started (landing + onboarding implemented).
 
 ## Phase 0: Foundation Cleanup
 - [x] Golden Test Harness (7 scenarios implemented)
@@ -54,11 +54,11 @@
   - [x] Restrict service-context fallback to explicit internal env (`SUPABASE_SERVICE_CONTEXT_USER_ID`)
 
 ## Phase 3: Beta Polish
-- [ ] Landing Page (Simple "Sign up for Beta")
-- [ ] Onboarding Flow (Portfolio creation + CSV upload)
-- [ ] Cloud Run Error Monitoring (Log queries)
-- [ ] Production CORS Update
-- [ ] User-based Rate Limiting
+- [x] Landing Page (Simple "Sign up for Beta")
+- [x] Onboarding Flow (Portfolio creation + CSV upload)
+- [x] Cloud Run Error Monitoring (Log queries)
+- [x] Production CORS Update
+- [x] User-based Rate Limiting
 - [ ] Smoke Test (50 users)
 
 ## Reference Documents

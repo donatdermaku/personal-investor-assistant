@@ -2,6 +2,7 @@ import type {
     DefinitionsRegistry,
     NexusState,
     PortfolioResponse,
+    PortfolioCreateResponse,
     RunManifest,
     RunMetricsResponse,
     RunListItem,
@@ -133,6 +134,28 @@ export async function getDefinitions(): Promise<DefinitionsRegistry> {
 export async function getPortfolio(portfolioId = "default"): Promise<PortfolioResponse | null> {
     if (!API_BASE) return null;
     return fetchJson(`${API_BASE}/portfolio/${portfolioId}`, true);
+}
+
+export async function createPortfolio(params: { name: string; currency?: string }): Promise<PortfolioCreateResponse> {
+    if (!API_BASE) {
+        throw new Error("Backend URL is not configured.");
+    }
+    const res = await fetch(`${API_BASE}/api/v1/portfolios`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            ...(await getAuthHeaders()),
+        },
+        body: JSON.stringify({
+            name: params.name,
+            currency: params.currency ?? "USD",
+        }),
+    });
+    if (!res.ok) {
+        const message = await resolveErrorMessage(res);
+        throw new Error(message);
+    }
+    return res.json();
 }
 
 export async function getRunMetrics(runId: string): Promise<RunMetricsResponse> {

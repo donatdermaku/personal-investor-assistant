@@ -275,6 +275,10 @@ export interface PortfolioMeta {
     benchmark?: string | null;
 }
 
+export interface PortfolioCreateResponse {
+    portfolio: PortfolioMeta;
+}
+
 export interface DefinitionItem {
     title: string;
     definition_md: string;

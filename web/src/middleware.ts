@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { updateSession } from "@/lib/supabase/middleware";
 
-const PROTECTED_PREFIXES = ["/overview", "/performance", "/holdings", "/risk", "/operations"];
+const PROTECTED_PREFIXES = ["/overview", "/performance", "/holdings", "/risk", "/operations", "/onboarding"];
 
 function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
@@ -51,5 +51,12 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/overview/:path*", "/performance/:path*", "/holdings/:path*", "/risk/:path*", "/operations/:path*"],
+  matcher: [
+    "/overview/:path*",
+    "/performance/:path*",
+    "/holdings/:path*",
+    "/risk/:path*",
+    "/operations/:path*",
+    "/onboarding/:path*",
+  ],
 };
