@@ -190,7 +190,14 @@ class MarketDataStore:
             if prev_days:
                 aligned[td] = prev_days[-1] # Max of prev_days
             else:
-                missing.append(td.isoformat())
+                # No previous trading day available (trade date before any market data).
+                # Try the next available trading day instead — handles holidays and
+                # trades at the very start of the price range.
+                next_days = [d for d in sorted_available if d > td]
+                if next_days:
+                    aligned[td] = next_days[0]
+                else:
+                    missing.append(td.isoformat())
 
         if missing:
             raise MarketDataError(
