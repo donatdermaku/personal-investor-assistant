@@ -665,3 +665,80 @@ alembic current
 | Coverage Semantics | `/docs/COVERAGE_SEMANTICS.md` | Data availability rules |
 | Metrics Definitions | `/docs/METRICS_DEFINITIONS.md` | KPI specifications |
 | Schema | `/docs/SCHEMA.md` | Database schema |
+
+---
+
+## 15. Phase -1 Baseline Capture
+
+### ENVIRONMENT
+- Python version: `3.12.11`
+- pandas: `2.2.3`
+- numpy: `1.26.4`
+- duckdb: `1.4.3`
+- scipy: `1.13.1`
+- sqlalchemy: `2.0.41`
+- Full pip freeze: `docs/planning/pip_freeze_phase_minus_1.txt`
+
+### BASELINE TEST RESULTS
+- Command: `pytest --tb=short -q`
+- Exact result: `149 passed, 1 skipped, 70 warnings in 20.20s`
+
+### FIXTURE HASHES
+- Random seed used for fixture generation: `np.random.seed(42)`
+- `tests/fixtures/baseline_ledger.csv`: `817f4c68cc027784d564ee349f42f438ece64360d504370bb1b92dfa3141c18f`
+- `tests/fixtures/baseline_prices.parquet`: `9e6b396c74e597549f63afe2c1ef341b3aaf2ec105435fe969b673aec3b6e3dc`
+
+### GOLDEN METRICS SNAPSHOT (PHASE -1)
+- File: `tests/fixtures/golden_metrics_phase_minus_1.json`
+- Payload:
+```json
+{
+  "twr": 0.0493976052144709,
+  "mwr": -0.07242406503979686,
+  "sharpe_rolling_last": 0.010716854141029198,
+  "sharpe_api": 0.6222303689200788,
+  "max_drawdown": -0.09112418483507145,
+  "factor_tilt_value": 12.5,
+  "factor_tilt_quality": 5.0,
+  "factor_tilt_momentum": 5.0,
+  "score_coverage_pct": null,
+  "rf_coverage_pct": null
+}
+```
+
+### FUNCTION INVENTORY
+file: `src/analytics/rolling.py`
+  - `compute_rolling_metrics()` — lines 7-46 — computes rolling volatility, rolling Sharpe, rolling drawdown — BUG: rolling Sharpe divides daily mean by annualized volatility.
+
+file: `src/portfolio.py`
+  - `compute_twr()` — lines 117-131 — daily geometric linking with external cashflows — BUG: `inf/-inf` normalized to `0.0`, which can corrupt linked return logic.
+  - `compute_irr()` — lines 134-135 — thin wrapper over `_xirr` — BUG: no valuation end date parameter.
+  - `compute_portfolio_from_ledger()` — lines 232-366 — builds cashflow series and valuations — BUG: MWR flow sign semantics and inclusion of internal flows (`DIVIDEND`, `INTEREST`, `FEE`).
+  - `_xirr()` — lines 415-468 — Newton + finite-difference derivative + bisection fallback — BUG: hardcoded bracket and terminal value date handling.
+
+file: `src/api/server.py`
+  - `_compute_risk_metrics()` — lines 710-746 — point-in-time VaR/CVaR/volatility/Sharpe from exported returns — dependency for Phase 0 Sharpe parity check and Phase 1 RF coverage behavior.
+
+file: `src/compute/factors.py`
+  - `_build_ttm_rollup()` — lines 45-75 — pandas-based trailing four-quarter rollups for fundamentals.
+  - `_calc_fundamental_metrics()` — lines 125-191 — per-ticker grouped transformations and rolling stats.
+  - `compute()` — lines 203-417 — factor pipeline composition (value/quality/momentum/composite).
+  - `main()` — lines 420-538 — loads full DuckDB tables and writes score outputs.
+
+file: `src/ingest/fundamentals_sec.py`
+  - `pull_company_facts()` — lines 60-77 — SEC fetch + cache with retries.
+  - `main()` — lines 119-188 — sequential ticker ingestion and persistence.
+
+file: `src/ingest/prices.py`
+  - `_split_multiindex()` — lines 77-91 — splits yfinance multi-index frame per ticker.
+  - `main()` — lines 94-160 — batched yfinance download and persistence.
+
+file: `manage.py`
+  - `cmd_update()` — lines 41-46 — currently aliases compute path; does not execute ingest stages.
+
+### OPEN ISSUES
+- Plan/file mismatch detected before Phase 0 start:
+  - Risk-free implementation file in repository is `src/risk_free.py` (not `src/analytics/risk_free.py`).
+  - Factor-tilt runtime implementation is in `src/analytics/factors.py`; plan references `src/compute/factors.py` for Phase 1.3 behavior change.
+- Resolution to apply after Phase -1 gate: treat these as execution-path ambiguities and log final handling under `PLAN DEVIATIONS` once Phase 0 begins.
+
