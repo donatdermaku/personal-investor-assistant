@@ -125,14 +125,35 @@ def compute_twr(
     else:
         cf = external_cashflows.reindex(valuation_series.index).fillna(0.0)
     prev = valuation_series.shift(1)
-    daily = (valuation_series - cf) / prev - 1.0
-    daily = daily.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-    twr = (1 + daily).prod() - 1
+    raw_daily = (valuation_series - cf) / prev - 1.0
+    valid = prev > 0
+    daily = raw_daily.where(valid)
+
+    # Start a new linked sub-period after a zero-balance day that receives a flow.
+    relink_points = (prev == 0) & (cf != 0)
+    subperiod_id = relink_points.cumsum()
+
+    linked_terms: list[float] = []
+    for _, group in daily.groupby(subperiod_id):
+        valid_group = pd.to_numeric(group, errors="coerce").dropna()
+        if valid_group.empty:
+            continue
+        linked_terms.append(float((1.0 + valid_group).prod() - 1.0))
+
+    if not linked_terms:
+        return None, daily
+    twr = float(np.prod([1.0 + term for term in linked_terms]) - 1.0)
     return twr, daily
 
 
-def compute_irr(cashflows: pd.Series, terminal_value: float | None) -> float | None:
-    return _xirr(cashflows, terminal_value)
+def compute_irr(
+    cashflows: pd.Series,
+    terminal_value: float | None,
+    valuation_end_date: pd.Timestamp | str | None = None,
+) -> float | None:
+    if valuation_end_date is None:
+        raise ValueError("valuation_end_date is required for IRR calculation.")
+    return _xirr(cashflows, terminal_value, valuation_end_date)
 
 
 def compute_monthly_returns(daily_returns: pd.Series) -> pd.Series:
@@ -330,9 +351,8 @@ def compute_portfolio_from_ledger(
                 if action in {"DEPOSIT", "WITHDRAWAL"}:
                     flow = price if action != "WITHDRAWAL" else -abs(price)
                     cashflows.append((day, flow))
-                if action in {"DEPOSIT", "WITHDRAWAL", "DIVIDEND", "FEE", "INTEREST"}:
-                    flow = price if action not in {"WITHDRAWAL", "FEE"} else -abs(price)
-                    mwr_flow = -abs(price) if action == "DEPOSIT" else flow
+                if action in {"DEPOSIT", "WITHDRAWAL"}:
+                    mwr_flow = -abs(price) if action == "DEPOSIT" else abs(price)
                     cashflows_mwr.append((day, mwr_flow))
 
         snapshot = prices[prices["date"] == d]
@@ -358,9 +378,13 @@ def compute_portfolio_from_ledger(
         cashflows_mwr_series = pd.Series(dtype=float)
 
     twr, daily_returns = compute_twr(values_df["value"], cashflows_series)
-    mwr = compute_irr(cashflows_mwr_series, values_df["value"].iloc[-1] if not values_df.empty else None)
+    mwr = compute_irr(
+        cashflows_mwr_series,
+        values_df["value"].iloc[-1] if not values_df.empty else None,
+        valuation_end_date=values_df.index[-1] if not values_df.empty else None,
+    )
 
-    returns = daily_returns if not daily_returns.empty else values_df["value"].pct_change().fillna(0.0)
+    returns = daily_returns.fillna(0.0) if not daily_returns.empty else values_df["value"].pct_change().fillna(0.0)
     holdings_daily = pd.DataFrame(holdings_snapshots) if holdings_snapshots else pd.DataFrame(columns=["date", "ticker", "quantity"])
 
     return PortfolioResult("ledger", values_df, returns, holdings_daily, cashflows_series, mwr, twr, errors)
@@ -412,12 +436,16 @@ def _expand_holdings(holdings: dict[str, float], prices: pd.DataFrame, dates: It
     return pd.DataFrame(records)
 
 
-def _xirr(cashflows: pd.Series, terminal_value: float | None) -> float | None:
+def _xirr(
+    cashflows: pd.Series,
+    terminal_value: float | None,
+    valuation_end_date: pd.Timestamp | str,
+) -> float | None:
     if terminal_value is None or cashflows.empty:
         return None
-    dates = list(cashflows.index)
+    dates = [pd.Timestamp(d) for d in cashflows.index]
     amounts = list(cashflows.values)
-    dates.append(dates[-1])
+    dates.append(pd.Timestamp(valuation_end_date))
     amounts.append(terminal_value)
 
     def npv(rate: float) -> float:

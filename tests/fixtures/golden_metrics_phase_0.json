@@ -1,0 +1,12 @@
+{
+  "twr": 0.0493976052144709,
+  "mwr": 0.04973609575086422,
+  "sharpe_rolling_last": 2.700647243539358,
+  "sharpe_api": 0.6222303689200788,
+  "max_drawdown": -0.09112418483507145,
+  "factor_tilt_value": 12.5,
+  "factor_tilt_quality": 5.0,
+  "factor_tilt_momentum": 5.0,
+  "score_coverage_pct": null,
+  "rf_coverage_pct": null
+}

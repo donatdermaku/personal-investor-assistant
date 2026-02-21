@@ -25,7 +25,7 @@ def test_twr_with_cashflow() -> None:
 def test_irr_trivial_case() -> None:
     dates = pd.to_datetime(["2024-01-01", "2025-01-01"])
     cashflows = pd.Series([-100.0, 0.0], index=dates)
-    irr = compute_irr(cashflows, 110.0)
+    irr = compute_irr(cashflows, 110.0, valuation_end_date=dates[-1])
     assert irr is not None
     assert_close(irr, 0.10, tol=1e-3)
 
@@ -35,7 +35,7 @@ def test_mwr_differs_from_twr_with_late_deposit() -> None:
     values = pd.Series([100.0, 1100.0, 1210.0], index=dates)
     cashflows = pd.Series([-100.0, -900.0, 0.0], index=[dates[0], dates[1], dates[2]])
     twr, _ = compute_twr(values, pd.Series([900.0], index=[dates[1]]))
-    irr = compute_irr(cashflows, 1210.0)
+    irr = compute_irr(cashflows, 1210.0, valuation_end_date=dates[-1])
     assert irr is not None
     assert irr < twr
 

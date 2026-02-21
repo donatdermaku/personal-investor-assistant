@@ -742,3 +742,49 @@ file: `manage.py`
   - Factor-tilt runtime implementation is in `src/analytics/factors.py`; plan references `src/compute/factors.py` for Phase 1.3 behavior change.
 - Resolution to apply after Phase -1 gate: treat these as execution-path ambiguities and log final handling under `PLAN DEVIATIONS` once Phase 0 begins.
 
+
+### Phase 0.1 Status
+- Verified `rolling_vol = std(ddof=1) * sqrt(252)` in `src/analytics/rolling.py`.
+- Updated rolling Sharpe to annualized form: `(rolling_mean * 252) / rolling_vol`.
+- Added targeted tests: `tests/test_rolling.py`.
+- Gate result: `2 passed` (`pytest --tb=short -q tests/test_rolling.py`).
+
+### Phase 0.2 Status
+- Updated MWR external-flow semantics in `src/portfolio.py`:
+  - External MWR flows include only `DEPOSIT` and `WITHDRAWAL`.
+  - `DEPOSIT -> negative`, `WITHDRAWAL -> positive`.
+  - `compute_irr(..., valuation_end_date=...)` now requires valuation end date and appends terminal value at that date.
+- Added targeted tests: `tests/test_mwr.py`.
+- Gate result: `4 passed` (`pytest --tb=short -q tests/test_mwr.py`).
+
+### TWR SUB-PERIOD CONVENTION
+Worked example (required convention before implementation):
+- Phase 1: portfolio falls from `100` to `0` with no external inflow during loss interval.
+  - `TWR_1 = (0 / 100) - 1 = -1.0`.
+- Phase 2: new capital injected (`+100`) and portfolio grows from `100` to `200`.
+  - `TWR_2 = (200 / 100) - 1 = +1.0`.
+- Linked total:
+  - `TWR_total = (1 + TWR_1) * (1 + TWR_2) - 1`
+  - `= (1 - 1.0) * (1 + 1.0) - 1`
+  - `= 0 * 2 - 1 = -1.0`.
+
+Therefore a complete wipeout in an earlier linked sub-period is permanent in the linked TWR chain.
+
+### Phase 0.3 Status
+- Implemented zero-balance sub-period relinking in `compute_twr()`.
+- Undefined periods (`V_(t-1) == 0` and no cashflow) now stay `NaN` in raw daily TWR output and are excluded from geometric linking.
+- Added targeted tests: `tests/test_twr.py`.
+- Gate result: `4 passed` (`pytest --tb=short -q tests/test_twr.py`).
+
+### Phase 0 Completion Gate
+- Full suite command: `pytest --tb=short -q`
+- Result: `159 passed, 1 skipped, 70 warnings in 5.77s`
+- Baseline floor preserved: no previously passing test remains failing.
+
+### Phase 0 Golden Snapshot
+- Created: `tests/fixtures/golden_metrics_phase_0.json`
+- Delta vs `tests/fixtures/golden_metrics_phase_minus_1.json`:
+  - `twr`: `0.0493976052144709 -> 0.0493976052144709` (no change; expected for this fixture).
+  - `mwr`: `-0.07242406503979686 -> 0.04973609575086422` (intentional fix from corrected external-flow filtering/sign convention + terminal-date timing).
+  - `sharpe_rolling_last`: `0.010716854141029198 -> 2.700647243539358` (intentional annualization fix in rolling Sharpe).
+

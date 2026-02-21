@@ -29,7 +29,7 @@ def compute_rolling_metrics(
         returns = (aligned["daily_return"] - aligned["rf_daily_return"].fillna(0.0)).reset_index(drop=True)
     rolling_vol = returns.rolling(window, min_periods=window).std(ddof=1) * np.sqrt(252)
     rolling_mean = returns.rolling(window, min_periods=window).mean()
-    rolling_sharpe = rolling_mean / rolling_vol.replace({0.0: np.nan})
+    rolling_sharpe = (rolling_mean * 252.0) / rolling_vol.replace({0.0: np.nan})
     rolling_sharpe = rolling_sharpe.replace([np.inf, -np.inf], np.nan)
 
     drawdown = pd.to_numeric(perf.get("drawdown"), errors="coerce")
