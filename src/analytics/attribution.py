@@ -95,15 +95,17 @@ def compute_attribution(
     )
 
     # Per-asset summaries (streamed)
-    log_terms = np.log1p(portfolio_returns.to_numpy(dtype=np.float64))
-    log_terms = np.where(portfolio_returns.to_numpy() == -1.0, np.nan, log_terms)
+    pr_vals_raw = portfolio_returns.to_numpy(dtype=np.float64)
+    safe_pr = np.clip(pr_vals_raw, -0.9999, None)
+    log_terms = np.log1p(safe_pr)
+    log_terms = np.where(pr_vals_raw == -1.0, np.nan, log_terms)
     sum_log = float(np.nansum(log_terms))
     total_return = float(np.expm1(sum_log)) if sum_log != 0 else 0.0
     carino_weights = np.zeros(len(calendar), dtype=np.float64)
     pr_vals = portfolio_returns.to_numpy(dtype=np.float64)
     non_zero = pr_vals != 0
     carino_weights[non_zero] = log_terms[non_zero] / pr_vals[non_zero]
-    factor = np.log1p(total_return) / sum_log if sum_log != 0 else 1.0
+    factor = np.log1p(max(total_return, -0.9999)) / sum_log if sum_log != 0 else 1.0
 
     alloc_sum = np.zeros(n_assets, dtype=np.float64)
     sel_sum = np.zeros(n_assets, dtype=np.float64)
@@ -149,7 +151,8 @@ def _carino_link(component: pd.Series, total_returns: pd.Series) -> float:
     total_returns = total_returns.fillna(0.0)
     component = component.reindex(total_returns.index).fillna(0.0)
 
-    log_terms = np.log1p(total_returns.replace({-1.0: np.nan}))
+    safe_returns = total_returns.replace({-1.0: np.nan}).clip(lower=-0.9999)
+    log_terms = np.log1p(safe_returns)
     sum_log = float(log_terms.sum())
     total_return = float(np.expm1(sum_log)) if sum_log != 0 else 0.0
 
@@ -161,7 +164,7 @@ def _carino_link(component: pd.Series, total_returns: pd.Series) -> float:
     weights[non_zero] = log_terms[non_zero] / total_returns[non_zero]
 
     scaled = float((component * weights).sum())
-    factor = np.log1p(total_return) / sum_log if sum_log != 0 else 1.0
+    factor = np.log1p(max(total_return, -0.9999)) / sum_log if sum_log != 0 else 1.0
     return float(scaled * factor)
 
 
@@ -174,7 +177,7 @@ def _summarize_attribution(
     allocation_total = _carino_link(allocation, total_returns)
     selection_total = _carino_link(selection, total_returns)
     interaction_total = _carino_link(interaction, total_returns)
-    total_return = float(np.expm1(np.log1p(total_returns.fillna(0.0)).sum()))
+    total_return = float(np.expm1(np.log1p(total_returns.fillna(0.0).clip(lower=-0.9999)).sum()))
     combined = allocation_total + selection_total + interaction_total
     if combined != 0:
         scale = total_return / combined

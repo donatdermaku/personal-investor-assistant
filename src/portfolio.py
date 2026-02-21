@@ -256,13 +256,41 @@ def compute_portfolio_from_ledger(
     if len(price_dates) == 0:
         return PortfolioResult("ledger", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, ["No price data available."])
 
+    # Only compute from the first trade date onward — avoids iterating over
+    # years of irrelevant history (e.g. 2010→2024) that produce zero-value rows
+    first_trade = ledger["date"].min()
+    if pd.notna(first_trade):
+        price_dates = price_dates[price_dates >= first_trade]
+    if len(price_dates) == 0:
+        return PortfolioResult("ledger", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, ["No price data after first trade date."])
+
     holdings = {}
     cash = 0.0
     daily_values = []
+    holdings_snapshots = []  # Track holdings state at each date
     cashflows = []
     cashflows_mwr = []
 
-    ledger_by_date = {d: g for d, g in ledger.groupby(ledger["date"].dt.normalize())}
+    # Group ledger entries by trading day, snapping non-trading days
+    # (holidays, weekends) to the NEXT available trading day so that
+    # deposits/trades on e.g. MLK Day or Labor Day are not silently dropped.
+    price_dates_set = set(price_dates)
+    ledger_by_date: dict[pd.Timestamp, pd.DataFrame] = {}
+    for ledger_date, grp in ledger.groupby(ledger["date"].dt.normalize()):
+        if ledger_date in price_dates_set:
+            target = ledger_date
+        else:
+            # Find next available trading day
+            future = [d for d in price_dates if d > ledger_date]
+            if future:
+                target = pd.Timestamp(future[0]).normalize()
+            else:
+                # No future trading day — snap to last available
+                target = pd.Timestamp(price_dates[-1]).normalize()
+        if target in ledger_by_date:
+            ledger_by_date[target] = pd.concat([ledger_by_date[target], grp])
+        else:
+            ledger_by_date[target] = grp
 
     for d in price_dates:
         day = pd.Timestamp(d).normalize()
@@ -314,6 +342,10 @@ def compute_portfolio_from_ledger(
             if not price_row.empty:
                 value += qty * float(price_row.iloc[0]["adj_close"])
         daily_values.append({"date": d, "value": value, "cash": cash})
+        # Snapshot the current holdings state (not just the final state)
+        for ticker, qty in holdings.items():
+            if qty != 0:
+                holdings_snapshots.append({"date": d, "ticker": ticker, "quantity": qty})
 
     values_df = pd.DataFrame(daily_values).set_index("date")
     if cashflows:
@@ -329,7 +361,7 @@ def compute_portfolio_from_ledger(
     mwr = compute_irr(cashflows_mwr_series, values_df["value"].iloc[-1] if not values_df.empty else None)
 
     returns = daily_returns if not daily_returns.empty else values_df["value"].pct_change().fillna(0.0)
-    holdings_daily = _expand_holdings(holdings, prices, values_df.index)
+    holdings_daily = pd.DataFrame(holdings_snapshots) if holdings_snapshots else pd.DataFrame(columns=["date", "ticker", "quantity"])
 
     return PortfolioResult("ledger", values_df, returns, holdings_daily, cashflows_series, mwr, twr, errors)
 

@@ -1070,31 +1070,9 @@ async def create_run(
     tickers = portfolio_service.extract_tickers(validated)
     logger.info("RUN_TICKERS count=%s tickers=%s", len(tickers), tickers[:10] if len(tickers) > 10 else tickers)
     log_rss("after_csv_read")  # Track memory after CSV parsing
-    
-    # Use MarketDataService for fetching
-    failed_tickers: list[str] = []
-    if tickers:
-        trade_dates = pd.to_datetime(validated["date"], errors="coerce").dt.date.dropna().unique().tolist()
-        
-        try:
-            market_data_service = MarketDataService()
-            _, failed_tickers = market_data_service.fetch_batch(tickers, trade_dates)
-        except MarketDataError as exc:
-            # Get user-friendly error message
-            user_message = MarketDataService.get_user_friendly_error_message(exc.error_code, exc.details.get("ticker", "unknown"))
-            
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "error_code": exc.error_code,
-                    "message": user_message,
-                    "ticker": exc.details.get("ticker"),
-                    "hint": exc.hint or "Check market data coverage for this ticker.",
-                },
-            )
-    
-    if failed_tickers:
-        logger.warning("RUN_TICKERS_FAILED count=%s tickers=%s", len(failed_tickers), failed_tickers)
+
+    # Market data is fetched inside compute_app_state → get_prices()
+    # No separate pre-fetch needed — eliminates redundant fetching that doubled processing time
 
     log_rss("before_compute")  # Track memory before computation
     
@@ -1103,7 +1081,6 @@ async def create_run(
     
     logger.info("RUN_COMPUTE_START run_id=%s portfolio_id=%s", run_id, resolved_portfolio_id)
     try:
-        # CRITICAL FIX: Pass extracted tickers to pipeline
         app_state = compute_app_state(
             portfolio_id=resolved_portfolio_id,
             run_id=run_id,
@@ -1111,7 +1088,7 @@ async def create_run(
             source_override="Ledger",
             uploads_active=True,
             run_type="uploaded",
-            trade_tickers=tickers,  # ← FIXED: Pass trade tickers to pipeline
+            trade_tickers=tickers,
         )
         logger.info("RUN_COMPUTE_SUCCESS run_id=%s", run_id)
         log_rss("after_compute")  # Track memory after computation
@@ -1119,14 +1096,17 @@ async def create_run(
         logger.info("RUN_ARTIFACTS_SAVED run_id=%s", run_id)
         manifest = app_state.run_manifest
         
-        # Build response with warnings if any tickers failed
+        # Build response with warnings if any tickers had missing market data
         response = {
             "run_id": manifest.run_id if manifest else "",
             "status": "completed",
             "timestamp": manifest.timestamp if manifest else None,
         }
         
+        # Surface failed tickers from the pipeline's price metadata
+        failed_tickers = app_state.price_meta.missing_tickers if app_state.price_meta else []
         if failed_tickers:
+            logger.warning("RUN_TICKERS_MISSING count=%s tickers=%s", len(failed_tickers), failed_tickers)
             response["warnings"] = {
                 "failed_tickers": {
                     "count": len(failed_tickers),
