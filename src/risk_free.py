@@ -32,7 +32,7 @@ def compute_risk_free_series(dates: pd.DatetimeIndex) -> RiskFreeSeries:
     if rates.isna().all():
         return RiskFreeSeries(series=pd.DataFrame(), status="unavailable", reason_codes=["NO_COVERAGE"])
 
-    annual_rate = rates.fillna(method="ffill").fillna(0.0) / 100.0
+    annual_rate = rates.ffill() / 100.0
     rf_daily = (1.0 + annual_rate) ** (1.0 / 252.0) - 1.0
     out = pd.DataFrame(
         {

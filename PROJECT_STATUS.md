@@ -788,3 +788,57 @@ Therefore a complete wipeout in an earlier linked sub-period is permanent in the
   - `mwr`: `-0.07242406503979686 -> 0.04973609575086422` (intentional fix from corrected external-flow filtering/sign convention + terminal-date timing).
   - `sharpe_rolling_last`: `0.010716854141029198 -> 2.700647243539358` (intentional annualization fix in rolling Sharpe).
 
+
+### PLAN DEVIATIONS
+- Original instruction: Phase 1.2 target file `src/analytics/risk_free.py`.
+  - Blocker discovered: repository risk-free implementation is located at `src/risk_free.py`; `src/analytics/risk_free.py` does not exist.
+  - Resolution chosen: implemented the Phase 1.2 changes in `src/risk_free.py` and propagated to `src/analytics/rolling.py` and `src/api/server.py` as specified.
+- Original instruction: Phase 1.3 target file `src/compute/factors.py` for factor tilt bias correction.
+  - Blocker discovered: live portfolio tilt computation is implemented in `src/analytics/factors.py` and called from `src/pipeline.py`.
+  - Resolution chosen: implement the Phase 1.3 tilt-bias fix in `src/analytics/factors.py` (runtime path), keeping `src/compute/factors.py` unchanged for the scoring engine.
+
+
+### EXCEPTIONS
+- File touched outside strict per-subphase target list for dependency wiring: `src/streamlit_export.py`.
+  - Reason: surface new non-fatal `PortfolioResult.warnings` in exported summary payload so IRR `no_root/ambiguous_multi_root` statuses are user-visible.
+  - Scope: added `warnings` field to summary JSON payload only; no analytics math changes.
+
+### Phase 1.1 Status
+- Replaced custom Newton/Bisection IRR solver with interval scan + `scipy.optimize.brentq` in `src/portfolio.py`.
+- Added typed IRR result object:
+  - `IRRResult(value, status, message)` where status is `ok | no_root | ambiguous_multi_root`.
+- Caller wiring:
+  - `compute_portfolio_from_ledger()` now handles IRR statuses explicitly and stores non-fatal IRR status in `PortfolioResult.warnings`.
+- Added targeted tests: `tests/test_irr_solver.py`.
+- Gate result: `4 passed` (`pytest --tb=short -q tests/test_irr_solver.py`).
+
+### Phase 1.2 Status
+- Removed silent risk-free zero-fill in `src/risk_free.py`.
+- Updated rolling Sharpe in `src/analytics/rolling.py` to compute excess returns only where RF is present.
+- Updated API risk metrics in `src/api/server.py`:
+  - Sharpe/volatility from excess returns only on RF-overlap.
+  - Added `rf_coverage_pct` in payload.
+- Added targeted tests: `tests/test_risk_free.py`.
+- Gate result: `4 passed` (`pytest --tb=short -q tests/test_risk_free.py`).
+
+### Phase 1.3 Status
+- Implemented factor-tilt bias correction in runtime tilt path `src/analytics/factors.py`:
+  - No post-drop renormalization of covered holdings.
+  - Added `score_coverage_pct` and `score_coverage_by_factor` to summary.
+  - Logs warning when coverage `< 0.5`.
+- Added/updated targeted tests in `tests/unit/test_factors.py`.
+- Gate result: `5 passed` (`pytest --tb=short -q tests/unit/test_factors.py`).
+
+### Phase 1 Completion Gate
+- Full suite command: `pytest --tb=short -q`
+- Result: `170 passed, 1 skipped, 70 warnings in 7.71s`
+- Created: `tests/fixtures/golden_metrics_phase_1.json`
+
+### Phase 1 Golden Comparison
+Comparison against `tests/fixtures/golden_metrics_phase_0.json` on baseline fixture:
+- `twr`: unchanged (`0.0493976052144709`).
+- `mwr`: `0.04973609575086422 -> 0.049736095726908874` (delta `~2.40e-11`, within tolerance).
+- `sharpe_rolling_last`: unchanged (`2.700647243539358`).
+- `sharpe_api`: unchanged (`0.6222303689200788`).
+- New metadata field from Phase 1.3: `score_coverage_pct = 1.0`.
+

@@ -29,6 +29,7 @@ def export_summary_json(path: Path, portfolio: PortfolioResult, manifest=None) -
         "twr": portfolio.twr,
         "mwr": portfolio.mwr,
         "errors": portfolio.errors,
+        "warnings": getattr(portfolio, "warnings", []),
     }
     
     # Add manifest details if available

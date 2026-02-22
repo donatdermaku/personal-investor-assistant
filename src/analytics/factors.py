@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 
 import numpy as np
 import pandas as pd
@@ -19,6 +20,8 @@ _FACTOR_COLUMN_CANDIDATES: dict[str, list[str]] = {
     "composite": ["composite_pct", "Composite"],
 }
 
+logger = logging.getLogger(__name__)
+
 
 def _select_factor_column(scores: pd.DataFrame, candidates: list[str]) -> str | None:
     for column in candidates:
@@ -30,12 +33,7 @@ def _select_factor_column(scores: pd.DataFrame, candidates: list[str]) -> str | 
 def _normalize_weights(weights: pd.Series) -> pd.Series:
     cleaned = pd.to_numeric(weights, errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
     cleaned = cleaned[cleaned > 0]
-    if cleaned.empty:
-        return pd.Series(dtype=float)
-    total = float(cleaned.sum())
-    if total <= 0:
-        return pd.Series(dtype=float)
-    return cleaned / total
+    return cleaned
 
 
 def compute_factor_tilts(
@@ -66,6 +64,13 @@ def compute_factor_tilts(
             details=pd.DataFrame(),
         )
 
+    total_weight = float(weights.sum())
+    if total_weight <= 0:
+        return FactorTiltOutput(
+            summary={"status": "unavailable", "reason": "MISSING_PORTFOLIO_WEIGHTS"},
+            details=pd.DataFrame(),
+        )
+
     scoped = scores.copy()
     scoped["ticker"] = scoped["ticker"].astype(str).str.upper()
     scoped = scoped.drop_duplicates(subset=["ticker"], keep="last")
@@ -79,6 +84,7 @@ def compute_factor_tilts(
         )
 
     details_rows: list[dict] = []
+    coverage_map: dict[str, float] = {}
     for factor_name, candidates in _FACTOR_COLUMN_CANDIDATES.items():
         column = _select_factor_column(scoped, candidates)
         if not column:
@@ -93,11 +99,12 @@ def compute_factor_tilts(
         if portfolio_factor.empty:
             continue
         aligned_weights = weights.reindex(portfolio_factor.index).fillna(0.0)
-        weight_sum = float(aligned_weights.sum())
-        if weight_sum <= 0:
+        covered_weight = float(aligned_weights.sum())
+        if covered_weight <= 0:
             continue
-        aligned_weights = aligned_weights / weight_sum
-        portfolio_mean = float((portfolio_factor * aligned_weights).sum())
+        score_coverage_pct = covered_weight / total_weight if total_weight > 0 else 0.0
+        coverage_map[factor_name] = score_coverage_pct
+        portfolio_mean = float((portfolio_factor * aligned_weights).sum() / total_weight)
         tilt_value = float(portfolio_mean - universe_mean)
 
         details_rows.append(
@@ -107,6 +114,7 @@ def compute_factor_tilts(
                 "portfolio_mean": portfolio_mean,
                 "universe_mean": universe_mean,
                 "tilt": tilt_value,
+                "score_coverage_pct": score_coverage_pct,
             }
         )
 
@@ -117,10 +125,15 @@ def compute_factor_tilts(
         )
 
     details = pd.DataFrame(details_rows).sort_values("factor").reset_index(drop=True)
+    overall_coverage = min(coverage_map.values()) if coverage_map else 0.0
+    if overall_coverage < 0.5:
+        logger.warning("Factor tilt estimate has low score coverage: %.4f", overall_coverage)
     summary = {
         "status": "ok",
         "portfolio_tickers_used": len(common),
         "factor_count": int(details.shape[0]),
+        "score_coverage_pct": overall_coverage,
+        "score_coverage_by_factor": coverage_map,
         "tilts": {
             row["factor"]: float(row["tilt"])
             for _, row in details.iterrows()

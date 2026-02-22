@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import brentq
 
 
 from storage.datamanager import data_manager
@@ -150,7 +151,7 @@ def compute_irr(
     cashflows: pd.Series,
     terminal_value: float | None,
     valuation_end_date: pd.Timestamp | str | None = None,
-) -> float | None:
+) -> IRRResult:
     if valuation_end_date is None:
         raise ValueError("valuation_end_date is required for IRR calculation.")
     return _xirr(cashflows, terminal_value, valuation_end_date)
@@ -197,6 +198,18 @@ class PortfolioResult:
     mwr: float | None
     twr: float | None
     errors: list[str]
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass
+class IRRResult:
+    value: float | None
+    status: str  # "ok" | "no_root" | "ambiguous_multi_root"
+    message: str | None = None
+
+
+def _is_fatal_portfolio_error(message: str) -> bool:
+    return not str(message).startswith("MWR unavailable:")
 
 
 def load_portfolio(
@@ -236,7 +249,7 @@ def load_portfolio(
     # Auto-detect
     if not ledger_df.empty:
         result = compute_portfolio_from_ledger(ledger_df, prices)
-        if not result.errors:
+        if not result.errors or not any(_is_fatal_portfolio_error(e) for e in result.errors):
             return result
 
     if not snapshot_df.empty:
@@ -378,16 +391,20 @@ def compute_portfolio_from_ledger(
         cashflows_mwr_series = pd.Series(dtype=float)
 
     twr, daily_returns = compute_twr(values_df["value"], cashflows_series)
-    mwr = compute_irr(
+    irr_result = compute_irr(
         cashflows_mwr_series,
         values_df["value"].iloc[-1] if not values_df.empty else None,
         valuation_end_date=values_df.index[-1] if not values_df.empty else None,
     )
+    mwr = irr_result.value
+    warnings: list[str] = []
+    if irr_result.status in {"no_root", "ambiguous_multi_root"}:
+        warnings = [f"MWR unavailable: {irr_result.status}"]
 
     returns = daily_returns.fillna(0.0) if not daily_returns.empty else values_df["value"].pct_change().fillna(0.0)
     holdings_daily = pd.DataFrame(holdings_snapshots) if holdings_snapshots else pd.DataFrame(columns=["date", "ticker", "quantity"])
 
-    return PortfolioResult("ledger", values_df, returns, holdings_daily, cashflows_series, mwr, twr, errors)
+    return PortfolioResult("ledger", values_df, returns, holdings_daily, cashflows_series, mwr, twr, errors, warnings=warnings)
 
 
 def compute_portfolio_from_snapshot(snapshot: pd.DataFrame, prices: pd.DataFrame) -> PortfolioResult:
@@ -440,9 +457,9 @@ def _xirr(
     cashflows: pd.Series,
     terminal_value: float | None,
     valuation_end_date: pd.Timestamp | str,
-) -> float | None:
+) -> IRRResult:
     if terminal_value is None or cashflows.empty:
-        return None
+        return IRRResult(None, "no_root", "Missing terminal value or external cashflows.")
     dates = [pd.Timestamp(d) for d in cashflows.index]
     amounts = list(cashflows.values)
     dates.append(pd.Timestamp(valuation_end_date))
@@ -457,40 +474,40 @@ def _xirr(
             total += cf / (1 + rate) ** (days / 365)
         return total
 
-    rate = 0.1
-    for _ in range(100):
-        f = npv(rate)
-        if f != f:
-            break
-        if abs(f) < 1e-6:
-            return rate
-        # derivative approximation
-        f1 = npv(rate + 1e-5)
-        if f1 != f1:
-            break
-        derivative = (f1 - f) / 1e-5
-        if derivative == 0:
-            break
-        rate -= f / derivative
-        if rate <= -0.999999:
-            break
+    rates = np.arange(-0.99, 10.0 + 0.1, 0.1, dtype=float)
+    values = [npv(r) for r in rates]
+    intervals: list[tuple[float, float]] = []
 
-    low, high = -0.9, 10.0
-    f_low = npv(low)
-    f_high = npv(high)
-    if f_low != f_low or f_high != f_high or f_low * f_high > 0:
-        return None
-    for _ in range(200):
-        mid = (low + high) / 2
-        f_mid = npv(mid)
-        if f_mid != f_mid:
-            return None
-        if abs(f_mid) < 1e-7:
-            return mid
-        if f_low * f_mid <= 0:
-            high = mid
-            f_high = f_mid
-        else:
-            low = mid
-            f_low = f_mid
-    return (low + high) / 2
+    for i in range(len(rates) - 1):
+        left_r = float(rates[i])
+        right_r = float(rates[i + 1])
+        left_v = values[i]
+        right_v = values[i + 1]
+
+        if np.isnan(left_v) or np.isnan(right_v):
+            continue
+        if left_v == 0:
+            intervals.append((left_r, left_r))
+            continue
+        if left_v * right_v < 0:
+            intervals.append((left_r, right_r))
+
+    if not intervals:
+        return IRRResult(None, "no_root", f"No sign-change interval in [-0.99, 10.0] for {len(amounts)} cashflow points.")
+    if len(intervals) > 1:
+        signs = [int(np.sign(a)) for a in amounts if a != 0]
+        sign_changes = int(np.sum(np.diff(signs) != 0)) if len(signs) > 1 else 0
+        return IRRResult(
+            None,
+            "ambiguous_multi_root",
+            f"Multiple candidate roots detected ({len(intervals)} intervals); sign_changes={sign_changes}, cashflow_points={len(amounts)}.",
+        )
+
+    low, high = intervals[0]
+    if low == high:
+        return IRRResult(low, "ok")
+    try:
+        root = float(brentq(npv, low, high, maxiter=500))
+        return IRRResult(root, "ok")
+    except ValueError as exc:
+        return IRRResult(None, "no_root", str(exc))
