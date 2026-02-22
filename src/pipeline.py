@@ -86,6 +86,7 @@ def compute_app_state(
         coverage_tickers,
         source_override=source_override,
         uploads_active=uploads_active,
+        portfolio_id=portfolio_id,
     )
     try:
         from src.utils_memory import log_rss

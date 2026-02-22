@@ -217,11 +217,13 @@ def load_portfolio(
     watchlist: Iterable[str],
     source_override: str | None = None,
     uploads_active: bool = True,
+    portfolio_id: int | None = None,
     base_dir: Path | None = None,
 ) -> PortfolioResult:
-    # Resolve Portfolio ID (assuming default user/portfolio for now)
-    user_id = data_manager.get_current_user_id()
-    portfolio_id = data_manager.get_main_portfolio_id(user_id)
+    # Resolve portfolio id when caller did not provide one.
+    if portfolio_id is None:
+        user_id = data_manager.get_current_user_id()
+        portfolio_id = data_manager.get_main_portfolio_id(user_id)
 
     if not uploads_active and source_override != "Demo":
         return PortfolioResult("none", pd.DataFrame(), pd.Series(dtype=float), pd.DataFrame(), pd.Series(dtype=float), None, None, ["No uploads in this session."])
