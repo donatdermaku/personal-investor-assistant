@@ -6,7 +6,7 @@ import pandas as pd
 from src.compute.factors import _calc_fundamental_metrics, _calc_price_metrics
 
 
-def _legacy_build_ttm_rollup(group: pd.DataFrame) -> pd.DataFrame:
+def _legacy_build_ttm_rollup(group: pd.DataFrame, ticker: str | None = None) -> pd.DataFrame:
     g = group.sort_values("fiscal_end").copy()
     res = pd.DataFrame({"fiscal_end": g["fiscal_end"].values})
     rolling_cols = {
@@ -32,10 +32,15 @@ def _legacy_build_ttm_rollup(group: pd.DataFrame) -> pd.DataFrame:
         "sic",
         "cik",
         "entity_name",
-        "ticker",
     ]
     for col in passthrough:
         res[col] = g[col].values
+    if "ticker" in g.columns:
+        res["ticker"] = g["ticker"].values
+    elif ticker is not None:
+        res["ticker"] = ticker
+    else:
+        raise ValueError("ticker is required when group does not include ticker column")
     res["FCFTTM"] = res["OpCFTTM"] - res["CapexTTM"].fillna(0)
     return res
 
@@ -78,13 +83,13 @@ def test_ttm_window_sql_matches_legacy_partial_history() -> None:
     )
 
     rollup_new, _ = _calc_fundamental_metrics(fnds)
-    rollup_old = (
-        fnds.groupby("ticker", group_keys=False)
-        .apply(_legacy_build_ttm_rollup)
-        .reset_index(drop=True)
-        .sort_values(["ticker", "fiscal_end"])
-        .reset_index(drop=True)
-    )
+    rollup_old = pd.concat(
+        [
+            _legacy_build_ttm_rollup(group, ticker=str(ticker))
+            for ticker, group in fnds.groupby("ticker", sort=False)
+        ],
+        ignore_index=True,
+    ).sort_values(["ticker", "fiscal_end"]).reset_index(drop=True)
 
     compare_cols = [
         "RevenueTTM",
