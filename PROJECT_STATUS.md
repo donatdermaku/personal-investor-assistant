@@ -905,3 +905,51 @@ Comparison against `tests/fixtures/golden_metrics_phase_0.json` on baseline fixt
   - `factor_tilt_momentum`: unchanged (`5.0`)
   - `score_coverage_pct`: unchanged (`1.0`)
   - `rf_coverage_pct`: unchanged (`null`)
+
+### Phase 3.1 Status
+- Updated `manage.py::cmd_update(args)` to run staged workflow in strict order:
+  - `ingest_universe -> ingest_prices -> ingest_fundamentals -> compute_factors -> compute_analytics`.
+- Added explicit failure halting semantics:
+  - Any stage exception exits non-zero and prevents downstream stages from executing.
+- Added CLI flags to `update`:
+  - `--compute-only` (skips ingest/factor stages and runs compute analytics only).
+  - `--dry-run` (prints planned stage names without execution).
+- Added tests: `tests/test_cli.py`:
+  - `test_update_calls_ingest_before_compute`
+  - `test_ingest_failure_halts_pipeline`
+  - `test_compute_only_skips_ingest`
+  - `test_dry_run_no_execution`
+- Subphase gate result:
+  - `pytest --tb=short -q tests/test_cli.py` -> `4 passed`.
+
+### Phase 3 Completion Gate
+- Full suite command: `pytest --tb=short -q`
+- Result: `181 passed, 1 skipped, 71 warnings in 13.18s`
+- Created: `tests/fixtures/golden_metrics_phase_3.json`
+- Exact identity check:
+  - `golden_metrics_phase_3.json` matches `golden_metrics_phase_2.json` byte-for-byte (`cmp` exit `0`).
+
+### Final Verification
+- End-to-end run executed:
+  - `python manage.py update --compute-only`
+  - Result: succeeded (`exit 0`) and produced artifacts for run `6eb4cbb5-9c19-4782-98a4-d4c17eb04359`.
+  - Note: network-restricted environment caused expected Yahoo DNS warnings during benchmark/market fetch; pipeline still completed.
+- Fixture hash check (must remain unchanged):
+  - `tests/fixtures/baseline_ledger.csv`: `817f4c68cc027784d564ee349f42f438ece64360d504370bb1b92dfa3141c18f` (unchanged)
+  - `tests/fixtures/baseline_prices.parquet`: `9e6b396c74e597549f63afe2c1ef341b3aaf2ec105435fe969b673aec3b6e3dc` (unchanged)
+- Metric deltas vs `golden_metrics_phase_minus_1.json` (bug-fix rationale):
+  - `mwr` changed from `-0.07242406503979686` to `0.049736095726908874` because Phase 0 corrected IRR cashflow semantics (external flow filtering/sign convention) and terminal valuation date handling.
+  - `sharpe_rolling_last` changed from `0.010716854141029198` to `2.700647243539358` because Phase 0 fixed rolling Sharpe annualization to align with annualized volatility.
+  - `score_coverage_pct` changed from `null` to `1.0` because Phase 1 introduced explicit factor-score coverage reporting instead of implicit omission.
+
+### REFACTOR COMPLETE
+- Phases completed:
+  - `Phase -1`, `Phase 0`, `Phase 1`, `Phase 2`, `Phase 3`, and final verification.
+- Total tests added:
+  - 10 new test files during phased refactor (`tests/test_rolling.py`, `tests/test_mwr.py`, `tests/test_twr.py`, `tests/test_irr_solver.py`, `tests/test_risk_free.py`, `tests/test_factors_pushdown.py`, `tests/test_sec_ingestion.py`, `tests/test_prices_split.py`, `tests/test_cli.py`, plus additional phase-specific updates to existing suites).
+- Open issues remaining:
+  - None blocking; known warnings are deprecation/network-environment related and not correctness regressions.
+- Financial metrics changed and why:
+  - `MWR` and rolling `Sharpe` changed due to intentional mathematical bug fixes in Phase 0.
+  - Coverage metadata (`score_coverage_pct`) became explicit in Phase 1.
+  - Other locked metrics remained stable through Phases 2–3, confirming architecture/UX changes were non-regressive.
