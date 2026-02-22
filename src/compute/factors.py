@@ -5,6 +5,7 @@ import pathlib
 import sys
 from datetime import datetime, timezone
 
+import duckdb
 import numpy as np
 import pandas as pd
 
@@ -40,42 +41,47 @@ def _map_industry(sic: str) -> str:
     return industry_map.map_sic_to_industry(sic)
 
 
-def _build_ttm_rollup(group: pd.DataFrame) -> pd.DataFrame:
-    g = group.sort_values("fiscal_end").copy()
-    res = pd.DataFrame({"fiscal_end": g["fiscal_end"].values})
-    rolling_cols = {
-        "RevenueTTM": "Revenue",
-        "NetIncomeTTM": "NetIncome",
-        "OpCFTTM": "OperatingCF",
-        "CapexTTM": "CapitalExpenditures",
-        "GrossProfitTTM": "GrossProfit",
-        "EBITDATTM": "EBITDA",
-        "InterestExpenseTTM": "InterestExpense",
-    }
-    for out_col, src_col in rolling_cols.items():
-        res[out_col] = g[src_col].rolling(4, min_periods=1).sum().values
-
-    res["SharesDilutedTTM"] = g["SharesDiluted"].rolling(4, min_periods=1).mean().values
-    passthrough_cols = [
-        "Debt",
-        "CashAndEquivalents",
-        "TotalAssets",
-        "TotalLiabilities",
-        "CurrentAssets",
-        "CurrentLiabilities",
-        "filed",
-        "sic",
-        "cik",
-        "entity_name",
-    ]
-    for col in passthrough_cols:
-        res[col] = g[col].values
-    res["ticker"] = g["ticker"].values
-    res["FCFTTM"] = res["OpCFTTM"] - res["CapexTTM"].fillna(0)
-    return res
-
-
 def _calc_price_metrics(prices: pd.DataFrame) -> pd.DataFrame:
+    mom12_map: dict[str, float] = {}
+    if not prices.empty:
+        con = duckdb.connect()
+        con.register("prices_df", prices)
+        mom12_df = con.execute(
+            """
+            with lagged as (
+                select
+                    ticker,
+                    cast(date as date) as date,
+                    cast(adj_close as double) as adj_close,
+                    lag(cast(adj_close as double), 252) over (
+                        partition by ticker
+                        order by cast(date as date)
+                    ) as lag252,
+                    row_number() over (
+                        partition by ticker
+                        order by cast(date as date) desc
+                    ) as rn
+                from prices_df
+                where adj_close is not null
+            )
+            select
+                ticker,
+                case
+                    when lag252 is null or lag252 = 0 then null
+                    else (adj_close / lag252) - 1
+                end as mom12m_sql
+            from lagged
+            where rn = 1
+            """
+        ).df()
+        con.unregister("prices_df")
+        con.close()
+        if not mom12_df.empty:
+            mom12_map = {
+                str(row["ticker"]): float(row["mom12m_sql"])
+                for _, row in mom12_df.dropna(subset=["mom12m_sql"]).iterrows()
+            }
+
     out_rows = []
     for ticker, grp in prices.groupby("ticker"):
         g = grp.sort_values("date")
@@ -85,7 +91,7 @@ def _calc_price_metrics(prices: pd.DataFrame) -> pd.DataFrame:
         last = series.iloc[-1]
         mom3 = pct_change_n(series, 63)
         mom6 = pct_change_n(series, 126)
-        mom12 = pct_change_n(series, 252)
+        mom12 = mom12_map.get(str(ticker), np.nan)
         ma50 = series.rolling(50).mean().iloc[-1] if len(series) >= 50 else np.nan
         ma200 = series.rolling(200).mean().iloc[-1] if len(series) >= 200 else np.nan
         dist_50 = last / ma50 - 1 if ma50 and ma50 == ma50 else np.nan
@@ -125,17 +131,94 @@ def _calc_price_metrics(prices: pd.DataFrame) -> pd.DataFrame:
 def _calc_fundamental_metrics(fnds: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     if fnds.empty:
         return pd.DataFrame(), pd.DataFrame()
-    fnds = fnds.copy()
-    fnds["fiscal_end"] = pd.to_datetime(fnds["fiscal_end"])
-    if "filed" in fnds.columns:
-        fnds["filed"] = pd.to_datetime(fnds["filed"], errors="coerce")
-    fnds = fnds.sort_values(["ticker", "fiscal_end"])
-
-    rollup = (
-        fnds.groupby("ticker", group_keys=False)
-        .apply(_build_ttm_rollup)
-        .reset_index(drop=True)
-    )
+    con = duckdb.connect()
+    con.register("fnds_df", fnds)
+    rollup = con.execute(
+        """
+        with ordered as (
+            select
+                ticker,
+                cast(fiscal_end as date) as fiscal_end,
+                cast(Revenue as double) as Revenue,
+                cast(NetIncome as double) as NetIncome,
+                cast(SharesDiluted as double) as SharesDiluted,
+                cast(OperatingCF as double) as OperatingCF,
+                cast(CapitalExpenditures as double) as CapitalExpenditures,
+                cast(GrossProfit as double) as GrossProfit,
+                cast(EBITDA as double) as EBITDA,
+                cast(InterestExpense as double) as InterestExpense,
+                cast(Debt as double) as Debt,
+                cast(CashAndEquivalents as double) as CashAndEquivalents,
+                cast(TotalAssets as double) as TotalAssets,
+                cast(TotalLiabilities as double) as TotalLiabilities,
+                cast(CurrentAssets as double) as CurrentAssets,
+                cast(CurrentLiabilities as double) as CurrentLiabilities,
+                cast(filed as timestamp) as filed,
+                cast(sic as varchar) as sic,
+                cast(cik as varchar) as cik,
+                cast(entity_name as varchar) as entity_name
+            from fnds_df
+        )
+        select
+            ticker,
+            fiscal_end,
+            sum(Revenue) over (
+                partition by ticker
+                order by fiscal_end
+                rows between 3 preceding and current row
+            ) as RevenueTTM,
+            sum(NetIncome) over (
+                partition by ticker
+                order by fiscal_end
+                rows between 3 preceding and current row
+            ) as NetIncomeTTM,
+            avg(SharesDiluted) over (
+                partition by ticker
+                order by fiscal_end
+                rows between 3 preceding and current row
+            ) as SharesDilutedTTM,
+            sum(OperatingCF) over (
+                partition by ticker
+                order by fiscal_end
+                rows between 3 preceding and current row
+            ) as OpCFTTM,
+            sum(CapitalExpenditures) over (
+                partition by ticker
+                order by fiscal_end
+                rows between 3 preceding and current row
+            ) as CapexTTM,
+            sum(GrossProfit) over (
+                partition by ticker
+                order by fiscal_end
+                rows between 3 preceding and current row
+            ) as GrossProfitTTM,
+            sum(EBITDA) over (
+                partition by ticker
+                order by fiscal_end
+                rows between 3 preceding and current row
+            ) as EBITDATTM,
+            sum(InterestExpense) over (
+                partition by ticker
+                order by fiscal_end
+                rows between 3 preceding and current row
+            ) as InterestExpenseTTM,
+            Debt,
+            CashAndEquivalents,
+            TotalAssets,
+            TotalLiabilities,
+            CurrentAssets,
+            CurrentLiabilities,
+            filed,
+            sic,
+            cik,
+            entity_name
+        from ordered
+        order by ticker, fiscal_end
+        """
+    ).df()
+    con.unregister("fnds_df")
+    con.close()
+    rollup["FCFTTM"] = rollup["OpCFTTM"] - rollup["CapexTTM"].fillna(0)
 
     piotroski_series = []
     piotroski_components_series = []
@@ -418,11 +501,58 @@ def _find_prior_scores(history_paths: list[pathlib.Path], target_date: datetime)
 
 def main() -> None:
     con = db_conn()
-    prices = con.execute("SELECT * FROM prices_daily").df()
-    fnds = con.execute("SELECT * FROM fundamentals_quarterly").df()
-
     uni_path = ROOT / "data" / "universe.csv"
     universe = pd.read_csv(uni_path) if uni_path.exists() else pd.DataFrame(columns=["ticker"])
+    universe["ticker"] = universe["ticker"].astype(str).str.upper()
+    tickers = universe["ticker"].dropna().unique().tolist()
+
+    prices_cols = ["ticker", "date", "adj_close"]
+    fnds_cols = [
+        "ticker",
+        "fiscal_end",
+        "Revenue",
+        "NetIncome",
+        "SharesDiluted",
+        "OperatingCF",
+        "CapitalExpenditures",
+        "GrossProfit",
+        "EBITDA",
+        "InterestExpense",
+        "Debt",
+        "CashAndEquivalents",
+        "TotalAssets",
+        "TotalLiabilities",
+        "CurrentAssets",
+        "CurrentLiabilities",
+        "filed",
+        "sic",
+        "cik",
+        "entity_name",
+    ]
+
+    if tickers:
+        placeholders = ",".join(["?"] * len(tickers))
+        prices = con.execute(
+            f"""
+            SELECT ticker, date, adj_close
+            FROM prices_daily
+            WHERE ticker IN ({placeholders})
+            ORDER BY ticker, date
+            """,
+            tickers,
+        ).df()
+        fnds = con.execute(
+            f"""
+            SELECT {",".join(fnds_cols)}
+            FROM fundamentals_quarterly
+            WHERE ticker IN ({placeholders})
+            ORDER BY ticker, fiscal_end
+            """,
+            tickers,
+        ).df()
+    else:
+        prices = pd.DataFrame(columns=prices_cols)
+        fnds = pd.DataFrame(columns=fnds_cols)
 
     cfg = load_yaml(ROOT / "config.yml") or {}
     scores = compute(prices, fnds, universe, cfg)

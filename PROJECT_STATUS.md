@@ -842,3 +842,66 @@ Comparison against `tests/fixtures/golden_metrics_phase_0.json` on baseline fixt
 - `sharpe_api`: unchanged (`0.6222303689200788`).
 - New metadata field from Phase 1.3: `score_coverage_pct = 1.0`.
 
+### Phase 2.1 Status
+- Implemented DuckDB aggregation push-down in `src/compute/factors.py`:
+  - Removed pandas `_build_ttm_rollup()` and replaced TTM rollups with window SQL in `_calc_fundamental_metrics()`.
+  - Pushed 252-day momentum computation into DuckDB (`LAG(..., 252)`) in `_calc_price_metrics()`.
+  - In `main()`, replaced full-table `SELECT *` with universe-filtered projection:
+    - `prices_daily`: `ticker, date, adj_close`
+    - `fundamentals_quarterly`: factor-required projected columns only.
+- Numerical identity verification:
+  - Added `tests/test_factors_pushdown.py`.
+  - TTM comparison vs legacy pandas rollup: max abs diff `4.547473508864641e-13` (within raw tolerance `1e-12`).
+  - 252-day momentum comparison vs manual baseline: exact within `1e-12`.
+- Memory benchmark (tracemalloc, synthetic 600 tickers x 16 quarters):
+  - Legacy peak: `26,364,730` bytes.
+  - Phase 2.1 peak: `18,976,434` bytes.
+  - Reduction: `28.02%`.
+
+### Phase 2.2 Status
+- Refactored `src/ingest/fundamentals_sec.py`:
+  - Added async ingestion path with `asyncio.gather(...)`.
+  - Added `TokenBucketRateLimiter` and `await limiter.acquire()` before each SEC call.
+  - Added retry behavior for `429/503` with exponential backoff (`1s`, `2s`, `4s` with configured base and max retries).
+  - Added cache freshness skip semantics with optional CLI flag `--force-refresh`.
+  - Kept cache default at 7 days (`sec_cache_hours` default `168`).
+- Added `tests/test_sec_ingestion.py`:
+  - `test_rate_limiter_enforces_limit`
+  - `test_429_triggers_retry_with_backoff`
+  - `test_cached_cik_not_refetched`
+  - `test_partial_run_resumable`
+- Subphase gate result:
+  - `pytest --tb=short -q tests/test_sec_ingestion.py` (included in targeted Phase 2 run) passed.
+
+### Phase 2.3 Status
+- Updated `src/ingest/prices.py::_split_multiindex()`:
+  - Replaced broad per-ticker membership checks with vendor presence pre-filtering and `xs(..., drop_level=True)` extraction.
+- Added `tests/test_prices_split.py`:
+  - Verifies numerical identity against legacy splitter on 10-ticker MultiIndex batch.
+  - Max numeric diff observed: `0.0` (within `1e-12` tolerance).
+- Memory benchmark (tracemalloc):
+  - Workload: 500 requested tickers, 10 returned tickers, 1,200 business days.
+  - Legacy peak: `993,740` bytes.
+  - Phase 2.3 peak: `967,831` bytes.
+  - Reduction: `2.61%`.
+
+### PLAN DEVIATIONS
+- Original instruction: Phase 2.2 suggested limiter config `rate=9.0`, `capacity=9.0`.
+  - Blocker discovered: burst capacity of `9.0` can exceed strict per-second cap under sliding-window validation.
+  - Resolution chosen: keep `rate=9.0` and set runtime limiter capacity to `1.0` for strict `<=9 req/sec` compliance in tests and ingestion runtime.
+
+### Phase 2 Completion Gate
+- Full suite command: `pytest --tb=short -q`
+- Result: `177 passed, 1 skipped, 71 warnings in 13.23s`
+- Created: `tests/fixtures/golden_metrics_phase_2.json`
+- Golden comparison (`phase_2` vs `phase_1`):
+  - `twr`: unchanged (`0.0493976052144709`)
+  - `mwr`: unchanged (`0.049736095726908874`)
+  - `sharpe_rolling_last`: unchanged (`2.700647243539358`)
+  - `sharpe_api`: unchanged (`0.6222303689200788`)
+  - `max_drawdown`: unchanged (`-0.09112418483507145`)
+  - `factor_tilt_value`: unchanged (`12.5`)
+  - `factor_tilt_quality`: unchanged (`5.0`)
+  - `factor_tilt_momentum`: unchanged (`5.0`)
+  - `score_coverage_pct`: unchanged (`1.0`)
+  - `rf_coverage_pct`: unchanged (`null`)
