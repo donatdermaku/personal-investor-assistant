@@ -710,17 +710,20 @@ def _load_supabase_csv(run_id: str, filename: str, user_id: str | None = None) -
 def _compute_risk_metrics(performance_rows: list[dict], risk_free_rows: list[dict] | None = None) -> dict:
     returns = [row.get("daily_return") for row in performance_rows if row.get("daily_return") is not None]
     if not returns:
-        return {"var_95": None, "cvar_95": None, "volatility": None, "sharpe": None}
+        return {"var_95": None, "cvar_95": None, "volatility": None, "sharpe": None, "rf_coverage_pct": None}
     arr = np.array(returns, dtype=float)
     var_95 = float(np.quantile(arr, 0.05))
     tail = arr[arr <= var_95]
     cvar_95 = float(tail.mean()) if tail.size else None
+    rf_coverage_pct = None
     if arr.size < 2:
-        return {"var_95": var_95, "cvar_95": cvar_95, "volatility": None, "sharpe": None}
+        return {"var_95": var_95, "cvar_95": cvar_95, "volatility": None, "sharpe": None, "rf_coverage_pct": rf_coverage_pct}
     std = float(np.std(arr, ddof=1))
     if std == 0:
-        return {"var_95": var_95, "cvar_95": cvar_95, "volatility": None, "sharpe": None}
+        return {"var_95": var_95, "cvar_95": cvar_95, "volatility": None, "sharpe": None, "rf_coverage_pct": rf_coverage_pct}
     mean = float(np.mean(arr))
+    sharpe = (mean / std) * math.sqrt(252)
+    volatility = std * math.sqrt(252)
     if risk_free_rows:
         perf_df = pd.DataFrame(performance_rows)
         rf_df = pd.DataFrame(risk_free_rows)
@@ -728,21 +731,37 @@ def _compute_risk_metrics(performance_rows: list[dict], risk_free_rows: list[dic
             perf_df["date"] = pd.to_datetime(perf_df["date"], errors="coerce")
             rf_df["date"] = pd.to_datetime(rf_df["date"], errors="coerce")
             perf_df = perf_df.dropna(subset=["date", "daily_return"])
-            rf_df = rf_df.dropna(subset=["date", "rf_daily_return"])
-            aligned = perf_df.set_index("date")[["daily_return"]].join(
+            aligned_all = perf_df.set_index("date")[["daily_return"]].join(
                 rf_df.set_index("date")[["rf_daily_return"]],
-                how="inner",
+                how="left",
             )
-            if not aligned.empty:
-                excess = aligned["daily_return"] - aligned["rf_daily_return"]
-                mean = float(excess.mean())
-                std = float(excess.std(ddof=1)) if excess.size > 1 else std
-    annualized = math.sqrt(252)
+            if not aligned_all.empty:
+                rf_coverage_pct = float(pd.to_numeric(aligned_all["rf_daily_return"], errors="coerce").notna().mean())
+            aligned = aligned_all.dropna(subset=["rf_daily_return"])
+            if aligned.shape[0] > 1:
+                excess = pd.to_numeric(aligned["daily_return"], errors="coerce") - pd.to_numeric(aligned["rf_daily_return"], errors="coerce")
+                excess = excess.dropna()
+                if excess.shape[0] > 1:
+                    mean_excess = float(excess.mean())
+                    std_excess = float(excess.std(ddof=1))
+                    if std_excess > 0:
+                        sharpe = (mean_excess / std_excess) * math.sqrt(252)
+                        volatility = std_excess * math.sqrt(252)
+                    else:
+                        sharpe = None
+                        volatility = None
+                else:
+                    sharpe = None
+                    volatility = None
+            else:
+                sharpe = None
+                volatility = None
     return {
         "var_95": var_95,
         "cvar_95": cvar_95,
-        "volatility": std * annualized,
-        "sharpe": (mean / std) * annualized,
+        "volatility": volatility,
+        "sharpe": sharpe,
+        "rf_coverage_pct": rf_coverage_pct,
     }
 
 def _empty_summary(message: str) -> dict:

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import argparse
+import asyncio
 import json
 import pathlib
 import sys
 import time
+from typing import Any
 
 import pandas as pd
 import requests
@@ -43,6 +46,29 @@ FACTS = {
 }
 
 
+class TokenBucketRateLimiter:
+    def __init__(self, rate: float = 9.0, capacity: float = 9.0) -> None:
+        self.rate = float(rate)
+        self.capacity = float(capacity)
+        self.tokens = float(capacity)
+        self.updated_at = time.monotonic()
+        self._lock = asyncio.Lock()
+
+    async def acquire(self) -> None:
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                elapsed = now - self.updated_at
+                if elapsed > 0:
+                    self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
+                    self.updated_at = now
+                if self.tokens >= 1.0:
+                    self.tokens -= 1.0
+                    return
+                wait_seconds = (1.0 - self.tokens) / self.rate if self.rate > 0 else 0.0
+            await asyncio.sleep(max(wait_seconds, 0.0))
+
+
 def _load_universe_tickers() -> pd.DataFrame:
     uni_path = ROOT / "data" / "universe.csv"
     if uni_path.exists():
@@ -57,23 +83,37 @@ def _load_universe_tickers() -> pd.DataFrame:
     return pd.DataFrame({"ticker": tickers, "vendor_ticker": [sec_ticker(t) for t in tickers]})
 
 
-def pull_company_facts(cik: str, cache_hours: int, retries: int, backoff: int) -> dict:
+async def pull_company_facts(
+    cik: str,
+    cache_hours: int,
+    retries: int,
+    backoff: int,
+    limiter: TokenBucketRateLimiter,
+    force_refresh: bool = False,
+) -> dict[str, Any]:
     cache_path = SEC_CACHE / f"companyfacts_{cik}.json"
-    if cache_path.exists():
+    if cache_path.exists() and not force_refresh:
         age_hours = (time.time() - cache_path.stat().st_mtime) / 3600
         if age_hours < cache_hours:
             return json.loads(cache_path.read_text(encoding="utf-8"))
 
     url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
     headers = {"User-Agent": sec_user_agent()}
+    last_resp: requests.Response | None = None
     for attempt in range(retries):
-        resp = requests.get(url, headers=headers, timeout=30)
+        await limiter.acquire()
+        resp = await asyncio.to_thread(requests.get, url, headers=headers, timeout=30)
+        last_resp = resp
         if resp.status_code == 200:
             cache_path.write_bytes(resp.content)
             return resp.json()
+        if resp.status_code in (429, 503) and attempt < retries - 1:
+            await asyncio.sleep(float(backoff) * (2 ** attempt))
+            continue
         if attempt < retries - 1:
-            time.sleep(backoff * (attempt + 1))
-    resp.raise_for_status()
+            await asyncio.sleep(backoff * (attempt + 1))
+    if last_resp is not None:
+        last_resp.raise_for_status()
     return {}
 
 
@@ -116,11 +156,72 @@ def extract_quarterly(facts: dict, ticker: str) -> pd.DataFrame:
     return df
 
 
-def main() -> None:
+async def _fetch_one_ticker(
+    ticker: str,
+    vendor_ticker: str,
+    cik_map: dict[str, str],
+    overrides: dict[str, str],
+    cache_hours: int,
+    retries: int,
+    backoff: int,
+    limiter: TokenBucketRateLimiter,
+    force_refresh: bool,
+) -> tuple[str, pd.DataFrame | None]:
+    t = normalize_ticker(ticker)
+    vendor = sec_ticker(vendor_ticker)
+    cik = overrides.get(t) or cik_map.get(t) or cik_map.get(vendor)
+    if not cik:
+        print(f"[WARN] Missing CIK for {t} (vendor {vendor}); skipping.")
+        return t, None
+    facts = await pull_company_facts(cik, cache_hours, retries, backoff, limiter, force_refresh=force_refresh)
+    df = extract_quarterly(facts, t)
+    if not df.empty:
+        df["cik"] = df["cik"].fillna(cik)
+        return t, df
+    return t, None
+
+
+async def _collect_fundamentals(
+    universe: pd.DataFrame,
+    cik_map: dict[str, str],
+    overrides: dict[str, str],
+    cache_hours: int,
+    retries: int,
+    backoff: int,
+    force_refresh: bool,
+) -> tuple[list[str], list[pd.DataFrame]]:
+    # Use unit burst capacity to enforce strict <= 9 requests/sec.
+    limiter = TokenBucketRateLimiter(rate=9.0, capacity=1.0)
+    tasks = [
+        _fetch_one_ticker(
+            str(row["ticker"]),
+            str(row["vendor_ticker"]),
+            cik_map,
+            overrides,
+            cache_hours,
+            retries,
+            backoff,
+            limiter,
+            force_refresh,
+        )
+        for _, row in universe.iterrows()
+    ]
+    results = await asyncio.gather(*tasks)
+    tickers: list[str] = []
+    frames: list[pd.DataFrame] = []
+    for ticker, maybe_df in results:
+        tickers.append(ticker)
+        if maybe_df is not None:
+            frames.append(maybe_df)
+    return tickers, frames
+
+
+def main(force_refresh: bool = False) -> None:
     cfg = load_yaml(ROOT / "config.yml") or {}
     fetch_cfg = cfg.get("fetch", {})
     retries = int(fetch_cfg.get("retries", 3))
     backoff = int(fetch_cfg.get("backoff_seconds", 2))
+    # Cache freshness: default 7 days unless config explicitly overrides.
     cache_hours = int(fetch_cfg.get("sec_cache_hours", 168))
 
     watch = load_yaml(ROOT / "watchlist.yml") or {}
@@ -128,22 +229,17 @@ def main() -> None:
 
     universe = _load_universe_tickers()
     cik_map = get_ticker_cik_map()
-    frames: list[pd.DataFrame] = []
-    tickers = []
-    for _, row in universe.iterrows():
-        t = normalize_ticker(row["ticker"])
-        vendor = sec_ticker(row["vendor_ticker"])
-        tickers.append(t)
-        cik = overrides.get(t) or cik_map.get(t) or cik_map.get(vendor)
-        if not cik:
-            print(f"[WARN] Missing CIK for {t} (vendor {vendor}); skipping.")
-            continue
-        facts = pull_company_facts(cik, cache_hours, retries, backoff)
-        df = extract_quarterly(facts, t)
-        if not df.empty:
-            df["cik"] = df["cik"].fillna(cik)
-            frames.append(df)
-        time.sleep(0.2)
+    tickers, frames = asyncio.run(
+        _collect_fundamentals(
+            universe,
+            cik_map,
+            overrides,
+            cache_hours,
+            retries,
+            backoff,
+            force_refresh=force_refresh,
+        )
+    )
 
     fundamentals = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(
         columns=["fiscal_end", "ticker", *FACTS.keys(), "filed", "cik", "sic", "entity_name"]
@@ -185,4 +281,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Ingest SEC fundamentals into DuckDB/parquet.")
+    parser.add_argument("--force-refresh", action="store_true", help="Ignore cache freshness and re-fetch all CIKs.")
+    args = parser.parse_args()
+    main(force_refresh=args.force_refresh)

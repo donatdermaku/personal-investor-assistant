@@ -79,11 +79,10 @@ def _split_multiindex(df: pd.DataFrame, tickers: list[str], vendor_map: dict[str
     if df.empty:
         return frames
     if isinstance(df.columns, pd.MultiIndex):
-        level = df.columns.get_level_values(1)
-        for vendor in vendor_map.keys():
-            if vendor in level:
-                sub = df.xs(vendor, axis=1, level=1)
-                frames.append(_normalize_price_frame(sub, vendor_map[vendor]))
+        available_vendors = set(df.columns.get_level_values(1))
+        for vendor in [v for v in vendor_map.keys() if v in available_vendors]:
+            sub = df.xs(vendor, axis=1, level=1, drop_level=True)
+            frames.append(_normalize_price_frame(sub, vendor_map[vendor]))
         return frames
     # Single ticker
     if tickers:
