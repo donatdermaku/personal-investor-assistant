@@ -87,3 +87,34 @@ def test_negative_rf_no_sign_error() -> None:
     metrics = api_server._compute_risk_metrics(perf.to_dict(orient="records"), rf.to_dict(orient="records"))
     assert "sharpe" in metrics
     assert metrics["rf_coverage_pct"] is not None
+
+
+def test_rf_coverage_pct_present_in_rolling_output() -> None:
+    """
+    Verify that compute_rolling_metrics returns rf_coverage_pct
+    in its output when RF data is provided.
+    """
+    np.random.seed(42)
+    returns = pd.Series(0.001 + np.random.normal(0, 0.01, 252))
+    rf = pd.Series(0.0002, index=returns.index)
+    rf.iloc[:50] = np.nan
+    result = compute_rolling_metrics(returns, window=63, risk_free_series=rf)
+    assert "rf_coverage_pct" in result.columns or hasattr(result, "rf_coverage_pct"), \
+        "rf_coverage_pct must be present in rolling output"
+    coverage = result["rf_coverage_pct"].iloc[-1] if "rf_coverage_pct" in result.columns \
+        else result.rf_coverage_pct
+    assert 0.75 < coverage < 0.85, f"Expected ~80% coverage, got {coverage}"
+
+
+def test_rf_coverage_pct_none_when_no_rf() -> None:
+    """
+    Verify rf_coverage_pct is null/None when no RF series is provided.
+    """
+    np.random.seed(42)
+    returns = pd.Series(0.001 + np.random.normal(0, 0.01, 252))
+    result = compute_rolling_metrics(returns, window=63, risk_free_series=None)
+    coverage = result.get("rf_coverage_pct", None) if isinstance(result, dict) \
+        else result["rf_coverage_pct"].iloc[-1] if "rf_coverage_pct" in result.columns \
+        else None
+    assert coverage is None or np.isnan(coverage), \
+        "rf_coverage_pct must be null when no RF series is provided"

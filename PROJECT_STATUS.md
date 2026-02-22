@@ -953,3 +953,54 @@ Comparison against `tests/fixtures/golden_metrics_phase_0.json` on baseline fixt
   - `MWR` and rolling `Sharpe` changed due to intentional mathematical bug fixes in Phase 0.
   - Coverage metadata (`score_coverage_pct`) became explicit in Phase 1.
   - Other locked metrics remained stable through Phases 2–3, confirming architecture/UX changes were non-regressive.
+
+### REMEDIATION NOTES
+- Gap identified post-review:
+  - `src/analytics/rolling.py::compute_rolling_metrics()` did not emit `rf_coverage_pct` in rolling output.
+- Fix applied:
+  - Added `rf_coverage_pct` scalar computation from aligned `rf_daily` non-null fraction.
+  - Broadcast `rf_coverage_pct` into the returned rolling output DataFrame as a column.
+  - Kept return type unchanged (`pd.DataFrame`).
+- Additional compatibility handling:
+  - `compute_rolling_metrics()` now also accepts `pd.Series` inputs for `performance` and `risk_free_series` to support the required remediation tests while preserving existing DataFrame behavior.
+  - Missing `drawdown` now yields `NaN` rolling drawdown instead of raising.
+- Required tests added:
+  - `test_rf_coverage_pct_present_in_rolling_output`
+  - `test_rf_coverage_pct_none_when_no_rf`
+- Targeted test gate:
+  - `pytest tests/test_risk_free.py -v` -> `6 passed`.
+- Full suite gate:
+  - `pytest --tb=short -q` -> `183 passed, 1 skipped`.
+  - Note: baseline previously reported `181 passed`; count increased by exactly 2 due the two newly required remediation tests. No regressions observed.
+- Baseline fixture hashes re-verified unchanged:
+  - `tests/fixtures/baseline_ledger.csv`: `817f4c68cc027784d564ee349f42f438ece64360d504370bb1b92dfa3141c18f`
+  - `tests/fixtures/baseline_prices.parquet`: `9e6b396c74e597549f63afe2c1ef341b3aaf2ec105435fe969b673aec3b6e3dc`
+- Golden metrics regeneration scope:
+  - Updated only: `tests/fixtures/golden_metrics_phase_1.json`, `tests/fixtures/golden_metrics_phase_2.json`, `tests/fixtures/golden_metrics_phase_3.json`.
+  - Unchanged by policy: `tests/fixtures/golden_metrics_phase_minus_1.json`, `tests/fixtures/golden_metrics_phase_0.json`.
+- Golden metrics consistency check:
+  - For phases 1–3, only `rf_coverage_pct` changed (`null -> 1.0`).
+  - All other fields remained exactly unchanged.
+- Updated golden file hashes:
+  - `tests/fixtures/golden_metrics_phase_1.json`: `2090018659a78a3c50363eca4e772c4ff64dc65d1ecb6bd7f71a5c4936f2985b`
+  - `tests/fixtures/golden_metrics_phase_2.json`: `2090018659a78a3c50363eca4e772c4ff64dc65d1ecb6bd7f71a5c4936f2985b`
+  - `tests/fixtures/golden_metrics_phase_3.json`: `2090018659a78a3c50363eca4e772c4ff64dc65d1ecb6bd7f71a5c4936f2985b`
+
+### REMEDIATION
+- Files modified:
+  - `src/analytics/rolling.py`
+  - `tests/test_risk_free.py`
+  - `tests/fixtures/golden_metrics_phase_1.json`
+  - `tests/fixtures/golden_metrics_phase_2.json`
+  - `tests/fixtures/golden_metrics_phase_3.json`
+  - `PROJECT_STATUS.md`
+- Remediation outcome:
+  - Rolling output now includes `rf_coverage_pct` per implementation-plan requirement.
+  - `rf_coverage_pct` values in golden metrics:
+    - Phase 1: `1.0`
+    - Phase 2: `1.0`
+    - Phase 3: `1.0`
+
+### REFACTOR COMPLETE (POST-REVIEW UPDATE)
+- Post-review remediation applied for rolling RF coverage emission parity.
+- No regressions introduced; remediation is scoped and validated by targeted + full test gates.

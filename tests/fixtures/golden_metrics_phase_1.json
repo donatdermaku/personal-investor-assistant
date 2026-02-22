@@ -8,5 +8,5 @@
   "factor_tilt_quality": 5.0,
   "factor_tilt_momentum": 5.0,
   "score_coverage_pct": 1.0,
-  "rf_coverage_pct": null
+  "rf_coverage_pct": 1.0
 }
